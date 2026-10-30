@@ -1,0 +1,9 @@
+{{define "head"}}{{template "list-head" .}}{{end}}
+{{define "content"}}
+<div class="titlebar">
+  <h1>Configuration items</h1>
+  {{if .Body.CanEdit}}<a class="button" href="{{.Base}}/cis/new">New CI</a>{{end}}
+</div>
+<p class="muted">Everything Baseline tracks: hosts, containers and Compose stacks found by agents, and agentless items added by hand, such as switches, a NAS, a UPS or a licence.</p>
+{{template "list" .Body.List}}
+{{end}}

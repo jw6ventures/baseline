@@ -1,0 +1,21 @@
+{{define "content"}}
+{{$v := .Body}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<section class="panel">
+  <div class="titlebar"><h2>Field groups</h2><a class="button" href="{{.Base}}/settings/field-groups/new">New field group</a></div>
+  <p class="muted">A group bundles <a href="{{.Base}}/settings/fields">custom fields</a> in order, each optionally required and with a default. A project applies several groups to each ticket type it offers, from the type's link on the project's page. A field in two applied groups shows once, required if either group requires it.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Group</th><th>Fields</th><th class="num">Used by</th><th></th></tr></thead>
+    <tbody>{{range $v.Groups}}<tr>
+      <td><strong>{{.Name}}</strong>{{with .Description}}<br><span class="muted small">{{.}}</span>{{end}}</td>
+      <td class="small">{{range $i, $f := .Fields}}{{if $i}}, {{end}}{{$f.Label}}{{if $f.Required}}*{{end}}{{else}}<span class="muted">none</span>{{end}}</td>
+      <td class="num">{{.Uses}}</td>
+      <td class="actions"><a class="button small" href="{{$.Base}}/settings/field-groups/{{.ID}}">Edit</a></td>
+    </tr>{{else}}<tr><td colspan="4" class="muted">No field groups yet.</td></tr>{{end}}</tbody>
+  </table></div>
+  <p class="muted small">* required</p>
+</section>
+{{end}}

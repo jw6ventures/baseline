@@ -1,0 +1,54 @@
+{{define "content"}}
+{{$v := .Body}}{{$m := $v.Model}}
+<div class="titlebar">
+  <div>
+    <h1>{{$m.Name}}</h1>
+    <p class="muted sub">Change model · {{template "model-state" $m}} · {{$m.Risk}} risk</p>
+  </div>
+  <div class="actions">
+    {{if $v.CanRun}}<a class="button" href="{{.Base}}/changes/new?model={{$m.ID}}">New Standard change</a>{{end}}
+    {{if and $v.IsAdmin (ne $m.State "retired")}}<a class="button secondary" href="{{.Base}}/change-models/{{$m.ID}}/edit">Edit</a>{{end}}
+  </div>
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{if eq $m.State "pending"}}<p class="notice warn">Waiting for an approver. Until then no change is made from it{{if or $m.PatchGroups $m.Stacks}}, and the patch groups and stacks that use it don't run{{end}}.</p>{{end}}
+
+<section class="panel">
+  <dl class="facts">
+    <dt>Does</dt><dd>{{$m.Summary}} <span class="muted small mono">{{$m.Action}}</span></dd>
+    {{with $m.Description}}<dt>About</dt><dd class="pre">{{.}}</dd>{{end}}
+    {{if $m.ScriptID}}<dt>Script</dt><dd><a href="{{.Base}}/scripts/{{$m.ScriptID}}?v={{$m.ScriptVersion}}">version {{$m.ScriptVersion}}</a></dd>{{end}}
+    <dt>Parameters</dt><dd class="mono small">{{printf "%s" $m.Params}}</dd>
+    <dt>Written by</dt><dd>{{with $m.RequestedByName}}{{.}}{{else}}—{{end}} <span class="muted small">{{time $m.UpdatedAt}}</span></dd>
+    {{if not $m.ApprovedAt.IsZero}}<dt>Approved by</dt><dd>{{$m.ApprovedByName}}{{if $m.SelfApproved}} <span class="tag">self-approved</span>{{end}} <span class="muted small">{{time $m.ApprovedAt}}</span></dd>{{end}}
+    <dt>Used by</dt><dd>{{plural $m.PatchGroups "patch group"}}, {{plural $m.Stacks "Compose stack"}}</dd>
+  </dl>
+  {{if hasPrefix $m.Action "compose."}}<p class="muted small">A Compose model applies to the stacks that choose it: an approver sets it on a stack's page to make that stack's updates Standard changes, and to let it update itself.</p>{{end}}
+  {{if $v.CanApprove}}
+  <form method="post" action="{{.Base}}/change-models/{{$m.ID}}/approve">
+    <p class="muted">Approving it pre-approves every change made from it, on any host operators can change.</p>
+    <button>Approve this model</button>
+  </form>
+  {{end}}
+</section>
+
+<h2>Changes made from it</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Change</th><th>Title</th><th>State</th><th>Hosts</th><th>Requested</th></tr></thead>
+  <tbody>{{range $v.Changes}}<tr>
+    <td class="nowrap"><a href="{{$.Base}}/changes/{{.ID}}"><strong>{{.Ref}}</strong></a></td>
+    <td>{{.Title}}</td><td class="nowrap">{{template "change-state" .}}</td>
+    <td class="small">{{join .HostNames ", "}}</td>
+    <td class="nowrap">{{.RequestedByName}}<br><span class="muted small">{{ago .CreatedAt}}</span></td>
+  </tr>{{else}}<tr><td colspan="5" class="muted">None yet.</td></tr>{{end}}</tbody>
+</table></div>
+
+{{if and $v.IsAdmin (ne $m.State "retired")}}
+<section class="panel danger-zone spaced">
+  <h2>Retire</h2>
+  <p class="muted">No more changes are made from it; patch groups and stacks using it stop running until they get another model.</p>
+  <form method="post" action="{{.Base}}/change-models/{{$m.ID}}/retire"><button class="danger">Retire this model</button></form>
+</section>
+{{end}}
+{{end}}

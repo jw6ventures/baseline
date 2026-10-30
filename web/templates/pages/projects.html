@@ -1,0 +1,11 @@
+{{define "head"}}{{template "list-head" .}}{{end}}
+{{define "content"}}
+{{$v := .Body}}
+<div class="titlebar">
+  <h1>Projects</h1>
+  {{if $v.CanEdit}}<a class="button" href="{{.Base}}/projects/new">New project</a>{{end}}
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+<p class="muted">A project holds work items, numbered within it (OPS-42), and offers a set of the shared <a href="{{.Base}}/settings/ticket-types">ticket types</a>. A service desk takes incidents and requests; a software project takes stories, tasks and bugs.</p>
+{{template "list" $v.List}}
+{{end}}

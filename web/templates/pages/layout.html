@@ -1,0 +1,28 @@
+{{define "head"}}<script src="{{.Base}}/static/layout.js" defer></script>{{end}}
+{{define "content"}}
+{{$v := .Body}}
+<h1>{{$v.Heading}}</h1>
+<p class="muted sub"><a href="{{.Base}}{{$v.Back}}">Back</a></p>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Source}}<p class="notice">{{.}}</p>{{end}}
+
+<form class="panel stack-form wide-form" method="post" action="{{.Base}}{{$v.Action}}" data-layout-form>
+  <p class="muted">Sections show in order. Each holds core fields, whole field groups (their fields in the group's order) or single fields. A field placed twice shows the first time; applied fields left out show in "Other".</p>
+  <div data-layout-editor hidden></div>
+  <script type="application/json" data-layout-palette>{{$v.Palette}}</script>
+  <label data-layout-raw>Sections <span class="muted small">(JSON: [{"title", "columns": 1 or 2, "collapsed", "items": [{"kind": "core", "field"}, {"kind": "group", "group_id"}, {"kind": "field", "field_id"}]}])</span>
+    <textarea name="sections" rows="12" class="mono">{{$v.Sections}}</textarea></label>
+  <div class="inline-form">
+    <button>Save</button>
+    {{if eq $v.Screen "create"}}<label class="check"><input type="checkbox" name="view_uses_create" value="1"{{if $v.ViewUsesCreate}} checked{{end}}> Use this screen for view too</label>{{end}}
+    <a href="{{.Base}}{{$v.Back}}">Cancel</a>
+  </div>
+</form>
+{{with $v.Reset}}
+<form class="panel" method="post" action="{{$.Base}}{{.}}">
+  <p class="muted">{{$v.ResetMsg}}</p>
+  <button class="danger">Remove this layout</button>
+</form>
+{{end}}
+{{end}}

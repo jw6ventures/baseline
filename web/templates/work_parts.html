@@ -1,0 +1,124 @@
+{{/* A work item's status category as a tag. */}}
+{{define "item-status"}}{{if eq . "done"}}<span class="tag ok">{{itemStatus .}}</span>{{else if eq . "in_progress"}}<span class="tag caution">{{itemStatus .}}</span>{{else}}<span class="tag">{{itemStatus .}}</span>{{end}}{{end}}
+
+{{/* A work item's workflow status, coloured by its category: a WorkItem. */}}
+{{define "item-state"}}<span class="tag{{if eq .Status "done"}} ok{{else if eq .Status "in_progress"}} caution{{end}}" title="{{itemStatus .Status}}">{{.StatusName}}</span>{{end}}
+
+{{/* A workflow status by name and category: a WfStatus. */}}
+{{define "wf-status"}}<span class="tag{{if eq .Category "done"}} ok{{else if eq .Category "in_progress"}} caution{{end}}">{{.Name}}</span>{{end}}
+
+{{/* A priority as a tag. */}}
+{{define "item-priority"}}{{if eq . "critical"}}<span class="tag sev-critical">{{.}}</span>{{else if eq . "high"}}<span class="tag warn">{{.}}</span>{{else}}<span class="tag">{{.}}</span>{{end}}{{end}}
+
+{{/* Work items linked to a CI or change: dict "Base" .Base "Rows" [{Rel, Item}]
+     "Empty" text. */}}
+{{define "linked-items"}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Item</th><th>Title</th><th>Link</th><th>Status</th><th>Assignee</th></tr></thead>
+  <tbody>{{range .Rows}}<tr{{if .Item.Done}} class="dim"{{end}}>
+    <td class="nowrap"><a href="{{$.Base}}/work/{{.Item.Ref}}"><strong>{{.Item.Ref}}</strong></a></td>
+    <td>{{.Item.Title}} <span class="muted small">{{.Item.TypeName}}</span></td>
+    <td>{{human .Rel}}</td>
+    <td class="nowrap">{{template "item-state" .Item}}</td>
+    <td>{{with .Item.Assignee}}{{.}}{{else}}<span class="muted">nobody</span>{{end}}</td>
+  </tr>{{else}}<tr><td colspan="5" class="muted">{{.Empty}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+
+{{/* A work item screen's sections as form inputs (work_custom.go): dict
+     "S" []formSection "V" workFormView. */}}
+{{define "work-form-sections"}}{{$v := .V}}
+{{range .S}}
+<fieldset class="form-section{{if eq .Columns 2}} cols-2{{end}}">
+  {{with .Title}}<legend>{{.}}</legend>{{end}}
+  {{range .Items}}{{if .Core}}{{template "work-core-input" (dict "Name" .Core "V" $v)}}{{else}}{{template "work-custom-input" (dict "F" .Field "V" $v)}}{{end}}{{end}}
+</fieldset>
+{{end}}
+{{end}}
+
+{{define "work-core-input"}}{{$v := .V}}{{$it := $v.Item}}
+{{if eq .Name "title"}}<label class="wide">Title<input name="title" value="{{$it.Title}}" required></label>
+{{else if eq .Name "description"}}<label class="wide">Description<textarea name="description" rows="6">{{$it.Description}}</textarea></label>
+{{else if eq .Name "priority"}}<label>Priority<select name="priority">{{range $v.Priorities}}<option value="{{.}}"{{if eq . $it.Priority}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+{{else if eq .Name "impact"}}<label>Impact<select name="impact"><option value="">Not set</option>{{range $v.Levels}}<option value="{{.}}"{{if eq . $it.Impact}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+{{else if eq .Name "urgency"}}<label>Urgency<select name="urgency"><option value="">Not set</option>{{range $v.Levels}}<option value="{{.}}"{{if eq . $it.Urgency}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+{{else if eq .Name "assignee"}}<label>Assignee<select name="assignee"><option value="">Nobody</option>{{range $v.Users}}<option value="{{.ID}}"{{if eq .ID $it.AssigneeID}} selected{{end}}>{{.DisplayName}}</option>{{end}}</select></label>
+{{else if eq .Name "parent"}}<label>Parent <span class="muted small">(a reference, e.g. OPS-12)</span><input name="parent" value="{{$it.ParentRef}}"></label>
+{{else if eq .Name "estimate"}}<label>Estimate<input type="number" name="estimate" min="0" step="any" value="{{with $it.Estimate}}{{.}}{{end}}"></label>
+{{else if eq .Name "due"}}<label>Due<input type="date" name="due" value="{{if not $it.DueAt.IsZero}}{{$it.DueAt.Format "2006-01-02"}}{{end}}"></label>
+{{end}}
+{{end}}
+
+{{define "work-custom-input"}}{{$f := .F}}{{$v := .V}}
+{{if eq $f.Type "bool"}}<label class="check-line"><input type="checkbox" name="{{$f.Name}}" value="1"{{if $f.Checked}} checked{{end}}> {{$f.Label}}</label>
+{{else if eq $f.Type "multiselect"}}<fieldset class="checks"><legend>{{$f.Label}}{{if $f.Required}} <span class="muted small">(required)</span>{{end}}</legend>
+  {{range $f.Options}}<label><input type="checkbox" name="{{$f.Name}}" value="{{.}}"{{if has $f.Values .}} checked{{end}}> {{.}}</label>{{end}}</fieldset>
+{{else}}
+<label{{if eq $f.Type "textarea"}} class="wide"{{end}}>{{$f.Label}}{{if $f.Required}} <span class="muted small">(required)</span>{{end}}{{with $f.Description}} <span class="muted small">{{.}}</span>{{end}}
+{{if eq $f.Type "textarea"}}<textarea name="{{$f.Name}}" rows="4"{{if $f.Required}} required{{end}}>{{$f.Value}}</textarea>
+{{else if eq $f.Type "number"}}<input type="number" step="any" name="{{$f.Name}}" value="{{$f.Value}}"{{if $f.Required}} required{{end}}>
+{{else if eq $f.Type "date"}}<input type="date" name="{{$f.Name}}" value="{{$f.Value}}"{{if $f.Required}} required{{end}}>
+{{else if eq $f.Type "datetime"}}<input type="datetime-local" name="{{$f.Name}}" value="{{$f.Value}}"{{if $f.Required}} required{{end}}>
+{{else if eq $f.Type "url"}}<input type="url" name="{{$f.Name}}" value="{{$f.Value}}" placeholder="https://"{{if $f.Required}} required{{end}}>
+{{else if eq $f.Type "select"}}<select name="{{$f.Name}}"{{if $f.Required}} required{{end}}><option value="">Not set</option>{{range $f.Options}}<option value="{{.}}"{{if eq . $f.Value}} selected{{end}}>{{.}}</option>{{end}}</select>
+{{else if eq $f.Type "user"}}<select name="{{$f.Name}}"{{if $f.Required}} required{{end}}><option value="">Nobody</option>{{range $v.Users}}<option value="{{.ID}}"{{if eq .ID $f.Value}} selected{{end}}>{{.DisplayName}}</option>{{end}}</select>
+{{else if eq $f.Type "ci_ref"}}<select name="{{$f.Name}}"{{if $f.Required}} required{{end}}><option value="">None</option>{{if $f.Hidden}}<option value="{{$f.Value}}" selected>{{$f.Display}}</option>{{end}}{{range $v.Targets}}<option value="{{.ID}}"{{if eq .ID $f.Value}} selected{{end}}>{{.Name}} ({{.TypeLabel}})</option>{{end}}</select>
+{{else if eq $f.Type "item_ref"}}<input name="{{$f.Name}}" value="{{$f.Value}}" placeholder="OPS-42"{{if $f.Required}} required{{end}}>
+{{else}}<input name="{{$f.Name}}" value="{{$f.Value}}"{{if $f.Required}} required{{end}}>
+{{end}}</label>
+{{end}}
+{{end}}
+
+{{/* A work item's view screen: dict "S" []formSection "It" WorkItem "Base". */}}
+{{define "work-view-sections"}}{{$it := .It}}{{$base := .Base}}
+{{range .S}}{{if not .Empty}}
+{{if .Collapsed}}<details class="form-section"><summary>{{with .Title}}{{.}}{{else}}Details{{end}}</summary>{{else}}{{with .Title}}<h3>{{.}}</h3>{{end}}{{end}}
+<dl class="facts{{if eq .Columns 2}} cols-2{{end}}">
+  {{range .Items}}{{if not .Empty}}<dt>{{.Label}}</dt><dd{{if or (eq .Core "description") (and .Field (eq .Field.Type "textarea"))}} class="pre"{{end}}>{{if .Core}}{{template "work-core-value" (dict "Name" .Core "It" $it "Base" $base)}}{{else}}{{with .Field}}{{if .Link}}{{if eq .Type "url"}}<a href="{{.Display}}" rel="noopener noreferrer">{{.Display}}</a>{{else}}<a href="{{$base}}{{.Link}}">{{.Display}}</a>{{end}}{{else if .Hidden}}<span class="muted">{{.Display}}</span>{{else}}{{.Display}}{{end}}{{end}}{{end}}</dd>{{end}}{{end}}
+</dl>
+{{if .Collapsed}}</details>{{end}}
+{{end}}{{end}}
+{{end}}
+
+{{define "work-core-value"}}{{$it := .It}}
+{{- if eq .Name "description"}}{{$it.Description}}
+{{- else if eq .Name "priority"}}{{template "item-priority" $it.Priority}}
+{{- else if eq .Name "impact"}}{{$it.Impact}}
+{{- else if eq .Name "urgency"}}{{$it.Urgency}}
+{{- else if eq .Name "assignee"}}{{with $it.Assignee}}{{.}}{{else}}<span class="muted">nobody</span>{{end}}
+{{- else if eq .Name "parent"}}<a href="{{.Base}}/work/{{$it.ParentRef}}">{{$it.ParentRef}}</a> {{$it.ParentTitle}}
+{{- else if eq .Name "estimate"}}{{with $it.Estimate}}{{.}}{{end}}
+{{- else if eq .Name "due"}}{{$it.DueAt.Format "2006-01-02"}}
+{{- end}}{{end}}
+
+{{/* The transitions out of an item's status, as buttons; one with a screen
+     opens its form in place. dict "It" WorkItem "T" []itemTransition
+     "Users" []User "Resolutions" []string "Base" .Base. Posts to
+     /work/{ref}/transition. */}}
+{{define "work-transitions"}}{{$it := .It}}{{$v := .}}
+{{range .T}}
+{{if not .Allowed}}<button class="small" disabled title="You may not run this transition">{{.Name}} → {{.ToName}}</button>
+{{else if .Screen}}
+<details class="transition">
+  <summary class="button small">{{.Name}} → {{.ToName}}</summary>
+  <form class="panel stack-form" method="post" action="{{$v.Base}}/work/{{$it.Ref}}/transition">
+    <input type="hidden" name="transition" value="{{.ID}}">
+    {{if and (.Asks "resolution") (eq .ToCategory "done")}}<label>Resolution<select name="resolution">{{range $v.Resolutions}}<option value="{{.}}">{{.}}</option>{{end}}</select></label>{{end}}
+    {{if .Asks "assignee"}}<label>Assignee<select name="assignee"><option value="">Nobody</option>{{range $v.Users}}<option value="{{.ID}}"{{if eq .ID $it.AssigneeID}} selected{{end}}>{{.DisplayName}}</option>{{end}}</select></label>{{end}}
+    {{if .Asks "comment"}}<label>Comment<textarea name="comment" rows="2"></textarea></label>{{end}}
+    <div><button>{{.Name}}</button></div>
+  </form>
+</details>
+{{else}}
+<form class="inline" method="post" action="{{$v.Base}}/work/{{$it.Ref}}/transition">
+  <input type="hidden" name="transition" value="{{.ID}}"><button class="small">{{.Name}} → {{.ToName}}</button>
+</form>
+{{end}}
+{{else}}<span class="muted small">No transitions lead out of this status.</span>{{end}}
+{{end}}
+
+{{/* A workflow migration's state as a tag. */}}
+{{define "migration-state"}}{{if eq .State "draft"}}<span class="tag caution">draft</span>{{else if eq .State "running"}}<span class="tag">running</span>{{else if eq .State "done"}}<span class="tag ok">done</span>{{else}}<span class="tag warn">{{.State}}</span>{{end}}{{end}}
+
+{{/* An SLA clock's state as a tag: a slaClockView. */}}
+{{define "sla-state"}}{{if eq .State "breached"}}<span class="tag warn">breached</span>{{else if eq .State "met"}}<span class="tag ok">met</span>{{else}}<span class="tag caution">running</span>{{end}}{{end}}

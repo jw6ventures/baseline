@@ -1,0 +1,130 @@
+{
+  "containers": [
+    {
+      "id": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+      "podSandboxId": "8f1c0e6a3e1b2d4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f",
+      "metadata": {
+        "name": "coredns",
+        "attempt": 0
+      },
+      "image": {
+        "image": "sha256:1cf5f116067c67da67f97bff78c4bbc76913f59057c18627b96facaced73ea0b",
+        "annotations": {},
+        "runtimeHandler": ""
+      },
+      "imageRef": "sha256:1cf5f116067c67da67f97bff78c4bbc76913f59057c18627b96facaced73ea0b",
+      "state": "CONTAINER_RUNNING",
+      "createdAt": "1760423520987654321",
+      "labels": {
+        "io.kubernetes.container.name": "coredns",
+        "io.kubernetes.pod.name": "coredns-64fd4b4794-7xk2p",
+        "io.kubernetes.pod.namespace": "kube-system",
+        "io.kubernetes.pod.uid": "0b6f1d2e-3c4a-4b5c-8d9e-0f1a2b3c4d5e"
+      },
+      "annotations": {
+        "io.kubernetes.container.hash": "2e9f7d5a",
+        "io.kubernetes.container.ports": "[{\"name\":\"dns\",\"containerPort\":53,\"protocol\":\"UDP\"}]",
+        "io.kubernetes.container.restartCount": "0",
+        "io.kubernetes.container.terminationMessagePath": "/dev/termination-log",
+        "io.kubernetes.container.terminationMessagePolicy": "File",
+        "io.kubernetes.pod.terminationGracePeriod": "30"
+      },
+      "imageId": ""
+    },
+    {
+      "id": "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3",
+      "podSandboxId": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
+      "metadata": {
+        "name": "local-path-provisioner",
+        "attempt": 0
+      },
+      "image": {
+        "image": "sha256:fbc6d8b1d4ac3fbe8a8b9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a",
+        "annotations": {},
+        "runtimeHandler": ""
+      },
+      "imageRef": "sha256:fbc6d8b1d4ac3fbe8a8b9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a",
+      "state": "CONTAINER_EXITED",
+      "createdAt": "1760423519000000000",
+      "labels": {
+        "io.kubernetes.container.name": "local-path-provisioner",
+        "io.kubernetes.pod.name": "local-path-provisioner-774c6665dc-q8h4m",
+        "io.kubernetes.pod.namespace": "kube-system",
+        "io.kubernetes.pod.uid": "6a7b8c9d-0e1f-4a2b-9c3d-4e5f6a7b8c9d"
+      },
+      "annotations": {
+        "io.kubernetes.container.restartCount": "0"
+      },
+      "imageId": ""
+    },
+    {
+      "id": "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4",
+      "podSandboxId": "2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c",
+      "metadata": {
+        "name": "local-path-provisioner",
+        "attempt": 1
+      },
+      "image": {
+        "image": "sha256:fbc6d8b1d4ac3fbe8a8b9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a",
+        "annotations": {},
+        "runtimeHandler": ""
+      },
+      "imageRef": "sha256:fbc6d8b1d4ac3fbe8a8b9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a",
+      "state": "CONTAINER_RUNNING",
+      "createdAt": "1760427105000000000",
+      "labels": {
+        "io.kubernetes.container.name": "local-path-provisioner",
+        "io.kubernetes.pod.name": "local-path-provisioner-774c6665dc-q8h4m",
+        "io.kubernetes.pod.namespace": "kube-system",
+        "io.kubernetes.pod.uid": "6a7b8c9d-0e1f-4a2b-9c3d-4e5f6a7b8c9d"
+      },
+      "annotations": {
+        "io.kubernetes.container.restartCount": "1"
+      },
+      "imageId": ""
+    },
+    {
+      "id": "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5",
+      "podSandboxId": "3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d",
+      "metadata": {
+        "name": "helm",
+        "attempt": 0
+      },
+      "image": {
+        "image": "sha256:9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e",
+        "annotations": {},
+        "runtimeHandler": ""
+      },
+      "imageRef": "sha256:9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e",
+      "state": "CONTAINER_EXITED",
+      "createdAt": "1760423521000000000",
+      "labels": {
+        "io.kubernetes.container.name": "helm",
+        "io.kubernetes.pod.name": "helm-install-traefik-crd-5wz9l",
+        "io.kubernetes.pod.namespace": "kube-system",
+        "io.kubernetes.pod.uid": "7b8c9d0e-1f2a-4b3c-8d4e-5f6a7b8c9d0e"
+      },
+      "annotations": {},
+      "imageId": ""
+    },
+    {
+      "id": "e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6",
+      "podSandboxId": "4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e",
+      "metadata": {
+        "name": "web",
+        "attempt": 0
+      },
+      "image": {
+        "image": "sha256:4e1b6bae1e48ea2a6b6f8f0d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b",
+        "annotations": {},
+        "runtimeHandler": ""
+      },
+      "imageRef": "sha256:4e1b6bae1e48ea2a6b6f8f0d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b",
+      "state": "CONTAINER_RUNNING",
+      "createdAt": "1760424003000000000",
+      "labels": {},
+      "annotations": {},
+      "imageId": ""
+    }
+  ]
+}

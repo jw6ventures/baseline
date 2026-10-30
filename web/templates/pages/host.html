@@ -1,0 +1,539 @@
+{{define "head"}}{{if .Body.List}}{{template "list-head" .}}{{end}}{{if eq .Body.Tab "metrics"}}
+<link rel="stylesheet" href="{{.Base}}/static/vendor/uPlot.min.css">
+<script src="{{.Base}}/static/vendor/uPlot.iife.min.js" defer></script>
+<script src="{{.Base}}/static/metrics.js" defer></script>
+{{end}}{{end}}
+
+{{define "content"}}
+{{$h := .Body.Host}}
+<div class="titlebar">
+  <div>
+    <h1>{{$h.DisplayName}}</h1>
+    <p class="muted sub">{{template "status" $h}}{{if $h.HighSecurity}} <span class="tag" title="Hardware changes alert until acknowledged">high security</span>{{end}}{{with $h.OSPretty}} · {{.}}{{end}}{{with $h.FQDN}} · {{.}}{{end}}</p>
+  </div>
+  {{if and .Body.CanRefresh (not $h.Revoked)}}
+  <form method="post" action="{{.Base}}/hosts/{{$h.ID}}/refresh"><button{{if not .Body.Online}} disabled title="The agent isn't connected"{{end}}>Refresh inventory</button></form>
+  {{end}}
+</div>
+{{with .Body.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{if $h.DuplicateIdentity}}<p class="notice bad">Another host reports the same machine-id or DMI UUID as this one, usually a VM cloned from a template. Regenerate <code>/etc/machine-id</code> on the clone, re-enroll it with <code>baseline-agent enroll --force</code>, and revoke the clone's old record if it has one.</p>{{end}}
+{{if and $h.RebootRequired (not $h.Revoked)}}<p class="notice warn"><strong>Reboot required:</strong> {{join $h.RebootReasons "; "}}.{{if .Body.CanRun}} <a href="{{.Base}}/changes/new?action=host.reboot&amp;host={{$h.ID}}">Reboot…</a>{{end}}</p>{{end}}
+{{if $h.Revoked}}<p class="notice bad">This host is revoked: its agent can't connect. Its history is kept here; re-enrolling the machine creates a new host record.</p>{{end}}
+
+<nav class="tabs" aria-label="Host sections">
+{{range .Body.Tabs}}{{$t := .Key}}
+  <a href="{{$.Base}}{{.URL}}"{{if eq $.Body.Tab $t}} aria-current="page"{{end}}>{{.Label}}
+    {{- if and (eq $t "updates") $h.Updates}} <span class="count{{if $h.SecurityUpdates}} warn{{end}}">{{$h.Updates}}</span>{{end}}
+    {{- if and (eq $t "vulnerabilities") $h.FixableVulns}} <span class="count warn" title="fixed by pending updates">{{$h.FixableVulns}}</span>{{end}}
+    {{- if and (eq $t "containers") $h.Containers}} <span class="count{{if $h.ContainerUpdates}} warn{{end}}">{{$h.Containers}}</span>{{end}}
+    {{- if and (eq $t "services") $h.FailedServices}} <span class="count warn" title="failed">{{$h.FailedServices}}</span>{{end}}
+    {{- if and (eq $t "certificates") $h.CertsExpiring}} <span class="count warn" title="expiring within 30 days">{{$h.CertsExpiring}}</span>{{end}}
+    {{- if and (eq $t "jobs") $h.OpenJobs}} <span class="count" title="queued or running">{{$h.OpenJobs}}</span>{{end}}</a>
+{{end}}
+</nav>
+
+{{if eq .Body.Tab "overview"}}{{template "overview" .}}
+{{else if eq .Body.Tab "hardware"}}{{template "hardware" .}}
+{{else if eq .Body.Tab "packages"}}{{template "packages" .}}
+{{else if eq .Body.Tab "updates"}}{{template "updates" .}}
+{{else if eq .Body.Tab "vulnerabilities"}}{{template "vulnerabilities" .}}
+{{else if eq .Body.Tab "containers"}}{{template "containers" .}}
+{{else if eq .Body.Tab "stacks"}}{{if and $h.ManageCompose .Body.CanRun}}<p><a class="button" href="{{.Base}}/changes/new?action=compose.deploy&amp;host={{$h.ID}}">Deploy a stack…</a></p>{{end}}{{template "list" .Body.List}}
+{{else if eq .Body.Tab "vms"}}{{template "vms" .}}
+{{else if eq .Body.Tab "kubernetes"}}{{template "kubernetes" .}}
+{{else if eq .Body.Tab "services"}}{{template "services" .}}
+{{else if eq .Body.Tab "ports"}}{{template "ports" .}}
+{{else if eq .Body.Tab "certificates"}}{{template "certificates" .}}
+{{else if eq .Body.Tab "metrics"}}{{template "metrics" .}}
+{{else if eq .Body.Tab "jobs"}}{{template "jobs" .}}
+{{else if eq .Body.Tab "settings"}}{{template "settings" .}}
+{{else}}{{template "history" .}}{{end}}
+{{end}}
+
+{{define "smart-status"}}{{if .Failing}}<span class="tag warn">failing</span>{{else if .Degrading}}<span class="tag caution">degrading</span>{{else if .Passed}}<span class="tag ok">passed</span>{{else if .Error}}<span class="muted" title="{{.Error}}">unreadable</span>{{else}}<span class="muted">no SMART</span>{{end}}{{end}}
+
+{{define "status"}}{{if .Revoked}}<span class="dot off"></span>revoked{{else if .Connected}}<span class="dot on"></span>online{{else}}<span class="dot off"></span>offline{{if not .LastSeen.IsZero}} · last seen {{ago .LastSeen}}{{end}}{{end}}{{end}}
+
+{{define "overview"}}
+{{$h := .Body.Host}}
+{{with .Body.Alerts}}
+<section class="panel">
+  <h2>Alerts</h2>
+  <ul class="alert-list">{{range .}}<li>{{template "alert-severity" .}} <a href="{{$.Base}}/alerts/{{.ID}}">{{.Summary}}</a> <span class="muted small">{{.RuleName}} · {{if eq .State "pending"}}pending{{else}}since {{ago .FiredAt}}{{end}}</span>{{template "alert-flags" .}}</li>{{end}}</ul>
+</section>
+{{end}}
+{{with .Body.Cluster}}
+<p class="notice">This is the Kubernetes cluster agent of <a href="{{$.Base}}/kubernetes/{{.CIID}}"><strong>{{.Name}}</strong></a>: it runs in the cluster with a read-only service account and reports its nodes, workloads, services and ingresses. It runs no jobs and is updated by changing its image.</p>
+{{else}}{{if $h.ClusterAgent}}<p class="notice">This is a Kubernetes cluster agent. It hasn't reported its cluster yet.</p>{{end}}{{end}}
+<div class="grid2">
+{{if not $h.ClusterAgent}}
+<section class="panel">
+  <h2>System</h2>
+  <dl class="facts">
+  {{with .Body.OS}}
+    <dt>OS</dt><dd>{{.PrettyName}}{{with .VariantID}} <span class="muted">({{.}})</span>{{end}}</dd>
+    {{with .Image}}
+    <dt>Image</dt><dd><code class="wrap">{{.Origin}}</code><br>version {{.Version}}{{with .Staged}}<br><span class="tag warn">staged {{.Version}}, reboot to apply</span>{{end}}</dd>
+    {{end}}
+    <dt>Kernel</dt><dd class="mono">{{.Kernel}} ({{.Arch}})</dd>
+    <dt>Timezone</dt><dd>{{.Timezone}}</dd>
+  {{else}}
+    <dt>OS</dt><dd class="muted">No inventory received yet.</dd>
+  {{end}}
+  {{with .Body.Hardware}}
+    <dt>Machine</dt><dd>{{.System.Vendor}} {{.System.Product}}{{with .System.Chassis}} <span class="muted">· {{.}}</span>{{end}}</dd>
+    <dt>Virtualization</dt><dd>{{if eq .Virtualization "none"}}bare metal{{else}}{{.Virtualization}}{{end}}{{with $.Body.Guest}}<br><a href="{{$.Base}}/vms/{{.CIID}}">{{if eq .Kind "lxc"}}LXC container{{else}}VM{{end}} {{.Name}}</a> on <a href="{{$.Base}}/hosts/{{.HostID}}/vms">{{.Hostname}}</a>{{if not .Present}} <span class="muted">(no longer reported)</span>{{end}}{{end}}</dd>
+    <dt>CPU</dt><dd>{{.CPU.Model}}<br><span class="muted">{{.CPU.Sockets}} socket(s), {{.CPU.Cores}} cores, {{.CPU.Threads}} threads</span></dd>
+    <dt>Memory</dt><dd>{{bytes .Memory.TotalBytes}}</dd>
+    <dt>Disks</dt><dd>{{len .Disks}}</dd>
+  {{end}}
+  {{with .Body.Smart}}{{if .Devices}}
+    <dt>Drive health</dt><dd>{{if $h.DisksFailing}}<span class="tag warn">{{$h.DisksFailing}} failing</span> {{end}}{{if $h.DisksDegrading}}<span class="tag caution">{{$h.DisksDegrading}} degrading</span> {{end}}{{if not (or $h.DisksFailing $h.DisksDegrading)}}no problems{{end}}
+      <a href="{{$.Base}}/hosts/{{$h.ID}}?tab=hardware#drive-health">{{len .Devices}} drive{{if ne (len .Devices) 1}}s{{end}}</a></dd>
+  {{end}}{{end}}
+  {{if $h.Containers}}
+    <dt>Containers</dt><dd><a href="{{$.Base}}/hosts/{{$h.ID}}/containers">{{$h.ContainersUp}} of {{$h.Containers}} running</a>{{if $h.ContainerUpdates}} <span class="tag caution">{{$h.ContainerUpdates}} newer image{{if ne $h.ContainerUpdates 1}}s{{end}}</span>{{end}}</dd>
+  {{end}}
+  {{with .Body.Node}}
+    <dt>Kubernetes</dt><dd><a href="{{$.Base}}/hosts/{{$h.ID}}?tab=kubernetes">node {{.Name}}</a> of <a href="{{$.Base}}/kubernetes/{{.ClusterCI}}">{{.ClusterName}}</a>{{if not .Present}} <span class="muted">(no longer reported)</span>{{end}}</dd>
+  {{end}}
+  {{if $h.FailedServices}}
+    <dt>Services</dt><dd><a href="{{$.Base}}/hosts/{{$h.ID}}?tab=services"><span class="tag warn">{{$h.FailedServices}} failed</span></a></dd>
+  {{end}}
+  {{with .Body.Reboot}}{{with .Services}}
+    <dt>Need a restart</dt><dd>{{range .}}<span class="tag caution">{{.}}</span> {{end}}<br><span class="muted small">still running code from replaced libraries</span></dd>
+  {{end}}{{end}}
+  {{if $h.CertsExpiring}}
+    <dt>Certificates</dt><dd><a href="{{$.Base}}/hosts/{{$h.ID}}?tab=certificates"><span class="tag warn">{{$h.CertsExpiring}} expiring within 30 days</span></a></dd>
+  {{end}}
+  {{if not $h.UpdatesAt.IsZero}}
+    <dt>Updates</dt><dd><a href="{{$.Base}}/hosts/{{$h.ID}}?tab=updates">{{if $h.Updates}}{{$h.Updates}} available{{else}}up to date{{end}}</a>{{if $h.SecurityUpdates}} <span class="tag warn">{{$h.SecurityUpdates}} security</span>{{end}}</dd>
+  {{end}}
+  </dl>
+</section>
+{{end}}
+<section class="panel">
+  <h2>Agent</h2>
+  <dl class="facts">
+    <dt>Status</dt><dd>{{template "status" $h}}</dd>
+    <dt>Version</dt><dd><span class="mono">{{$h.AgentVersion}}</span>{{with $h.AgentArch}} <span class="muted">({{.}})</span>{{end}}
+      {{with $h.AgentUpdateTarget}}<br><span class="tag">updating to {{.}}</span> <span class="muted">requested {{ago $h.AgentUpdateAt}}</span>{{end}}
+      {{with $h.AgentUpdateError}}<br><span class="bad-text">Last update failed: {{.}}</span>{{end}}
+      {{if $h.Policy.SelfUpdateOff}}<br><span class="tag">self-update off</span> <span class="muted">agent.conf has self_update = off; update it with install.sh</span>{{end}}
+      {{if and $.Body.IsAdmin $.Body.Latest (ne $h.AgentVersion $.Body.Latest) (not $h.Revoked) (not $h.AgentUpdateTarget) (not $h.ClusterAgent) (not $h.Policy.SelfUpdateOff)}}
+      <form class="inline" method="post" action="{{$.Base}}/hosts/{{$h.ID}}/agent-update"><input type="hidden" name="version" value="{{$.Body.Latest}}"><button class="small">Update to {{$.Body.Latest}}</button></form>
+      {{end}}</dd>
+    <dt>Enrolled</dt><dd>{{time $h.EnrolledAt}}</dd>
+    <dt>Last connected</dt><dd>{{time $h.LastConnect}}</dd>
+    {{if not $h.ClusterAgent}}<dt>Booted</dt><dd>{{time $h.BootTime}}</dd>{{end}}
+    <dt>Certificate</dt><dd>valid until {{time $h.CertNotAfter}}</dd>
+    {{if not $h.ClusterAgent}}
+    <dt>Machine ID</dt><dd class="mono">{{$h.MachineID}}</dd>
+    <dt>DMI UUID</dt><dd class="mono">{{$h.DMIUUID}}</dd>
+    {{end}}
+    <dt>Capabilities</dt><dd>{{range $h.Capabilities}}<span class="tag">{{.}}</span> {{end}}</dd>
+    {{if not $h.ClusterAgent}}<dt>Local policy</dt><dd>{{template "policy" $h.Policy}}</dd>{{end}}
+  </dl>
+</section>
+</div>
+
+{{end}}
+
+{{define "hardware"}}
+{{with .Body.Hardware}}
+<p class="muted">Collected {{time $.Body.HardwareAt}}.</p>
+<section class="panel">
+  <h2>System</h2>
+  <dl class="facts">
+    <dt>Vendor / product</dt><dd>{{.System.Vendor}} {{.System.Product}} {{.System.Version}}</dd>
+    <dt>Serial</dt><dd class="mono">{{.System.Serial}}</dd>
+    <dt>Board</dt><dd>{{.System.BoardVendor}} {{.System.BoardName}}</dd>
+    <dt>BIOS</dt><dd>{{.System.BIOSVendor}} {{.System.BIOSVersion}} {{with .System.BIOSDate}}({{.}}){{end}}</dd>
+    <dt>CPU</dt><dd>{{.CPU.Model}} · {{.CPU.Sockets}} socket(s), {{.CPU.Cores}} cores, {{.CPU.Threads}} threads{{with .CPU.Microcode}} · microcode {{.}}{{end}}{{with .CPU.Flags}}<br>{{range .}}<span class="tag">{{.}}</span> {{end}}{{end}}</dd>
+    <dt>Memory</dt><dd>{{bytes .Memory.TotalBytes}}{{with .Memory.ECC}} · {{.}}{{end}}</dd>
+  </dl>
+</section>
+{{with .Memory.DIMMs}}
+<h2>Memory modules</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Slot</th><th>Size</th><th>Type</th><th>Speed</th><th>Manufacturer</th><th>Part</th><th>Serial</th></tr></thead>
+  <tbody>{{range .}}<tr><td>{{.Locator}}</td><td>{{bytes .SizeBytes}}</td><td>{{.Type}}</td><td>{{if .SpeedMTs}}{{.SpeedMTs}} MT/s{{end}}</td><td>{{.Manufacturer}}</td><td class="mono">{{.PartNumber}}</td><td class="mono">{{.Serial}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+<h2>Disks</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Device</th><th>Model</th><th>Size</th><th>Type</th><th>Serial</th><th>Firmware</th></tr></thead>
+  <tbody>{{range .Disks}}<tr><td class="mono">{{.Name}}</td><td>{{.Model}}</td><td class="nowrap">{{bytes .SizeBytes}}</td><td>{{.Transport}} {{if .Rotational}}HDD{{else}}SSD{{end}}</td><td class="mono">{{.Serial}}</td><td class="mono">{{.Firmware}}</td></tr>{{else}}<tr><td colspan="6" class="muted">None reported.</td></tr>{{end}}</tbody>
+</table></div>
+<h2>Filesystems</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Mount</th><th>Type</th><th>Device</th><th>Size</th></tr></thead>
+  <tbody>{{range .Filesystems}}<tr><td class="mono">{{.Mountpoint}}</td><td>{{.FSType}}</td><td class="mono">{{.Device}}</td><td class="nowrap">{{if .SizeBytes}}{{bytes .SizeBytes}}{{else}}<span class="muted">pool</span>{{end}}</td></tr>{{end}}</tbody>
+</table></div>
+<h2>Network interfaces</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Name</th><th>Kind</th><th>MAC</th><th>Driver</th><th>Speed</th><th>Addresses</th></tr></thead>
+  <tbody>{{range .NICs}}<tr><td class="mono">{{.Name}}{{with .Master}} <span class="muted">→ {{.}}</span>{{end}}</td><td>{{.Kind}}{{with .Link}} · link {{.}}{{end}}</td><td class="mono">{{.MAC}}</td><td>{{.Driver}}</td><td>{{if .SpeedMbps}}{{.SpeedMbps}} Mb/s{{end}}</td><td class="mono">{{join .Addresses ", "}}</td></tr>{{end}}</tbody>
+</table></div>
+<h2 id="drive-health">Drive health</h2>
+{{with $.Body.Smart}}
+<p class="muted">From smartctl, collected {{time $.Body.SmartAt}}. Drives in standby aren't woken; they keep their last reading. Temperatures are under Metrics.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Device</th><th>Model</th><th>Serial</th><th>Health</th><th class="num">Reallocated</th><th class="num">Pending</th><th class="num">Uncorrectable</th><th class="num">NVMe wear</th></tr></thead>
+  <tbody>{{range .Devices}}<tr><td class="mono">{{.Name}}</td><td>{{.Model}}</td><td class="mono">{{.Serial}}</td><td>{{template "smart-status" .}}</td>
+    <td class="num">{{.Reallocated}}</td><td class="num">{{.Pending}}</td><td class="num">{{.Uncorrectable}}{{if .MediaErrors}} <span class="muted">({{.MediaErrors}} media errors)</span>{{end}}</td><td class="num">{{if .PercentUsed}}{{.PercentUsed}}%{{end}}</td></tr>
+  {{else}}<tr><td colspan="8" class="muted">{{if has $.Body.Host.Capabilities "smartctl"}}No drives report SMART data.{{else}}smartctl isn't installed on this host (smartmontools 7 or newer).{{end}}</td></tr>{{end}}</tbody>
+</table></div>
+{{else}}
+<p class="muted">No SMART data received yet.</p>
+{{end}}
+{{with .Peripherals}}
+<h2>USB devices</h2>
+<p class="muted">Peripherals and link state are collected because this host is marked high security. USB devices are listed by port; root hubs are the controllers, under PCI.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Port</th><th>ID</th><th>Class</th><th>Manufacturer</th><th>Product</th><th>Serial</th></tr></thead>
+  <tbody>{{range .USB}}<tr><td class="mono">{{.Name}}</td><td class="mono">{{.VendorID}}:{{.ProductID}}</td><td>{{.Class}}</td><td>{{.Manufacturer}}</td><td>{{.Product}}</td><td class="mono">{{.Serial}}</td></tr>{{else}}<tr><td colspan="6" class="muted">Nothing plugged in.</td></tr>{{end}}</tbody>
+</table></div>
+<h2>Displays</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Connector</th><th>Status</th><th>Monitor</th><th>Serial</th></tr></thead>
+  <tbody>{{range .Displays}}<tr><td class="mono">{{.Name}}</td><td>{{.Status}}</td><td>{{.Monitor}}</td><td class="mono">{{.Serial}}</td></tr>{{else}}<tr><td colspan="4" class="muted">No display connectors.</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+{{with .PCI}}
+<details class="panel"><summary><strong>PCI devices ({{len .}})</strong></summary>
+<div class="table-wrap"><table>
+  <thead><tr><th>Slot</th><th>Class</th><th>Vendor</th><th>Device</th></tr></thead>
+  <tbody>{{range .}}<tr><td class="mono">{{.Address}}</td><td>{{.Class}}</td><td>{{.Vendor}}</td><td>{{.Device}}</td></tr>{{end}}</tbody>
+</table></div>
+</details>
+{{end}}
+{{else}}
+<p class="muted">No hardware inventory received yet.</p>
+{{end}}
+{{end}}
+
+{{define "packages"}}
+<form class="search" method="get" action="{{.Base}}/hosts/{{.Body.Host.ID}}">
+  <input type="hidden" name="tab" value="packages">
+  <input type="search" name="q" value="{{.Body.PackageQuery}}" placeholder="Filter by package name" aria-label="Filter packages">
+</form>
+<p class="muted">{{len .Body.Packages}} package(s){{if .Body.PackageQuery}} matching “{{.Body.PackageQuery}}”{{end}}{{if not .Body.PackagesAt.IsZero}} · collected {{time .Body.PackagesAt}}{{end}}.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Name</th><th>Version</th><th>Arch</th><th>Manager</th><th>Source / repo</th></tr></thead>
+  <tbody>{{range .Body.Packages}}<tr><td>{{.Name}}{{if .Layered}} <span class="tag">layered</span>{{end}}</td><td class="mono">{{.FullVersion}}</td><td>{{.Arch}}</td><td>{{.Manager}}</td><td class="muted">{{.Source}}{{if and .Source .Repo}} · {{end}}{{.Repo}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+
+{{define "vulnerabilities"}}
+{{$h := .Body.Host}}{{$v := .Body}}
+<div class="titlebar">
+  <p class="muted">{{if $h.VulnsAt.IsZero}}Not matched yet: the server matches packages after each inventory and OSV sync.{{else if not $h.VulnEcosystem}}OSV publishes no vulnerability data for this host's distribution, so its packages aren't matched. Image-based and Fedora hosts rely on their vendor's security updates (see <a href="{{.Base}}/hosts/{{$h.ID}}?tab=updates">Updates</a>).{{else}}Installed packages matched against OSV's <strong>{{$h.VulnEcosystem}}</strong> data {{ago $h.VulnsAt}}. A fix is available when the version an upgrade would install now is at least the fixed one.{{end}}</p>
+  {{if and $v.CanRun $v.FixablePkgs}}<form method="get" action="{{.Base}}/changes/new"><input type="hidden" name="action" value="pkg.upgrade"><input type="hidden" name="host" value="{{$h.ID}}"><input type="hidden" name="mode" value="selected">{{range $v.FixablePkgs}}<input type="hidden" name="pkg" value="{{.}}">{{end}}<button class="small">Upgrade {{plural (len $v.FixablePkgs) "fixing package"}}…</button></form>{{end}}
+</div>
+{{if $h.VulnEcosystem}}
+<form class="search inline-form" method="get" action="{{.Base}}/hosts/{{$h.ID}}">
+  <input type="hidden" name="tab" value="vulnerabilities">
+  <label>Show<select name="fixable"><option value="1"{{if $v.FixableOnly}} selected{{end}}>fixable now</option><option value="0"{{if not $v.FixableOnly}} selected{{end}}>all, fixed or not</option></select></label>
+  <label>Severity<select name="severity"><option value="">any</option>{{range list "low" "medium" "high" "critical"}}<option value="{{.}}"{{if eq $v.VulnSeverity .}} selected{{end}}>{{.}} or worse</option>{{end}}</select></label>
+  <button class="small">Filter</button>
+</form>
+{{template "host-vulns" dict "Base" .Base "Rows" $v.Vulns "Host" false}}
+{{if and (not $v.Vulns) $v.FixableOnly}}<p class="notice ok">Nothing that pending updates fix{{if $v.VulnSeverity}} at this severity{{end}}. <a href="{{.Base}}/hosts/{{$h.ID}}?tab=vulnerabilities&amp;fixable=0">Show unfixed ones</a>.</p>{{end}}
+{{end}}
+{{end}}
+
+{{define "updates"}}
+{{$h := .Body.Host}}
+<div class="titlebar">
+  <p class="muted">{{if .Body.UpdatesAt.IsZero}}Not checked yet.{{else}}Checked {{time .Body.UpdatesAt}} ({{ago .Body.UpdatesAt}}).{{end}} The agent refreshes repository metadata and checks every 6 hours.</p>
+  <div>
+  {{if and .Body.CanRefresh (not $h.Revoked)}}
+  <form method="post" action="{{.Base}}/hosts/{{$h.ID}}/refresh"><input type="hidden" name="section" value="updates"><button class="small"{{if not .Body.Online}} disabled title="The agent isn't connected"{{end}}>Check now</button></form>
+  {{end}}
+  {{if and .Body.CanRun .Body.Updates}}
+  <a class="button small" href="{{.Base}}/changes/new?action=pkg.upgrade&amp;host={{$h.ID}}&amp;mode=all">Install all…</a>
+  {{if $h.SecurityUpdates}}<a class="button small" href="{{.Base}}/changes/new?action=pkg.upgrade&amp;host={{$h.ID}}&amp;mode=security">Install security updates…</a>{{end}}
+  {{end}}
+  </div>
+</div>
+{{with .Body.UpdateInfo}}
+  {{range .Warnings}}<p class="notice warn">{{.}}</p>{{end}}
+  {{with .Held}}<p class="muted">Held, so never upgraded implicitly: {{range .}}<span class="tag">{{.}}</span> {{end}}</p>{{end}}
+{{end}}
+{{if .Body.Updates}}
+{{$pick := and .Body.CanRun (not (has $h.Capabilities "image-based"))}}
+<form method="get" action="{{.Base}}/changes/new">
+<input type="hidden" name="action" value="pkg.upgrade"><input type="hidden" name="host" value="{{$h.ID}}"><input type="hidden" name="mode" value="selected">
+<div class="table-wrap"><table>
+  <thead><tr>{{if $pick}}<th></th>{{end}}<th>Package</th><th>Installed</th><th>Available</th><th>Repository</th><th>Manager</th><th>Pending since</th></tr></thead>
+  <tbody>{{range .Body.Updates}}<tr>
+    {{if $pick}}<td><input type="checkbox" name="pkg" value="{{if or (eq .Manager "flatpak") (eq .Manager "snap")}}{{.Manager}}:{{end}}{{.Name}}" aria-label="Select {{.Name}}"{{if and (not .Installed) (eq .Manager "apt")}} disabled title="Pulled in by another package's upgrade"{{end}}></td>{{end}}
+    <td>{{if .Image}}<span class="tag">OS image</span> {{end}}{{.Name}}{{with .Arch}} <span class="muted">{{.}}</span>{{end}}
+      {{if .Security}}<span class="tag warn">security</span>{{end}}{{with .Advisories}}<br><span class="muted small">{{join . ", "}}</span>{{end}}</td>
+    <td class="mono">{{if .Installed}}{{.Installed}}{{else}}<span class="muted">new</span>{{end}}</td>
+    <td class="mono">{{.Candidate}}</td>
+    <td class="muted">{{.Repo}}</td>
+    <td>{{.Manager}}</td>
+    <td class="nowrap" title="{{time .FirstSeen}}">{{ago .FirstSeen}}</td>
+  </tr>{{end}}</tbody>
+</table></div>
+{{if $pick}}<p><button class="small">Upgrade selected…</button></p>{{end}}
+</form>
+{{if has $h.Capabilities "image-based"}}<p class="muted small">This host is image-based: upgrading installs the whole image, and it takes effect at the next reboot.</p>{{end}}
+{{else if not .Body.UpdatesAt.IsZero}}
+<p class="notice ok">Up to date.</p>
+{{end}}
+{{end}}
+
+{{define "metrics"}}
+{{$h := .Body.Host}}
+{{$m := .Body.Metrics}}
+<nav class="ranges" aria-label="Time range">
+{{range $m.Ranges}}<a href="{{$.Base}}/hosts/{{$h.ID}}?tab=metrics&amp;range={{.Key}}"{{if eq .Key $m.Range.Key}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
+</nav>
+{{range $m.Charts}}
+{{$c := .}}
+<figure class="chart panel" data-src="{{$.Base}}/hosts/{{$h.ID}}/metrics/{{.Panel.ID}}.json?range={{$m.Range.Key}}">
+  <figcaption>{{.Panel.Title}}</figcaption>
+  <div class="chart-plot">{{.SVG}}</div>
+  <ul class="legend">{{range $i, $l := .Labels}}<li><span class="swatch s{{mod $i 8}}"></span>{{$l}} <span class="muted">{{index $c.Latest $i}}</span></li>{{end}}</ul>
+</figure>
+{{else}}
+<p class="muted">No metrics recorded in this range. Agents send them every minute.</p>
+{{end}}
+{{if $m.Charts}}<p class="muted small">Drag across a chart to zoom in; double-click to zoom out. Times are in {{$m.TZ}}.</p>{{end}}
+{{end}}
+
+{{define "history"}}
+<p class="muted">Every change the agent reported, newest first. Changes made by a job carry its change record; the rest are unplanned.</p>
+{{range .Body.History}}
+<details class="hist">
+  <summary>
+    <span class="nowrap">{{time .At}}</span>
+    <span class="tag">{{.Section}}</span>
+    {{if .Initial}}First inventory received{{else}}{{.Summary}}{{end}}
+    {{if .ChangeID}}<a class="small" href="{{$.Base}}/changes/{{.ChangeID}}" title="Made by a job of this change">{{.ChangeRef}}</a>{{else if not .Initial}}<span class="tag caution small" title="No change record behind it">unplanned</span>{{end}}
+  </summary>
+  {{if not .Initial}}
+  <table class="diff">
+    {{range .Diff.Changed}}<tr><td class="op chg">~</td><td class="mono">{{.Field}}</td><td><del>{{value .From}}</del> → <ins>{{value .To}}</ins></td></tr>{{end}}
+    {{range .Diff.Added}}<tr><td class="op add">+</td><td class="mono">{{.Field}}</td><td><ins>{{value .To}}</ins></td></tr>{{end}}
+    {{range .Diff.Removed}}<tr><td class="op del">−</td><td class="mono">{{.Field}}</td><td><del>{{value .From}}</del></td></tr>{{end}}
+  </table>
+  <p class="muted small">by <code>{{.Actor}}</code></p>
+  {{end}}
+</details>
+{{else}}
+<p class="muted">No history yet.</p>
+{{end}}
+{{end}}
+
+{{define "settings"}}
+{{$h := .Body.Host}}
+<section class="panel">
+  <h2>Host groups</h2>
+  {{if .Body.IsAdmin}}
+  <form method="post" action="{{.Base}}/hosts/{{$h.ID}}/groups">
+    <div class="checks">
+    {{range .Body.AllGroups}}
+      <label><input type="checkbox" name="group" value="{{.ID}}"{{if has $h.GroupIDs .ID}} checked{{end}}> {{.Name}}</label>
+    {{else}}
+      <span class="muted">No host groups exist. <a href="{{$.Base}}/settings/access">Create one</a>.</span>
+    {{end}}
+    </div>
+    {{if .Body.AllGroups}}<button>Save groups</button>{{end}}
+  </form>
+  {{else}}
+  <p>{{range $h.GroupNames}}<span class="tag">{{.}}</span> {{else}}<span class="muted">None.</span>{{end}}</p>
+  {{end}}
+</section>
+
+<section class="panel">
+  <h2>High security</h2>
+  <p class="muted">A high security host's agent re-collects hardware within seconds of a device or network link coming or going, and every 5 minutes besides, with USB devices, displays and link state included. Any disk, memory module, physical NIC, PCI or USB device added, removed or swapped, network link going up or down, or display connected or disconnected without a change record raises an alert that stays firing, and reminds, until someone acknowledges it.</p>
+  {{if .Body.IsAdmin}}
+  <form method="post" action="{{.Base}}/hosts/{{$h.ID}}/high-security">
+    {{if $h.HighSecurity}}<p>On since {{time $h.HighSecuritySince}}.</p><input type="hidden" name="high_security" value="0"><button>Turn off</button>
+    {{else}}<input type="hidden" name="high_security" value="1"><button>Turn on</button>{{end}}
+  </form>
+  {{else}}
+  <p>{{if $h.HighSecurity}}On since {{time $h.HighSecuritySince}}.{{else}}Off.{{end}}</p>
+  {{end}}
+</section>
+
+<section class="panel">
+  <h2>Compose stacks</h2>
+  <p class="muted">When on, operators can deploy new Compose stacks to this host and edit the Compose file and .env of the stacks on it, including ones Baseline didn't deploy, each through a change. Baseline keeps every .env it writes, encrypted, and shows the values only to operators of the host.</p>
+  {{if .Body.IsAdmin}}
+  <form method="post" action="{{.Base}}/hosts/{{$h.ID}}/manage-compose">
+    {{if $h.ManageCompose}}<p>On since {{time $h.ManageComposeSince}}.</p><input type="hidden" name="manage_compose" value="0"><button>Turn off</button>
+    {{else}}<input type="hidden" name="manage_compose" value="1"><button>Turn on</button>{{end}}
+  </form>
+  {{else}}
+  <p>{{if $h.ManageCompose}}On since {{time $h.ManageComposeSince}}.{{else}}Off.{{end}}</p>
+  {{end}}
+  {{if $h.ManageCompose}}
+  <h3>Compose roots</h3>
+  <p class="muted">Directories on this host that new stacks are deployed under, each stack in <code>&lt;root&gt;/&lt;project&gt;</code>. The deploy form offers them, the first by default. With none, stacks go in the agent's own <code>compose_root</code> (agent.conf, <code>/var/lib/baseline/stacks</code> by default). Removing a root leaves the stacks under it where they are.</p>
+  {{if $h.ComposeRoots}}
+  <ul class="roots">{{range $i, $root := $h.ComposeRoots}}
+    <li><code>{{$root}}</code>{{if not $i}} <span class="tag">default</span>{{end}}
+      {{if $.Body.IsAdmin}}<form class="inline" method="post" action="{{$.Base}}/hosts/{{$h.ID}}/compose-roots"><input type="hidden" name="remove" value="{{$root}}"><button class="small secondary">Remove</button></form>{{end}}</li>
+  {{end}}</ul>
+  {{else}}<p class="muted">None yet.</p>{{end}}
+  {{if .Body.IsAdmin}}
+  <form class="inline-form" method="post" action="{{.Base}}/hosts/{{$h.ID}}/compose-roots">
+    <label>Directory<input name="root" placeholder="/srv/stacks" pattern="/.*" required></label>
+    <button class="small">Add root</button>
+  </form>
+  {{end}}
+  {{end}}
+  {{if and $h.ManageCompose .Body.CanRun (not $h.Revoked)}}<p><a class="button secondary" href="{{.Base}}/changes/new?action=compose.deploy&amp;host={{$h.ID}}">Deploy a stack…</a></p>{{end}}
+</section>
+
+{{if and .Body.IsAdmin (not $h.Revoked)}}
+<section class="panel danger-zone">
+  <h2>Revoke</h2>
+  <p class="muted">Revoking disconnects the agent and rejects its certificate from now on. History is kept. Re-enrolling the machine later creates a new host record.</p>
+  <form method="post" action="{{.Base}}/hosts/{{$h.ID}}/revoke"><button class="danger">Revoke this host</button></form>
+</section>
+{{end}}
+{{end}}
+
+{{define "containers"}}
+{{$h := .Body.Host}}
+<p class="muted">{{if .Body.ContainersAt.IsZero}}No container inventory received yet.{{else}}Reported {{time .Body.ContainersAt}}. The agent reads Docker and Podman every minute and sends changes.{{end}}</p>
+{{range .Body.Engines}}{{with .Error}}<p class="notice warn">{{$.Body.Host.DisplayName}}'s {{.}}</p>{{end}}{{end}}
+{{with .Body.Engines}}<p class="muted small">Engines: {{range .}}<span class="tag" title="{{.Socket}}">{{.Name}}{{with .Version}} {{.}}{{end}}</span> {{end}}</p>{{end}}
+{{template "list" .Body.List}}
+
+{{$tr := .Body.Traefik}}
+{{if or $h.Containers $tr.Node}}
+<section class="panel">
+  <h2>Traefik</h2>
+  <p>Hostnames in these containers' router labels depend on
+  {{range $i, $c := $tr.Local}}{{if $i}}, {{end}}<a href="{{$.Base}}/containers/{{.ID}}">{{.Name}}</a>{{end}}
+  {{- if and $tr.Local $tr.Node}} and {{end}}
+  {{- with $tr.Node}}<a href="{{$.Base}}/cis/{{.ID}}">{{.Name}}</a> <span class="muted small">({{.TypeLabel | lower}} on another node)</span>{{end}}
+  {{- if not (or $tr.Local $tr.Node)}} <span class="muted">no Traefik Baseline knows of</span>{{end}}.</p>
+  {{if .Body.CanRefresh}}
+  <form class="inline-form" method="post" action="{{.Base}}/hosts/{{$h.ID}}/traefik">
+    <label>Routed by a Traefik on another node<select name="traefik">
+      <option value="">none</option>
+      {{range .Body.TraefikNodes}}<option value="{{.ID}}"{{if and $tr.Node (eq .ID $tr.Node.ID)}} selected{{end}}>{{.Name}} ({{.TypeLabel | lower}})</option>{{end}}
+    </select></label>
+    <button class="small">Save</button>
+  </form>
+  <p class="muted small">Traefik containers on this host are found by their image. Set this when a Traefik elsewhere reads this host's Docker labels: a Traefik container, or a host that runs it as a service.</p>
+  {{end}}
+</section>
+{{end}}
+{{end}}
+
+{{define "services"}}
+<form class="search" method="get" action="{{.Base}}/hosts/{{.Body.Host.ID}}">
+  <input type="hidden" name="tab" value="services">
+  <input type="search" name="q" value="{{.Body.ServiceQuery}}" placeholder="Filter by unit, description or state" aria-label="Filter services">
+</form>
+<p class="muted">{{len .Body.Services}} service unit(s){{if not .Body.ServicesAt.IsZero}} · collected {{time .Body.ServicesAt}}{{end}}. Failed units come first; starts and stops aren't recorded in history, enabling and disabling are.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Unit</th><th>State</th><th>Enabled</th><th>Description</th>{{if $.Body.CanRun}}<th></th>{{end}}</tr></thead>
+  <tbody>{{range .Body.Services}}<tr>
+    <td class="mono">{{.Name}}</td>
+    <td class="nowrap">{{if .Failed}}<span class="tag warn">failed</span>{{else if eq .Active "active"}}<span class="dot on"></span>{{.Sub}}{{else}}<span class="dot off"></span>{{.Active}}{{end}}{{if eq .Load "masked"}} <span class="tag">masked</span>{{end}}</td>
+    <td>{{.Enabled}}</td>
+    <td class="muted">{{.Description}}</td>
+    {{if $.Body.CanRun}}<td class="row-actions">{{if ne .Load "masked"}}{{$u := .Name}}{{$hid := $.Body.Host.ID}}
+      {{if eq .Active "active"}}<a href="{{$.Base}}/changes/new?action=service.restart&amp;host={{$hid}}&amp;unit={{$u}}">Restart…</a><a href="{{$.Base}}/changes/new?action=service.stop&amp;host={{$hid}}&amp;unit={{$u}}">Stop…</a>
+      {{else}}{{if .Failed}}<a href="{{$.Base}}/changes/new?action=service.restart&amp;host={{$hid}}&amp;unit={{$u}}">Restart…</a>{{else}}<a href="{{$.Base}}/changes/new?action=service.start&amp;host={{$hid}}&amp;unit={{$u}}">Start…</a>{{end}}{{end}}
+    {{end}}</td>{{end}}
+  </tr>{{else}}<tr><td colspan="5" class="muted">{{if has .Body.Host.Capabilities "systemd"}}No services reported yet.{{else}}This host doesn't run systemd.{{end}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+
+{{define "ports"}}
+<p class="muted">Sockets listening on the host{{if not .Body.PortsAt.IsZero}}, collected {{time .Body.PortsAt}}{{end}}. Published container ports show as the engine's proxy, or not at all when the engine forwards them in the kernel.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th class="num">Port</th><th>Protocol</th><th>Address</th><th>Process</th><th>Unit</th></tr></thead>
+  <tbody>{{range .Body.Ports}}<tr>
+    <td class="num"><strong>{{.Port}}</strong></td><td>{{.Proto}}</td>
+    <td class="mono">{{.Addr}}{{if or (eq .Addr "127.0.0.1") (eq .Addr "::1")}} <span class="muted small">local only</span>{{end}}</td>
+    <td>{{with .Process}}{{.}}{{else}}<span class="muted">kernel</span>{{end}}</td><td class="mono small">{{.Unit}}</td>
+  </tr>{{else}}<tr><td colspan="5" class="muted">No listening sockets reported yet.</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+
+{{define "certificates"}}
+<p class="muted">TLS certificates in the usual places on disk and served by the host's listeners{{if not .Body.CertsAt.IsZero}}, collected {{time .Body.CertsAt}}{{end}}. The agent looks every 6 hours; CA certificates (the system trust store) are left out.</p>
+{{template "cert-table" .Body.Certs}}
+{{end}}
+
+{{define "policy"}}{{if not .Jobs}}<span class="muted">This agent predates jobs; update it to run actions.</span>{{else}}{{if .AllowScripts}}scripts allowed{{else}}<span class="tag">scripts off</span>{{end}}, {{if .AllActions}}all actions allowed{{else if not .AllowActions}}<span class="tag">no actions</span>{{else}}actions: {{range $i, $a := .AllowActions}}{{if $i}} {{end}}<span class="tag">{{$a}}</span>{{end}}{{end}}{{end}}{{if .SelfUpdateOff}}, <span class="tag">self-update off</span>{{end}}{{end}}
+
+{{define "jobs"}}
+{{$h := .Body.Host}}
+{{if .Body.CanRun}}
+<h2>Run an action</h2>
+<p class="muted">Each runs as a job inside a new change record. This host's local policy: {{template "policy" $h.Policy}}.</p>
+<div class="actions-list">
+{{range .Body.Actions}}
+  <a class="card{{if .Why}} off{{end}}" href="{{$.Base}}/changes/new?action={{.Name}}&amp;host={{$h.ID}}"{{with .Why}} title="{{.}}" aria-disabled="true"{{end}}>
+    <strong>{{.Label}}</strong>
+    <span>{{with .Why}}{{.}}{{else}}{{.Risk}} risk{{end}}</span>
+  </a>
+{{end}}
+</div>
+{{end}}
+<h2>Jobs</h2>
+{{template "list" .Body.List}}
+{{end}}
+
+{{define "vms"}}
+{{$h := .Body.Host}}
+<p class="muted">{{if .Body.VMsAt.IsZero}}No guest inventory received yet.{{else}}Reported {{time .Body.VMsAt}}. The agent reads its hypervisors every 5 minutes and sends changes.{{end}}</p>
+{{with .Body.VMs}}
+{{range .Hypervisors}}{{with .Error}}<p class="notice warn">{{$h.DisplayName}} couldn't read its guests: {{.}}. The earlier copy is shown.</p>{{end}}{{end}}
+<p class="muted small">{{range .Hypervisors}}<span class="tag">{{if eq .Platform "proxmox"}}Proxmox VE{{else}}libvirt{{end}}{{with .Version}} {{.}}{{end}}</span> {{with .Node}}node <strong>{{.}}</strong>{{end}}{{with .Cluster}} of cluster <strong>{{.}}</strong>{{end}} {{end}}</p>
+{{end}}
+<h2>Guests</h2>
+{{template "list" .Body.List}}
+{{with .Body.VMs}}{{with .Storage}}
+<h2>Storage</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Storage</th><th>Type</th><th>Content</th><th>Path</th></tr></thead>
+  <tbody>{{range .}}<tr><td><strong>{{.Name}}</strong>{{if .Shared}} <span class="tag">shared</span>{{end}}</td><td>{{.Type}}</td><td>{{join .Content ", "}}</td><td class="mono small">{{.Path}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}{{end}}
+{{end}}
+
+{{define "kubernetes"}}
+{{$h := .Body.Host}}
+{{with .Body.Node}}<p>This host is node <a href="{{$.Base}}/cis/{{.CIID}}"><strong>{{.Name}}</strong></a> of the cluster <a href="{{$.Base}}/kubernetes/{{.ClusterCI}}"><strong>{{.ClusterName}}</strong></a>.</p>{{end}}
+{{with .Body.K8sNode}}
+<p class="muted">Reported {{time $.Body.K8sNodeAt}} with <code>crictl</code>: {{.Runtime}}{{with .RuntimeVersion}} {{.}}{{end}} at <code>{{.Endpoint}}</code>. Pods come and go with rollouts, so this view isn't kept in the host's history.</p>
+<h2>Pods</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Pod</th><th>Container</th><th>Image</th><th>State</th></tr></thead>
+  <tbody>
+  {{range $.Body.Pods}}{{$p := .}}
+  {{range $i, $c := .Containers}}<tr{{if ne $p.State "ready"}} class="dim"{{end}}>
+    <td>{{if not $i}}<span class="muted">{{$p.Namespace}}/</span><strong>{{$p.Name}}</strong>{{if ne $p.State "ready"}} <span class="muted">{{$p.State}}</span>{{end}}{{end}}</td>
+    <td>{{$c.Name}}</td>
+    <td class="mono small">{{$c.Image}}</td>
+    <td class="nowrap">{{template "guest-state" $c.State}}{{if $c.Attempt}} <span class="muted small" title="restarts">↻{{$c.Attempt}}</span>{{end}}</td>
+  </tr>{{else}}<tr{{if ne $p.State "ready"}} class="dim"{{end}}><td><span class="muted">{{$p.Namespace}}/</span><strong>{{$p.Name}}</strong></td><td colspan="3" class="muted">no containers</td></tr>{{end}}
+  {{else}}<tr><td colspan="4" class="muted">No pods.</td></tr>{{end}}
+  </tbody>
+</table></div>
+<details>
+  <summary>{{len .Images}} image{{if ne (len .Images) 1}}s{{end}} in the runtime's store</summary>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Image</th><th>Digest</th><th class="num">Size</th></tr></thead>
+    <tbody>{{range .Images}}<tr><td class="mono small">{{range .Tags}}{{.}}<br>{{else}}<span class="muted">{{digest .ID}}</span>{{end}}</td><td class="mono small">{{range .Digests}}{{.}}<br>{{end}}</td><td class="num">{{bytes (uint .SizeBytes)}}</td></tr>{{end}}</tbody>
+  </table></div>
+</details>
+{{else}}
+<p class="muted">No runtime view: <code>crictl</code> isn't installed on this host, or its container runtime doesn't answer.</p>
+{{end}}
+{{end}}

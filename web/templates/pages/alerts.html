@@ -1,0 +1,67 @@
+{{define "head"}}{{template "list-head" .}}{{end}}
+{{define "content"}}
+{{$v := .Body}}
+<div class="titlebar">
+  <h1>Alerts</h1>
+  {{if $v.IsAdmin}}<div><a class="button" href="{{.Base}}/alert-rules/new">New rule</a> <a class="button secondary" href="{{.Base}}/settings/notifications">Channels</a></div>{{end}}
+</div>
+{{if ne $v.View "open"}}
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{end}}
+<nav class="tabs" aria-label="Alerts">
+  <a href="{{.Base}}/alerts"{{if eq $v.View "open"}} aria-current="page"{{end}}>Alerts
+    {{- with $v.Counts}}{{if .Critical}} <span class="count warn" title="critical">{{.Critical}}</span>{{end}}{{if .Warning}} <span class="count warn" title="warning">{{.Warning}}</span>{{end}}{{if .Info}} <span class="count" title="info">{{.Info}}</span>{{end}}{{end}}</a>
+  <a href="{{.Base}}/alerts?view=rules"{{if eq $v.View "rules"}} aria-current="page"{{end}}>Rules</a>
+  <a href="{{.Base}}/alerts?view=silences"{{if eq $v.View "silences"}} aria-current="page"{{end}}>Silences</a>
+</nav>
+
+{{if eq $v.View "open"}}
+<p class="muted">Rules are evaluated every minute. An alert <strong>fires</strong> once its condition has held for the rule's delay ({{if $v.Counts.Pending}}{{plural $v.Counts.Pending "alert"}} still pending{{else}}pending until then{{end}}), notifies the rule's channels, and resolves by itself when the condition clears. Acknowledging stops reminders; silencing mutes notifications for a while. Select alerts to acknowledge or silence them. Resolved alerts are kept for 90 days.</p>
+{{template "list" $v.List}}
+{{else if eq $v.View "rules"}}
+{{if and $v.IsAdmin $v.NoChannels}}<p class="notice warn">No notification channels yet, so alerts only show here. <a href="{{.Base}}/settings/notifications">Add a Matrix room or an ntfy topic</a>, then pick it in the rules that should notify.</p>{{end}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Rule</th><th>Watches</th><th>Severity</th><th>Scope</th><th>Notifies</th><th class="num">Firing</th>{{if $v.IsAdmin}}<th></th>{{end}}</tr></thead>
+  <tbody>{{range $v.Rules}}<tr{{if not .Enabled}} class="dim"{{end}}>
+    <td><strong>{{.Name}}</strong>{{if not .Enabled}} <span class="tag">off</span>{{end}}</td>
+    <td>{{.KindLabel}}{{with .Settings}}<br><span class="muted small">{{.}}</span>{{end}}</td>
+    <td>{{template "alert-severity" .}}</td>
+    <td>{{if .Global}}everything{{else}}{{join .ScopeNames ", "}}{{end}}</td>
+    <td>{{if .ChannelNames}}{{join .ChannelNames ", "}}{{else}}<span class="muted">nobody</span>{{end}}</td>
+    <td class="num">{{if .Firing}}<a href="{{$.Base}}/alerts">{{.Firing}}</a>{{end}}</td>
+    {{if $v.IsAdmin}}<td class="row-actions"><a href="{{$.Base}}/alert-rules/{{.ID}}">Edit</a></td>{{end}}
+  </tr>{{else}}<tr><td colspan="7" class="muted">No rules.</td></tr>{{end}}</tbody>
+</table></div>
+{{else}}
+<p class="muted">A silence mutes notifications for the alerts it matches until it ends: alerts still open and show here, marked silenced. Ending a silence early lets alerts that still fire notify.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Matches</th><th>From</th><th>Until</th><th>Why</th><th class="num">Muting</th><th></th></tr></thead>
+  <tbody>{{range $v.Silences}}<tr>
+    <td>{{if .RuleName}}{{.RuleName}}{{else}}every rule{{end}} on {{if .CIName}}{{.CIName}}{{else if .GroupName}}hosts in {{.GroupName}}{{else}}everything{{end}}{{with .Key}} <span class="mono small">{{.}}</span>{{end}}</td>
+    <td class="nowrap">{{time .Starts}}{{if .Upcoming}} <span class="tag">upcoming</span>{{end}}</td>
+    <td class="nowrap">{{time .Ends}}</td>
+    <td>{{.Comment}}<br><span class="muted small">{{with .CreatorName}}{{.}}{{else}}system{{end}}, {{ago .CreatedAt}}</span></td>
+    <td class="num">{{.Muting}}</td>
+    <td class="actions">{{if .CanEnd}}<form method="post" action="{{$.Base}}/silences/{{.ID}}/end"><button class="small">{{if .Upcoming}}Cancel{{else}}End now{{end}}</button></form>{{end}}</td>
+  </tr>{{else}}<tr><td colspan="6" class="muted">No silences in effect.</td></tr>{{end}}</tbody>
+</table></div>
+{{if $v.CanOperate}}
+<form class="panel stack-form wide" method="post" action="{{.Base}}/silences">
+  <h2>New silence</h2>
+  <div class="inline-form">
+    <label>Rule<select name="rule"><option value="">every rule</option>{{range $v.RuleChoices}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+    <label>Host<select name="host"><option value="">any</option>{{range $v.Hosts}}<option value="{{.ID}}">{{.DisplayName}}</option>{{end}}</select></label>
+    <label>or host group<select name="group"><option value="">any</option>{{range $v.Groups}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></label>
+  </div>
+  <div class="inline-form">
+    <label>Starts<input type="datetime-local" name="starts"></label>
+    <label>For<input name="for" value="4h" class="narrow" required></label>
+  </div>
+  <label>Why<input name="comment" required placeholder="Replacing the disk in the NAS"></label>
+  <p class="muted small hint">Leave the start empty to start now. Durations are like 90m, 4h or 2d, up to 90 days. Silencing every host needs a global operator role.</p>
+  <div><button>Add silence</button></div>
+</form>
+{{end}}
+{{end}}
+{{end}}

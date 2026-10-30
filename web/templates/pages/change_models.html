@@ -1,0 +1,10 @@
+{{define "head"}}{{template "list-head" .}}{{end}}
+{{define "content"}}
+{{$v := .Body}}
+<div class="titlebar">
+  <h1>Change models</h1>
+  {{if $v.IsAdmin}}<a class="button" href="{{.Base}}/change-models/new">New model</a>{{end}}
+</div>
+<p class="muted">A change model is a Standard change, approved once: an action and its parameters that approvers have agreed are routine. Changes made from an approved model are approved at once; operators pick the hosts (or the stack). Patch groups and Compose auto-updates run under models too. Editing a model needs approval again.</p>
+{{template "list" $v.List}}
+{{end}}

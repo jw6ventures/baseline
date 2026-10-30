@@ -1,0 +1,21 @@
+{{define "content"}}
+{{$v := .Body}}
+<h1>Kubernetes</h1>
+<div class="table-wrap"><table>
+  <thead><tr><th>Cluster</th><th>Version</th><th class="num">Nodes ready</th><th class="num">Workloads</th><th>Agent</th></tr></thead>
+  <tbody>
+  {{range $v.Clusters}}
+  <tr{{if ne .Status "active"}} class="dim"{{end}}>
+    <td><a href="{{$.Base}}/kubernetes/{{.CIID}}"><strong>{{.Name}}</strong></a>{{if ne .Status "active"}} <span class="muted">{{.Status}}</span>{{end}}</td>
+    <td class="mono">{{.Version}}</td>
+    <td class="num"><span class="{{if lt .NodesReady .Nodes}}tag warn{{end}}">{{.NodesReady}} / {{.Nodes}}</span></td>
+    <td class="num">{{.Workloads}}{{if .Degraded}} <span class="tag caution" title="fewer ready replicas than desired">{{.Degraded}} not ready</span>{{end}}</td>
+    <td><a href="{{$.Base}}/hosts/{{.HostID}}">{{if .Connected}}<span class="dot on"></span>online{{else}}<span class="dot off"></span>offline{{end}}</a></td>
+  </tr>
+  {{else}}
+  <tr><td colspan="5" class="muted">No clusters yet. Run the agent in a cluster with <code>deploy/k8s/baseline-agent.yaml</code>: it reports nodes, workloads, services and ingresses every 5 minutes.</td></tr>
+  {{end}}
+  </tbody>
+</table></div>
+<p class="muted small">A cluster agent runs in the cluster with a read-only service account. The host agent on each node still reports that node's OS, packages and containers, and its runtime's pods under the host's Kubernetes tab; nodes are joined to their hosts by machine-id or DMI product UUID.</p>
+{{end}}

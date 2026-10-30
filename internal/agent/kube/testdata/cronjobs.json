@@ -1,0 +1,55 @@
+{
+ "kind": "CronJobList",
+ "apiVersion": "batch/v1",
+ "metadata": {
+  "resourceVersion": "943"
+ },
+ "items": [
+  {
+   "metadata": {
+    "name": "backup",
+    "namespace": "demo",
+    "uid": "ada6f329-14e7-4568-965c-2687b598b6ab",
+    "resourceVersion": "739",
+    "generation": 1,
+    "creationTimestamp": "2026-10-14T06:38:22Z"
+   },
+   "spec": {
+    "schedule": "17 3 * * *",
+    "concurrencyPolicy": "Allow",
+    "suspend": true,
+    "jobTemplate": {
+     "metadata": {},
+     "spec": {
+      "template": {
+       "metadata": {},
+       "spec": {
+        "containers": [
+         {
+          "name": "backup",
+          "image": "busybox:1.37",
+          "command": [
+           "true"
+          ],
+          "resources": {},
+          "terminationMessagePath": "/dev/termination-log",
+          "terminationMessagePolicy": "File",
+          "imagePullPolicy": "IfNotPresent"
+         }
+        ],
+        "restartPolicy": "OnFailure",
+        "terminationGracePeriodSeconds": 30,
+        "dnsPolicy": "ClusterFirst",
+        "securityContext": {},
+        "schedulerName": "default-scheduler"
+       }
+      }
+     }
+    },
+    "successfulJobsHistoryLimit": 3,
+    "failedJobsHistoryLimit": 1
+   },
+   "status": {}
+  }
+ ]
+}

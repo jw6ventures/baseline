@@ -1,0 +1,42 @@
+{{define "content"}}
+{{$v := .Body}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<section class="panel">
+  <h2>SLA policies</h2>
+  <p class="muted">A policy sets response and resolution targets by priority. A new work item takes the most specific enabled policy: its project and ticket type, then its project, then its ticket type, then the policy for everything. The response clock stops when the item first leaves To do; the resolution clock stops when it is done, and runs again if it's reopened. Changing a policy affects new items only; a priority change on an item moves its running targets.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Policy</th><th>Project</th><th>Ticket type</th>{{range $v.Priorities}}<th>{{.}}</th>{{end}}<th class="num">Running</th><th></th></tr></thead>
+    <tbody>{{range $v.Policies}}{{$p := .}}<tr{{if not .Enabled}} class="dim"{{end}}>
+      <td><strong>{{.Name}}</strong>{{if not .Enabled}} <span class="muted small">disabled</span>{{end}}</td>
+      <td>{{with .ProjectKey}}{{.}}{{else}}<span class="muted">any</span>{{end}}</td>
+      <td>{{with .TypeName}}{{.}}{{else}}<span class="muted">any</span>{{end}}</td>
+      {{range $v.Priorities}}<td class="nowrap small">{{with mins ($p.Targets.Target . "response")}}respond {{.}}{{end}}{{with mins ($p.Targets.Target . "resolution")}}<br>resolve {{.}}{{end}}</td>{{end}}
+      <td class="num">{{.Running}}</td>
+      <td class="actions"><a class="button small" href="{{$.Base}}/settings/slas?edit={{.ID}}">Edit</a>
+        <form class="inline" method="post" action="{{$.Base}}/settings/slas/{{.ID}}/delete"><button class="small danger">Delete</button></form></td>
+    </tr>{{else}}<tr><td colspan="{{add 5 (len $v.Priorities)}}" class="muted">No policies yet: work items get no SLA clocks.</td></tr>{{end}}</tbody>
+  </table></div>
+</section>
+
+{{$e := $v.Edit}}
+<form class="panel stack-form" method="post" action="{{.Base}}/settings/slas{{with $e.ID}}/{{.}}{{end}}">
+  <h2>{{if $e.ID}}Edit {{$e.Name}}{{else}}New SLA policy{{end}}</h2>
+  <label>Name<input name="name" value="{{$e.Name}}" required></label>
+  <label>Project<select name="project"><option value="">Any project</option>{{range $v.Projects}}<option value="{{.ID}}"{{if eq .ID $e.ProjectID}} selected{{end}}>{{.Key}} {{.Name}}</option>{{end}}</select></label>
+  <label>Ticket type<select name="type"><option value="">Any ticket type</option>{{range $v.Types}}<option value="{{.ID}}"{{if eq .ID $e.TypeID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+  <p class="muted small">Targets as durations such as 30m, 4h, 2d or 1d4h, counted around the clock. Leave one empty for no clock.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Priority</th><th>Response</th><th>Resolution</th></tr></thead>
+    <tbody>{{range $prio := $v.Priorities}}<tr>
+      <td>{{template "item-priority" $prio}}</td>
+      {{range $v.Metrics}}<td><input name="{{.}}_{{$prio}}" value="{{$v.Span . $prio}}" size="8" aria-label="{{.}} target for {{$prio}}"></td>{{end}}
+    </tr>{{end}}</tbody>
+  </table></div>
+  <label class="check-line"><input type="checkbox" name="enabled" value="1"{{if $e.Enabled}} checked{{end}}> Enabled</label>
+  <div><button>{{if $e.ID}}Save{{else}}Create{{end}}</button>{{if $e.ID}} <a href="{{.Base}}/settings/slas">Cancel</a>{{end}}</div>
+</form>
+{{end}}

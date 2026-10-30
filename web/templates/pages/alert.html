@@ -1,0 +1,72 @@
+{{define "content"}}
+{{$v := .Body}}{{$a := $v.Alert}}
+<div class="titlebar">
+  <div>
+    <h1>{{$a.Summary}}</h1>
+    <p class="muted sub">{{template "alert-severity" $a}} {{if $a.Closed}}<span class="tag">closed</span>{{else if eq $a.State "resolved"}}<span class="tag ok">resolved</span>{{else if eq $a.State "pending"}}<span class="tag">pending</span>{{else}}<span class="tag warn">firing</span>{{end}}{{template "alert-flags" $a}} · rule <strong>{{$v.Rule.Name}}</strong>{{if $v.IsAdmin}} (<a href="{{.Base}}/alert-rules/{{$v.Rule.ID}}">edit</a>){{end}}</p>
+  </div>
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<div class="grid2">
+<section class="panel">
+  <h2>What</h2>
+  <dl class="facts">
+    <dt>On</dt><dd>{{if $a.Link}}<a href="{{.Base}}{{$a.Link}}">{{$a.Subject}}</a>{{else}}{{$a.Subject}}{{end}}{{with $a.Key}} <span class="mono small">{{.}}</span>{{end}}</dd>
+    {{range $v.Details}}<dt>{{index . 0}}</dt><dd>{{index . 1}}</dd>{{end}}
+  </dl>
+</section>
+<section class="panel">
+  <h2>When</h2>
+  <dl class="facts">
+    <dt>First seen</dt><dd>{{time $a.FirstAt}}</dd>
+    {{if not $a.FiredAt.IsZero}}<dt>Fired</dt><dd>{{time $a.FiredAt}}</dd>{{end}}
+    <dt>Last seen</dt><dd>{{time $a.LastAt}}</dd>
+    {{if not $a.ResolvedAt.IsZero}}<dt>Resolved</dt><dd>{{time $a.ResolvedAt}}</dd>{{end}}
+    {{if $a.Closed}}<dt>Closed</dt><dd>{{time $a.ClosedAt}}{{with $a.ClosedByName}} by {{.}}{{end}}{{with $a.CloseComment}}: {{.}}{{end}}</dd>{{end}}
+    {{if $a.Acked}}<dt>Acknowledged</dt><dd>{{time $a.AckedAt}}{{with $a.AckedByName}} by {{.}}{{end}}{{with $a.AckComment}}: {{.}}{{end}}</dd>{{end}}
+    {{if $a.Silenced}}<dt>Silenced</dt><dd>until {{time $a.SilenceEnds}} (<a href="{{.Base}}/alerts?view=silences">silences</a>)</dd>{{end}}
+  </dl>
+</section>
+</div>
+
+{{if $v.CanAct}}
+<section class="panel">
+  <h2>Act</h2>
+  {{if and (eq $a.State "firing") (not $a.Acked)}}
+  <form class="inline-form" method="post" action="{{.Base}}/alerts/{{$a.ID}}/ack">
+    <label>Note<input name="comment" placeholder="Looking into it"></label>
+    <button>Acknowledge</button>
+  </form>
+  <p class="muted small">Acknowledging tells others someone is on it and stops reminders. The alert still resolves by itself.</p>
+  {{end}}
+  <form class="inline-form" method="post" action="{{.Base}}/alerts/{{$a.ID}}/close">
+    <label>Why<input name="comment" placeholder="Known, not worth tracking"></label>
+    <button class="secondary">Close</button>
+  </form>
+  <p class="muted small">Closing puts the alert away for good: no more notifications, and it shows nowhere. It only fires again, as a new alert, if it gets worse{{if eq $a.RuleKind "smart"}} (more bad sectors, or the drive failing){{else}} (a higher severity){{end}}.</p>
+  {{if not $a.Silenced}}
+  <form class="inline-form" method="post" action="{{.Base}}/alerts/{{$a.ID}}/silence">
+    <label>Silence for<select name="for">{{range list "1h" "4h" "1d" "3d" "7d"}}<option>{{.}}</option>{{end}}</select></label>
+    <label>Match<select name="match"><option value="alert">this alert</option>{{if $a.CIID}}<option value="subject">everything this rule finds on {{$a.Subject}}</option>{{end}}</select></label>
+    <label>Why<input name="comment" placeholder="Planned maintenance"></label>
+    <button class="secondary">Silence</button>
+  </form>
+  {{end}}
+</section>
+{{end}}
+
+<h2>Notifications</h2>
+{{if $v.Notifications}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Queued</th><th>Channel</th><th>Message</th><th>Delivery</th></tr></thead>
+  <tbody>{{range $v.Notifications}}<tr>
+    <td class="nowrap">{{time .CreatedAt}}</td>
+    <td>{{.ChannelName}} <span class="muted small">{{.ChannelKind}}</span></td>
+    <td>{{.Title}}</td>
+    <td>{{template "delivery" .}}</td>
+  </tr>{{end}}</tbody>
+</table></div>
+{{else}}<p class="muted">None{{if not $v.Rule.Channels}}: the rule notifies no channel{{else if $a.Silenced}}: it's silenced{{else if eq $a.State "pending"}} yet: it's pending{{end}}.</p>{{end}}
+{{end}}
+

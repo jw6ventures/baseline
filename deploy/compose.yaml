@@ -1,0 +1,77 @@
+# Baseline: server + Postgres behind Traefik.
+#
+# Host rule: nothing binds to a public address, so no ports are published.
+# Traefik reaches the server over the shared proxy network; Postgres sits on
+# an internal-only network. Copy deploy/.env.example to deploy/.env first.
+
+name: baseline
+
+services:
+  server:
+    image: ${BASELINE_IMAGE:-baseline-server:latest}
+    build:
+      context: ..
+      args:
+        # Empty: the Dockerfile takes the newest schema migration's version.
+        VERSION: ${BASELINE_VERSION:-}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      BASELINE_DB_URL: postgres://baseline:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/baseline?sslmode=disable
+      BASELINE_GRPC_PUBLIC_ADDR: ${BASELINE_AGENT_HOST:?set BASELINE_AGENT_HOST in .env}:${BASELINE_AGENT_PORT:-443}
+    volumes:
+      - baseline-data:/data            # internal CA, gateway cert, release key
+    networks:
+      - proxy
+      - backend
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-proxy}
+      # Web UI: Traefik terminates TLS.
+      traefik.http.routers.baseline.rule: Host(`${BASELINE_HOST:?set BASELINE_HOST in .env}`)
+      traefik.http.routers.baseline.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.baseline.tls: "true"
+      traefik.http.routers.baseline.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-}
+      traefik.http.services.baseline.loadbalancer.server.port: "8080"
+      # Agent gateway: TLS passthrough on SNI. baseline terminates TLS itself
+      # with its internal CA and checks each agent's client cert.
+      traefik.tcp.routers.baseline-agent.rule: HostSNI(`${BASELINE_AGENT_HOST}`)
+      traefik.tcp.routers.baseline-agent.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.tcp.routers.baseline-agent.tls.passthrough: "true"
+      traefik.tcp.services.baseline-agent.loadbalancer.server.port: "8443"
+    # Fallback if TLS passthrough on the shared entrypoint is unwanted:
+    # publish the agent port on the VPN address only, never 0.0.0.0, and set
+    # BASELINE_AGENT_HOST/BASELINE_AGENT_PORT to that address and 8443.
+    # ports:
+    #   - "${BASELINE_VPN_IP}:8443:8443"
+
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: baseline
+      POSTGRES_DB: baseline
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "baseline", "-d", "baseline"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+networks:
+  proxy:
+    name: ${TRAEFIK_NETWORK:-proxy}
+    external: true
+  backend:
+    internal: true
+
+volumes:
+  baseline-data:
+  postgres-data:

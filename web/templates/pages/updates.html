@@ -1,0 +1,18 @@
+{{define "head"}}{{template "list-head" .}}{{end}}
+{{define "content"}}
+{{$v := .Body}}
+<h1>Updates</h1>
+<div class="stats">
+  <a class="stat" href="{{.Base}}/updates?show=pending"><span class="n">{{$v.HostsWithUpdates}}<span class="of"> / {{$v.HostCount}}</span></span><span>hosts with updates</span></a>
+  <a class="stat" href="{{.Base}}/updates/packages"><span class="n">{{$v.Total}}</span><span>updates</span></a>
+  <a class="stat" href="{{.Base}}/updates{{if eq $v.Tab "packages"}}/packages{{end}}?show=security"><span class="n{{if $v.Security}} bad{{end}}">{{$v.Security}}</span><span>security updates</span></a>
+  {{if $v.Unchecked}}<a class="stat" href="{{.Base}}/updates?show=unchecked"><span class="n">{{$v.Unchecked}}</span><span>not checked yet</span></a>{{end}}
+</div>
+
+<nav class="tabs" aria-label="Group updates">
+  <a href="{{.Base}}/updates"{{if eq $v.Tab "hosts"}} aria-current="page"{{end}}>By host</a>
+  <a href="{{.Base}}/updates/packages"{{if eq $v.Tab "packages"}} aria-current="page"{{end}}>By package</a>
+</nav>
+{{template "list" $v.List}}
+<p class="muted small">Agents refresh repository metadata and check for updates every 6 hours; “Check now” on a host's Updates tab runs it at once.</p>
+{{end}}

@@ -1,0 +1,69 @@
+{{define "content"}}
+{{template "settings-tabs" .}}
+<h1>Access</h1>
+{{with .Body.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with .Body.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<section>
+<h2>Role bindings</h2>
+<p class="muted">Each binding gives members of an Authentik group a role, everywhere or on one host group. Operator and approver include viewer; admin includes everything and is always global.
+{{with .Body.Bootstrap}}Members of <code>{{.}}</code> are always admin (<code>BASELINE_BOOTSTRAP_ADMIN_GROUP</code>), so removing your own binding can't lock you out.{{end}}</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Authentik group</th><th>Role</th><th>Scope</th><th></th></tr></thead>
+  <tbody>
+  {{range .Body.Bindings}}
+  <tr>
+    <td><code>{{.IdPGroup}}</code></td>
+    <td>{{.Role}}</td>
+    <td>{{if .ScopeGroupID}}host group <strong>{{.ScopeGroupName}}</strong>{{else}}global{{end}}</td>
+    <td class="actions"><form method="post" action="{{$.Base}}/settings/access/bindings/{{.ID}}/delete"><button class="danger small">Remove</button></form></td>
+  </tr>
+  {{else}}
+  <tr><td colspan="4" class="muted">No bindings yet.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<form class="inline-form" method="post" action="{{.Base}}/settings/access/bindings">
+  <label>Authentik group <input name="idp_group" required placeholder="lab-media-ops"></label>
+  <label>Role
+    <select name="role">{{range .Body.Roles}}<option>{{.}}</option>{{end}}</select>
+  </label>
+  <label>Scope
+    <select name="scope">
+      <option value="global">global</option>
+      {{range .Body.HostGroups}}<option value="{{.ID}}">host group: {{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <button>Add binding</button>
+</form>
+</section>
+
+<section>
+<h2>Host groups</h2>
+<p class="muted">Groups scope role bindings now, and maintenance windows and patch groups later. Hosts join them from M1. Removing a group also removes the bindings scoped to it.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Name</th><th>Description</th><th>Created</th><th></th></tr></thead>
+  <tbody>
+  {{range .Body.HostGroups}}
+  <tr>
+    <td><strong>{{.Name}}</strong></td>
+    <td>{{.Description}}</td>
+    <td class="nowrap">{{time .CreatedAt}}</td>
+    <td class="actions"><form method="post" action="{{$.Base}}/settings/access/groups/{{.ID}}/delete"><button class="danger small">Remove</button></form></td>
+  </tr>
+  {{else}}
+  <tr><td colspan="4" class="muted">No host groups yet.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<form class="inline-form" method="post" action="{{.Base}}/settings/access/groups">
+  <label>Name <input name="name" required placeholder="media"></label>
+  <label>Description <input name="description" placeholder="optional"></label>
+  <button>Add host group</button>
+</form>
+</section>
+{{end}}

@@ -1,0 +1,6 @@
+{{define "head"}}{{template "list-head" .}}{{end}}
+{{define "content"}}
+<h1>Jobs</h1>
+<p class="muted">Every action sent to a host, newest first. A job's ID is its idempotency key: an agent that receives one again answers with the result instead of running it twice.</p>
+{{template "list" .Body.List}}
+{{end}}

@@ -1,0 +1,32 @@
+{{define "content"}}
+{{$v := .Body}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<section class="panel">
+  <h2>Workflows</h2>
+  <p class="muted">A workflow is the statuses a work item moves through and the transitions between them. Each <a href="{{.Base}}/projects">project</a> sets one per ticket type. Editing a workflow makes a draft; publishing it makes a new version that new items start on, while existing items stay on the version they started on.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Name</th><th>Published</th><th>Draft</th><th class="num">Project types</th><th class="num">Items</th></tr></thead>
+    <tbody>{{range $v.Workflows}}<tr>
+      <td><a href="{{$.Base}}/settings/workflows/{{.ID}}"><strong>{{.Name}}</strong></a>{{if .Default}} <span class="tag">default</span>{{end}}{{with .Description}}<br><span class="muted small">{{.}}</span>{{end}}</td>
+      <td>{{if .Latest}}v{{.Latest}}{{else}}<span class="muted">not yet</span>{{end}}</td>
+      <td>{{if .DraftID}}<span class="tag caution">draft</span>{{end}}</td>
+      <td class="num">{{.Uses}}</td><td class="num">{{.Items}}</td>
+    </tr>{{end}}</tbody>
+  </table></div>
+</section>
+
+<form class="panel stack-form" method="post" action="{{.Base}}/settings/workflows">
+  <h2>New workflow</h2>
+  <label>Name<input name="name" value="{{$v.Name}}" placeholder="Software development" required></label>
+  <label>Description<textarea name="description" rows="2"></textarea></label>
+  <label>Start from<select name="from">
+    <option value="">An empty draft</option>
+    {{range $v.Workflows}}{{if .Latest}}<option value="{{.ID}}"{{if eq .ID $v.From}} selected{{end}}>A copy of {{.Name}} v{{.Latest}}</option>{{end}}{{end}}
+  </select></label>
+  <div><button>Create</button></div>
+</form>
+{{end}}

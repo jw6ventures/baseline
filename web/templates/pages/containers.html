@@ -1,0 +1,17 @@
+{{define "head"}}{{template "list-head" .}}{{end}}
+{{define "content"}}
+{{$v := .Body}}
+<h1>Containers</h1>
+<div class="stats">
+  <a class="stat" href="{{.Base}}/containers?show=running"><span class="n">{{$v.Running}}<span class="of"> / {{$v.Total}}</span></span><span>containers running</span></a>
+  <a class="stat" href="{{.Base}}/containers?show=updates"><span class="n{{if $v.Updates}} caution{{end}}">{{$v.Updates}}</span><span>image updates</span></a>
+  <a class="stat" href="{{.Base}}/stacks"><span class="n">{{$v.StackCount}}</span><span>Compose stacks</span></a>
+</div>
+
+<nav class="tabs" aria-label="Containers or stacks">
+  <a href="{{.Base}}/containers"{{if eq $v.Tab "containers"}} aria-current="page"{{end}}>Containers</a>
+  <a href="{{.Base}}/stacks"{{if eq $v.Tab "stacks"}} aria-current="page"{{end}}>Compose stacks</a>
+</nav>
+{{template "list" $v.List}}
+<p class="muted small">The server checks each image's registry every 6 hours: a newer image behind the same tag is flagged. Newer version tags are suggested only for containers with a semver rule, set on the container's page.{{if eq $v.Tab "stacks"}} Agents discover stacks from container labels; a stack's name can carry its environment, category and visibility.{{end}}</p>
+{{end}}

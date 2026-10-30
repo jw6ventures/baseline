@@ -1,0 +1,82 @@
+{{define "head"}}{{template "list-head" .}}{{if eq .Body.M.State "running"}}<meta http-equiv="refresh" content="3">{{end}}{{end}}
+{{define "content"}}
+{{$v := .Body}}{{$m := $v.M}}{{$p := $v.Plan}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<div class="titlebar">
+  <div>
+    <h2>{{if eq $m.Kind "workflow"}}Migrate {{$m.From}} to {{$m.To}}{{else}}Move {{$m.From}} items to {{$m.To}}{{end}} {{template "migration-state" $m}}</h2>
+    <p class="muted sub">{{if $m.Draft}}Drafted {{time $m.CreatedAt}}{{if $p.Target.ID}}. Items go to {{$p.Target.WorkflowName}} v{{$p.Target.Version}}{{end}}.{{else}}Started {{time $m.StartedAt}}{{with $m.ToVersion}}, onto {{$m.ToVersionWorkflow}} v{{.}}{{end}}.{{end}}</p>
+  </div>
+  <div><a class="button" href="{{.Base}}/settings/migrations">All migrations</a></div>
+</div>
+
+{{if $m.Draft}}
+{{with $v.Problem}}<p class="notice warn">{{.}}</p>{{end}}
+
+<section class="panel">
+  <h2>1. Map statuses</h2>
+  <p class="muted">Each status the items are on now, with where they go. Statuses with the same key map on their own; change any of them. Counts are of the items ticked below.</p>
+  <form id="migration-form" method="post" action="{{.Base}}/settings/migrations/{{$m.ID}}/start">
+  {{range $p.Sources}}{{$src := .}}
+  <h3>From {{.Version.WorkflowName}} v{{.Version.Version}}</h3>
+  <div class="table-wrap"><table class="mapping">
+    <thead><tr><th>Status now</th><th class="num">Items</th><th>Goes to</th><th></th></tr></thead>
+    <tbody>{{range .Rows}}{{$row := .}}<tr{{if not .Items}} class="dim"{{end}}>
+      <td>{{template "wf-status" .Status}}</td>
+      <td class="num">{{.Items}}</td>
+      <td><select name="map.{{.Status.ID}}" aria-label="Where {{.Status.Name}} goes">{{range $p.Target.Statuses}}<option value="{{.Key}}"{{if eq .Key $row.Target.Key}} selected{{end}}>{{.Name}}{{if ne .Name (itemStatus .Category)}} ({{itemStatus .Category}}){{end}}</option>{{end}}</select></td>
+      <td class="muted small">{{mapHow .How}}</td>
+    </tr>{{end}}</tbody>
+  </table></div>
+  {{else}}<p class="muted">{{if $v.Problem}}Fix the target first.{{else}}No items are in scope.{{end}}</p>{{end}}
+  </form>
+  {{if eq $m.Kind "move"}}
+  {{if $p.Dropped}}<p class="notice warn">{{$m.To}} doesn't use these custom fields, so their values are dropped (each item's history keeps them): {{range $i, $f := $p.Dropped}}{{if $i}}, {{end}}<strong>{{$f.Label}}</strong>{{end}}.</p>
+  {{else}}<p class="muted">Every custom field the items have applies to {{$m.To}} too: nothing is dropped.</p>{{end}}
+  {{end}}
+</section>
+
+<section class="panel">
+  <h2>2. Pick items</h2>
+  <p class="muted">Every item that matches the filter moves, less the ones you untick. Unticking is saved as you go, across pages.</p>
+  {{if $m.Excluded}}<form class="inline" method="post" action="{{.Base}}/settings/migrations/{{$m.ID}}/select-all"><input type="hidden" name="query" value="{{$v.List.Encoded}}"><span class="muted small">{{plural (len $m.Excluded) "item"}} unticked.</span> <button class="small">Tick them all again</button></form>{{end}}
+  {{template "list" $v.List}}
+</section>
+
+<section class="panel">
+  <h2>3. Run</h2>
+  {{if $v.TooMany}}<p class="notice warn">More than {{plural 20000 "item"}} match: filter the list down and run the rest in another migration.</p>
+  {{else if $v.Selected}}<p>Moves <strong>{{plural $v.Selected "item"}}</strong>{{with $v.Targets}}: {{range $i, $t := .}}{{if $i}}, {{end}}{{$t}}{{end}}{{end}}. Counts follow the saved mapping: save after changing it to see them again.</p>
+  {{else}}<p class="muted">No items are ticked.</p>{{end}}
+  <p class="muted small">Validators and post-functions don't run. Done items keep their resolution; items that become done get Done. A version no item is on any more retires once the migration ends.</p>
+  <button form="migration-form" formaction="{{.Base}}/settings/migrations/{{$m.ID}}" class="secondary">Save mapping</button>
+  <button form="migration-form"{{if or (not $v.Selected) $v.TooMany $v.Problem}} disabled{{end}}>Run migration</button>
+  <form class="inline" method="post" action="{{.Base}}/settings/migrations/{{$m.ID}}/delete"><button class="danger">Discard the draft</button></form>
+</section>
+
+{{else}}
+<section class="panel">
+  {{if eq $m.State "running"}}
+  <h2>Running</h2>
+  <progress class="migration" max="{{$m.Total}}" value="{{$m.Done}}">{{$v.Percent}}%</progress>
+  <p>{{$m.Done}} of {{plural $m.Total "item"}} moved. This page refreshes on its own.</p>
+  {{else}}
+  <h2>{{if eq $m.State "done"}}Done{{else}}Failed{{end}}</h2>
+  {{with $m.Error}}<p class="notice bad">{{.}}</p>{{end}}
+  <p>Moved {{plural $m.Done "item"}}{{with $m.Skipped}}; skipped {{.}} that had left the scope before their turn{{end}}. Finished {{time $m.FinishedAt}}.</p>
+  {{end}}
+  {{range $p.Sources}}
+  <h3>From {{.Version.WorkflowName}} v{{.Version.Version}}</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Status</th><th>Went to</th></tr></thead>
+    <tbody>{{range .Rows}}<tr><td>{{template "wf-status" .Status}}</td><td>{{template "wf-status" .Target}}</td></tr>{{end}}</tbody>
+  </table></div>
+  {{end}}
+</section>
+{{end}}
+{{end}}
+

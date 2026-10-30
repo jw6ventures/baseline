@@ -1,0 +1,39 @@
+{{define "content"}}
+{{$v := .Body}}
+<h1>{{if $v.New}}New {{if eq $v.Kind "freeze"}}freeze{{else}}window{{end}}{{else}}Edit {{$v.Name}}{{end}}</h1>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+<p class="muted">The schedule is when it opens, written as cron (<code>minute hour day-of-month month day-of-week</code>) and read in its own time zone, so daylight-saving changes move with it. It stays open for the duration. Changes tied to a window run only while it's open; a freeze stops every change except Emergency ones while it's in effect.</p>
+<form class="panel stack-form wide" method="post" action="{{.Base}}/windows{{if not $v.New}}/{{$v.ID}}{{end}}">
+  <label>Name<input name="name" value="{{$v.Name}}" maxlength="100" required></label>
+  <label>Description<input name="description" value="{{$v.Description}}"></label>
+  <fieldset class="checks">
+    <legend>Kind</legend>
+    <label><input type="radio" name="kind" value="window"{{if ne $v.Kind "freeze"}} checked{{end}}> maintenance window <span class="muted small">changes may run while it's open</span></label>
+    <label><input type="radio" name="kind" value="freeze"{{if eq $v.Kind "freeze"}} checked{{end}}> freeze <span class="muted small">no changes but Emergency ones</span></label>
+  </fieldset>
+  <div class="inline-form">
+    <label>Opens (cron)<input name="cron" value="{{$v.Cron}}" class="mono" required placeholder="0 2 * * SUN"></label>
+    <label>For<input name="duration" value="{{$v.Duration}}" class="narrow" required placeholder="3h"></label>
+    <label>Time zone<input name="tz" value="{{$v.TZ}}" list="zones" required></label>
+  </div>
+  <datalist id="zones">{{range $v.ExampleZones}}<option value="{{.}}">{{end}}</datalist>
+  <p class="muted small hint">Examples: <code>0 2 * * SUN</code> for 3h is Sundays 02:00–05:00; <code>0 22 * * MON-FRI</code> for 8h is weeknights; <code>0 0 20 12 *</code> for 14d is a holiday freeze from 20 December. Durations are like <code>90m</code>, <code>3h</code> or <code>2d</code>, from 1 minute to 31 days.</p>
+  {{if $v.Preview}}<div class="preview"><span class="muted small">Next openings, in {{$v.DisplayTZ}}:</span><ul>{{range $v.Preview}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
+  {{with $v.PreviewNote}}<p class="notice warn">{{.}}</p>{{end}}
+  <fieldset class="checks">
+    <legend>Applies to <span class="small">(none ticked: every host)</span></legend>
+    {{range $v.Groups}}<label><input type="checkbox" name="scope" value="{{.ID}}"{{if .Checked}} checked{{end}}> {{.Name}} <span class="muted small">{{plural .Hosts "host"}}</span></label>
+    {{else}}<span class="muted">There are no host groups, so it applies to every host.</span>{{end}}
+  </fieldset>
+  <label class="check-line"><input type="checkbox" name="active" value="1"{{if $v.Active}} checked{{end}}> Active <span class="muted small">an inactive window never opens, and an inactive freeze blocks nothing</span></label>
+  <div><button>Save</button> <a href="{{.Base}}/windows">Cancel</a></div>
+</form>
+
+{{if not $v.New}}
+<section class="panel danger-zone">
+  <h2>Delete</h2>
+  <p class="muted">Changes{{with $v.PatchGroups}}, patch groups ({{join . ", "}}){{end}} and stacks that use it lose it and run without a window.</p>
+  <form method="post" action="{{.Base}}/windows/{{$v.ID}}/delete"><button class="danger">Delete {{$v.Name}}</button></form>
+</section>
+{{end}}
+{{end}}

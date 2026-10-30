@@ -1,0 +1,60 @@
+{{define "head"}}<script src="{{.Base}}/static/mapcore.js" defer></script><script src="{{.Base}}/static/cimap.js" defer></script>{{end}}
+{{define "content"}}
+<div class="titlebar">
+  <h1>CI map</h1>
+  <div class="actions">
+    <button type="button" class="small secondary" data-act="fit" title="Fit everything in view (F)">Fit</button>
+    <button type="button" class="small secondary" data-act="relayout" title="Shuffle and lay the graph out again">Re-layout</button>
+    <button type="button" class="small secondary" data-act="freeze" aria-pressed="false" title="Stop or resume the layout">Freeze</button>
+    <button type="button" class="small secondary" data-act="png" title="Download the current view as a PNG">Export PNG</button>
+    <button type="button" class="small secondary" data-act="reload" title="Fetch the latest CIs and relationships">Reload</button>
+  </div>
+</div>
+<p class="muted small">Every CI you can see and how they relate. Drag to pan, scroll or pinch to zoom, drag a CI to pin it in place, click one for details, double-click to open its page. Filters, focus and the view are kept in the address, so a view can be bookmarked or shared.</p>
+<noscript><p class="notice bad">The map needs JavaScript. The <a href="{{.Base}}/cis">CI list</a> works without it.</p></noscript>
+<div class="cimap" id="cimap" data-src="{{.Base}}/map.json">
+  <aside class="map-filters" aria-label="Map filters">
+    <label class="map-search">Search
+      <input type="search" data-f="q" placeholder="Name, host, tag or note" autocomplete="off">
+    </label>
+    <p class="map-matches muted small" aria-live="polite"></p>
+    <fieldset class="map-group" data-group="view">
+      <legend>View</legend>
+      <label>Colour by
+        <select data-f="color">
+          <option value="type">Type</option>
+          <option value="health">Health</option>
+          <option value="status">Status</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" data-f="bridge" checked> Bridge through hidden CIs</label>
+      <label class="check"><input type="checkbox" data-f="iso"> Hide CIs with no relationships</label>
+      <label class="check"><input type="checkbox" data-f="labels" checked> Show names</label>
+      <label class="check"><input type="checkbox" data-f="only"> Show only search matches</label>
+    </fieldset>
+    <fieldset class="map-group" data-group="focus" hidden>
+      <legend>Focus</legend>
+      <p class="small"><strong data-focus-name></strong></p>
+      <label>Hops
+        <select data-f="depth">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="0">All connected</option>
+        </select>
+      </label>
+      <button type="button" class="small secondary" data-act="unfocus">Leave focus</button>
+    </fieldset>
+    <div data-lists></div>
+    <button type="button" class="small secondary" data-act="reset">Reset filters</button>
+  </aside>
+  <div class="map-stage">
+    <canvas aria-label="Map of configuration items and their relationships" role="img"></canvas>
+    <p class="map-status muted">Loading…</p>
+    <div class="map-tip" hidden></div>
+    <div class="map-legend" aria-label="Legend"></div>
+    <section class="map-info" hidden aria-live="polite"></section>
+  </div>
+</div>
+{{end}}

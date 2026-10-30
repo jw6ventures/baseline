@@ -1,0 +1,165 @@
+# Baseline cluster agent: reports a Kubernetes cluster's nodes, namespaces,
+# workloads (Deployments, StatefulSets, DaemonSets, CronJobs and pods no
+# controller owns), Services and Ingresses to Baseline as the "k8s" section
+# (docs/architecture.md §2.2). It only reads, through a ClusterRole limited
+# to get and list on exactly those resources: no Secrets, no ConfigMaps, no
+# pod logs or exec, and it never collects environment variables or
+# annotations. The host agent on each node still reports that node's OS,
+# packages and containers.
+#
+# Usage:
+#   1. Set the Deployment's image below to a release,
+#      ghcr.io/jw6ventures/baseline-agent:<version>, or build your own with
+#      `make image-agent` and push it to a registry the cluster can pull from.
+#   2. Create an enrollment token in Baseline (Settings → Enrollment) and put it
+#      and the gateway address (BASELINE_GRPC_PUBLIC_ADDR, host:port) in the
+#      Secret below, or create the Secret yourself and delete it from this
+#      file:
+#        kubectl -n baseline create secret generic baseline-agent \
+#          --from-literal=server=agent.baseline.example:443 --from-literal=token='baseline1....'
+#   3. Set BASELINE_CLUSTER_NAME to the name the cluster should have in Baseline.
+#   4. kubectl apply -f baseline-agent.yaml
+#
+# On first start the agent enrolls with the token and keeps its key and
+# certificates on the PersistentVolumeClaim, so restarts and rescheduling
+# keep its identity and the token is not needed again (tokens are single-use
+# by default). Deleting the claim means enrolling again with a new token; the
+# old record then shows offline in Baseline and an admin revokes it.
+# The agent dials out to the gateway; it needs no Service or open port.
+# Update it by changing the image.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: baseline
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: baseline-agent
+  namespace: baseline
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: baseline-agent
+rules:
+  - apiGroups: [""]
+    resources: [nodes, namespaces, pods, services]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, daemonsets]
+    verbs: [get, list]
+  - apiGroups: [batch]
+    resources: [cronjobs]
+    verbs: [get, list]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list]
+  # The API server version (every authenticated user may read it already).
+  - nonResourceURLs: [/version]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: baseline-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: baseline-agent
+subjects:
+  - kind: ServiceAccount
+    name: baseline-agent
+    namespace: baseline
+---
+# server: the gateway address agents dial (BASELINE_GRPC_PUBLIC_ADDR).
+# token: an enrollment token, used only until the agent has enrolled.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: baseline-agent
+  namespace: baseline
+type: Opaque
+stringData:
+  server: agent.baseline.example:443
+  token: REPLACE-WITH-ENROLLMENT-TOKEN
+---
+# The agent's state: its private key, certificates and the CA, a few KB.
+# Certificate renewals write to it, so it must stay writable.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: baseline-agent-state
+  namespace: baseline
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: baseline-agent
+  namespace: baseline
+  labels:
+    app.kubernetes.io/name: baseline-agent
+spec:
+  # One agent per cluster. Recreate, so the old pod lets go of the volume
+  # (and its stream to the server) before the new one starts.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: baseline-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: baseline-agent
+    spec:
+      serviceAccountName: baseline-agent
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: baseline-agent:latest # e.g. ghcr.io/jw6ventures/baseline-agent:v1.0.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: BASELINE_SERVER
+              valueFrom:
+                secretKeyRef: {name: baseline-agent, key: server}
+            - name: BASELINE_TOKEN
+              valueFrom:
+                secretKeyRef: {name: baseline-agent, key: token}
+            - name: BASELINE_CLUSTER_NAME
+              value: homelab
+            - name: BASELINE_STATE_DIR
+              value: /var/lib/baseline
+            - name: BASELINE_LOG_LEVEL
+              value: Info
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/baseline
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: baseline-agent-state

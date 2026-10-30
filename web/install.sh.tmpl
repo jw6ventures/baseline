@@ -1,0 +1,138 @@
+#!/bin/sh
+# Baseline agent installer, served by {{.PublicURL}} (server {{.Version}}).
+#
+#   curl -fsSL {{.PublicURL}}/install.sh | sudo sh -s -- --token TOKEN
+#
+# Installs the agent binary and its systemd unit, enrolls the host with the
+# token (skipped if it is already enrolled), and starts the agent. Running it
+# again upgrades the binary in place.
+#
+# On a host set up before jcmdb was renamed Baseline, it replaces the
+# jcmdb-agent binary and unit with baseline-agent's and leaves /etc/jcmdb
+# and /var/lib/jcmdb where they are: the agent goes on using them, so the
+# host keeps its identity and its Compose stacks don't move.
+#
+# Works on Ubuntu, Rocky Linux, Fedora and image-based Fedora (Bazzite):
+# everything goes under /usr/local and /etc, which are writable on all of
+# them, and SELinux labels are restored where SELinux is enabled.
+set -eu
+
+# Everything runs inside main, called on the last line, so a download cut off
+# midway runs nothing rather than half a script.
+main() {
+
+SERVER_URL="{{.PublicURL}}"
+GATEWAY="{{.Gateway}}"
+TOKEN=""
+LIBEXEC=/usr/local/libexec/baseline
+UNIT=/etc/systemd/system/baseline-agent.service
+STATE=/var/lib/baseline
+LEGACY_UNIT=/etc/systemd/system/jcmdb-agent.service
+if [ ! -e "$STATE" ] && [ -e /var/lib/jcmdb ]; then
+	STATE=/var/lib/jcmdb
+fi
+
+die() { echo "Baseline install: $*" >&2; exit 1; }
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--token) [ $# -ge 2 ] || die "--token needs a value"; TOKEN="$2"; shift 2 ;;
+	--token=*) TOKEN="${1#*=}"; shift ;;
+	--gateway) [ $# -ge 2 ] || die "--gateway needs a value"; GATEWAY="$2"; shift 2 ;;
+	--gateway=*) GATEWAY="${1#*=}"; shift ;;
+	*) die "unknown option: $1" ;;
+	esac
+done
+
+[ "$(id -u)" -eq 0 ] || die "run as root, e.g. curl ... | sudo sh -s -- --token TOKEN"
+command -v systemctl >/dev/null 2>&1 || die "systemd is required"
+
+case "$(uname -m)" in
+x86_64 | amd64) ARCH=amd64 ;;
+aarch64 | arm64) ARCH=arm64 ;;
+*) die "unsupported architecture: $(uname -m)" ;;
+esac
+
+fetch() {
+	if command -v curl >/dev/null 2>&1; then
+		curl -fsSL "$1" -o "$2"
+	elif command -v wget >/dev/null 2>&1; then
+		wget -qO "$2" "$1"
+	else
+		die "curl or wget is required"
+	fi
+}
+
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT INT TERM
+
+echo "Downloading baseline-agent ($ARCH) from $SERVER_URL"
+fetch "$SERVER_URL/download/baseline-agent-linux-$ARCH" "$TMP/baseline-agent"
+fetch "$SERVER_URL/download/SHA256SUMS" "$TMP/SHA256SUMS"
+want=$(awk -v f="baseline-agent-linux-$ARCH" '$2 == f { print $1 }' "$TMP/SHA256SUMS")
+have=$(sha256sum "$TMP/baseline-agent" | awk '{ print $1 }')
+[ -n "$want" ] && [ "$want" = "$have" ] || die "checksum mismatch for baseline-agent-linux-$ARCH"
+
+mkdir -p "$LIBEXEC"
+# A fresh install supersedes a self-update still on probation.
+rm -f "$STATE/update-pending.json"
+install -m 0755 "$TMP/baseline-agent" "$LIBEXEC/baseline-agent.new"
+mv -f "$LIBEXEC/baseline-agent.new" "$LIBEXEC/baseline-agent"
+mkdir -p /usr/local/bin
+ln -sf "$LIBEXEC/baseline-agent" /usr/local/bin/baseline-agent
+
+mkdir -p "$(dirname "$UNIT")"
+cat >"$UNIT" <<EOF
+[Unit]
+Description=Baseline agent
+Documentation=$SERVER_URL
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Runs as root by design: package databases, SMART, dmidecode and (later)
+# patching need it. Hardening that blocks setuid or writes would break
+# package managers' maintainer scripts.
+#
+# Self-update keeps the previous binary as baseline-agent.prev; before each
+# start it rolls back an update that never reached the server. Until the
+# first self-update there is no .prev, and "-" ignores that.
+ExecStartPre=-$LIBEXEC/baseline-agent.prev guard
+ExecStart=$LIBEXEC/baseline-agent run
+Restart=always
+RestartSec=5
+Nice=5
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+if command -v restorecon >/dev/null 2>&1 && [ -e /sys/fs/selinux/enforce ]; then
+	restorecon -R "$LIBEXEC" /usr/local/bin/baseline-agent "$UNIT" || true
+fi
+
+if [ -e "$LEGACY_UNIT" ]; then
+	echo "Replacing jcmdb-agent with baseline-agent; keeping /etc/jcmdb and /var/lib/jcmdb."
+	systemctl disable --now jcmdb-agent >/dev/null 2>&1 || true
+	rm -f "$LEGACY_UNIT" /usr/local/bin/jcmdb-agent
+	rm -rf /usr/local/libexec/jcmdb
+fi
+
+if [ -e "$STATE/agent-id" ]; then
+	echo "Already enrolled; keeping the existing identity."
+elif [ -n "$TOKEN" ]; then
+	# Via the environment, so the token doesn't show in ps.
+	BASELINE_TOKEN="$TOKEN" "$LIBEXEC/baseline-agent" enroll --server "$GATEWAY"
+else
+	die "not enrolled yet: pass --token (Settings → Enrollment in the Baseline UI)"
+fi
+
+systemctl daemon-reload
+systemctl enable baseline-agent >/dev/null 2>&1
+systemctl restart baseline-agent
+echo "baseline-agent $("$LIBEXEC/baseline-agent" version) is running. Logs: journalctl -u baseline-agent -f"
+command -v smartctl >/dev/null 2>&1 || echo "Note: install smartmontools (7 or newer) to report drive health."
+}
+
+main "$@"

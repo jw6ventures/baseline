@@ -1,0 +1,39 @@
+{{define "content"}}
+{{$v := .Body}}
+<div class="titlebar">
+  <h1>Calendar</h1>
+  <nav class="ranges cal-nav" aria-label="Month">
+    <a href="{{.Base}}/calendar?month={{$v.Prev}}" rel="prev">← Previous</a>
+    <a href="{{.Base}}/calendar?month={{$v.This}}"{{if $v.IsCurrent}} aria-current="page"{{end}}>This month</a>
+    <a href="{{.Base}}/calendar?month={{$v.Next}}" rel="next">Next →</a>
+  </nav>
+</div>
+<p class="muted">Maintenance windows and freezes, changes planned to start, and patch group runs, by day in {{$v.DisplayTZ}}. Changes show once they're approved; patch group runs are the ones still to come.</p>
+<ul class="cal-legend" aria-label="Key">
+  <li><span class="cal-item window">window</span></li>
+  <li><span class="cal-item freeze">freeze</span></li>
+  <li><span class="cal-item change">change</span></li>
+  <li><span class="cal-item patch">patch group run</span></li>
+</ul>
+<h2 class="cal-month">{{$v.Month}}</h2>
+<div class="table-wrap"><table class="cal">
+  <thead><tr>{{range $v.Weekdays}}<th scope="col">{{.}}</th>{{end}}</tr></thead>
+  <tbody>{{range $v.Weeks}}<tr>{{range .}}
+    <td id="{{.ID}}" class="{{if not .InMonth}}out{{end}}{{if .Today}} today{{end}}{{if .Past}} past{{end}}"{{if .Today}} aria-current="date"{{end}}>
+      <div class="cal-day">{{.Day}}{{if .Today}} <span class="small">today</span>{{end}}</div>
+      {{range .Entries}}<a class="cal-item {{.Kind}}" href="{{$.Base}}{{.Href}}" title="{{.Name}} — {{.Detail}}"><span class="cal-time">{{.Time}}</span> {{.Name}}</a>{{end}}
+      {{with .More}}<span class="cal-more">+{{.}} more</span>{{end}}
+    </td>{{end}}
+  </tr>{{end}}</tbody>
+</table></div>
+
+<h2>Next 14 days</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>When</th><th>What</th><th>Details</th></tr></thead>
+  <tbody>{{range $v.Upcoming}}<tr>
+    <td class="nowrap">{{.When}}</td>
+    <td><span class="cal-item {{.Kind}} inline">{{if eq .Kind "patch"}}patch run{{else}}{{.Kind}}{{end}}</span> <a href="{{$.Base}}{{.Href}}">{{.Name}}</a></td>
+    <td class="small">{{.Detail}}</td>
+  </tr>{{else}}<tr><td colspan="3" class="muted">Nothing in the next two weeks.</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}

@@ -1,0 +1,36 @@
+{{define "content"}}
+{{$v := .Body}}{{$p := $v.Project}}{{$t := $v.Type}}
+<h1><span class="muted">{{$p.Key}}</span> {{$t.Name}}: fields and layouts</h1>
+<p class="muted sub"><a href="{{.Base}}/projects/{{$p.Key}}">{{$p.Key}} {{$p.Name}}</a></p>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+
+<form class="panel stack-form wide-form" method="post" action="{{.Base}}/projects/{{$p.Key}}/types/{{$t.Key}}/groups">
+  <h2>Field groups</h2>
+  <p class="muted">The groups {{$p.Key}} applies to {{$t.Name}} items, in order. Their fields show on the item's screens; a field in two groups shows once.</p>
+  {{if not $v.Groups}}<p class="muted">There are no field groups yet. <a href="{{.Base}}/settings/field-groups">Create one in Settings.</a></p>{{else}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Applied</th><th>Group</th><th>Fields</th><th>Position</th></tr></thead>
+    <tbody>{{range $v.Groups}}{{$pos := index $v.Applied .ID}}<tr>
+      <td><input type="checkbox" name="group" value="{{.ID}}"{{if $pos}} checked{{end}} aria-label="Apply {{.Name}}"></td>
+      <td><strong>{{.Name}}</strong></td>
+      <td class="small">{{range $i, $f := .Fields}}{{if $i}}, {{end}}{{$f.Label}}{{if $f.Required}}*{{end}}{{end}}</td>
+      <td><input type="number" name="gpos_{{.ID}}" value="{{if $pos}}{{$pos}}{{end}}" min="0" class="narrow" aria-label="Position of {{.Name}}"></td>
+    </tr>{{end}}</tbody>
+  </table></div>
+  <div><button>Save groups</button></div>{{end}}
+</form>
+
+<section class="panel">
+  <h2>Layouts</h2>
+  <p class="muted">A layout orders core fields, whole groups and single fields into sections. Without its own, the project uses the ticket type's default; anything applied but not placed shows in an "Other" section.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Screen</th><th>Layout</th><th></th></tr></thead>
+    <tbody>{{range $v.Layouts}}<tr>
+      <td>{{title .Screen}}{{if eq .Screen "create"}} <span class="muted small">(also editing)</span>{{end}}</td>
+      <td>{{if .Own}}This project's own{{if .Shared}}, also used for view{{end}}{{else}}<span class="muted">The ticket type's default</span>{{end}}</td>
+      <td class="actions"><a class="button small" href="{{$.Base}}/projects/{{$p.Key}}/types/{{$t.Key}}/layouts/{{.Screen}}">Edit</a></td>
+    </tr>{{end}}</tbody>
+  </table></div>
+</section>
+{{end}}

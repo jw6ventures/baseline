@@ -1,0 +1,98 @@
+{
+  "items": [
+    {
+      "id": "7aec74a3c2c00a10ce5bb32bb50165bdafbfa1f8eac8ef0e782d60cca77e81ce",
+      "metadata": {
+        "name": "debug",
+        "uid": "a82d1745-482b-406a-a8cd-42a85b222f88",
+        "namespace": "demo",
+        "attempt": 0
+      },
+      "state": "SANDBOX_READY",
+      "createdAt": "1791959903403694458",
+      "labels": {
+        "io.kubernetes.pod.name": "debug",
+        "io.kubernetes.pod.namespace": "demo",
+        "io.kubernetes.pod.uid": "a82d1745-482b-406a-a8cd-42a85b222f88"
+      },
+      "annotations": {
+        "kubernetes.io/config.seen": "2026-10-14T06:38:22.912549023Z",
+        "kubernetes.io/config.source": "api"
+      },
+      "runtimeHandler": ""
+    },
+    {
+      "id": "5ca3ec984f8f84ce2dba150a68f5e42857f855b431eb8637d84b9324fcf102eb",
+      "metadata": {
+        "name": "web-6bbd86ffb9-kjcbk",
+        "uid": "ff0cf893-2d91-444d-957e-cb3b84b121be",
+        "namespace": "demo",
+        "attempt": 0
+      },
+      "state": "SANDBOX_READY",
+      "createdAt": "1791959903372255805",
+      "labels": {
+        "app": "web",
+        "io.kubernetes.pod.name": "web-6bbd86ffb9-kjcbk",
+        "io.kubernetes.pod.namespace": "demo",
+        "io.kubernetes.pod.uid": "ff0cf893-2d91-444d-957e-cb3b84b121be",
+        "pod-template-hash": "6bbd86ffb9"
+      },
+      "annotations": {
+        "kubernetes.io/config.seen": "2026-10-14T06:38:22.857040005Z",
+        "kubernetes.io/config.source": "api"
+      },
+      "runtimeHandler": ""
+    },
+    {
+      "id": "1e9c27f40aca07bc457c1e847f3b6869d40f134e7ef0c30153e89208620deccd",
+      "metadata": {
+        "name": "coredns-7cfb7bc9c7-xd8vh",
+        "uid": "d427a76b-7871-4500-8aa6-74b2af6935c2",
+        "namespace": "kube-system",
+        "attempt": 0
+      },
+      "state": "SANDBOX_READY",
+      "createdAt": "1791959875729089489",
+      "labels": {
+        "io.kubernetes.pod.name": "coredns-7cfb7bc9c7-xd8vh",
+        "io.kubernetes.pod.namespace": "kube-system",
+        "io.kubernetes.pod.uid": "d427a76b-7871-4500-8aa6-74b2af6935c2",
+        "k8s-app": "kube-dns",
+        "pod-template-hash": "7cfb7bc9c7"
+      },
+      "annotations": {
+        "kubernetes.io/config.seen": "2026-10-14T06:37:54.088256765Z",
+        "kubernetes.io/config.source": "api"
+      },
+      "runtimeHandler": ""
+    },
+    {
+      "id": "591c3cddbfa12cb76a02b92035214b9673312988ba4efbff0a2872ceb2d1ae82",
+      "metadata": {
+        "name": "helm-install-traefik-mvtqp",
+        "uid": "f67b6360-0710-47c1-821c-95baef19380f",
+        "namespace": "kube-system",
+        "attempt": 0
+      },
+      "state": "SANDBOX_NOTREADY",
+      "createdAt": "1791959875706050810",
+      "labels": {
+        "batch.kubernetes.io/controller-uid": "cb7553e7-cb3a-457c-b51e-ad9c16b5f938",
+        "batch.kubernetes.io/job-name": "helm-install-traefik",
+        "controller-uid": "cb7553e7-cb3a-457c-b51e-ad9c16b5f938",
+        "helmcharts.helm.cattle.io/chart": "traefik",
+        "io.kubernetes.pod.name": "helm-install-traefik-mvtqp",
+        "io.kubernetes.pod.namespace": "kube-system",
+        "io.kubernetes.pod.uid": "f67b6360-0710-47c1-821c-95baef19380f",
+        "job-name": "helm-install-traefik"
+      },
+      "annotations": {
+        "helmcharts.helm.cattle.io/configHash": "SHA256=56C02A511D3E7CA8E3C0FFAB74979CB0A14099AA7A6945BE9C18E4627C1EC360",
+        "kubernetes.io/config.seen": "2026-10-14T06:37:54.037060559Z",
+        "kubernetes.io/config.source": "api"
+      },
+      "runtimeHandler": ""
+    }
+  ]
+}

@@ -1,0 +1,162 @@
+{{define "content"}}
+{{$v := .Body}}{{$it := $v.Item}}
+<div class="titlebar">
+  <div>
+    <h1><span class="muted">{{$it.Ref}}</span> {{$it.Title}}</h1>
+    <p class="muted sub">{{$it.TypeName}} in <a href="{{.Base}}/projects/{{$it.ProjectKey}}">{{$it.ProjectKey}} {{$it.ProjectName}}</a></p>
+  </div>
+  <div>
+    <form class="inline" method="post" action="{{.Base}}/work/{{$it.Ref}}/watch">
+      <input type="hidden" name="on" value="{{if $v.Watching}}0{{else}}1{{end}}">
+      <button class="small">{{if $v.Watching}}Stop watching{{else}}Watch{{end}}</button>
+    </form>
+    <a class="button" href="{{.Base}}/work/{{$it.Ref}}/edit">Edit</a>
+    {{if $v.CanMove}}<a class="button secondary" href="{{.Base}}/settings/migrations?project={{$it.ProjectID}}&amp;type={{$it.TypeID}}&amp;ref={{$it.Ref}}#move" title="Move to another project or change the type">Move</a>{{end}}
+  </div>
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+
+<section class="panel record-header" aria-label="Key fields">
+  <dl class="key-fields">
+    <div><dt>Status</dt><dd>{{template "item-state" $it}}{{with $it.Resolution}} <span class="muted">{{.}}</span>{{end}}</dd></div>
+    <div><dt>Priority</dt><dd>{{template "item-priority" $it.Priority}}</dd></div>
+    <div><dt>Assignee</dt><dd>{{with $it.Assignee}}{{.}}{{else}}<span class="muted">nobody</span>{{end}}</dd></div>
+    <div><dt>Reporter</dt><dd>{{with $it.Reporter}}{{.}}{{else}}<span class="muted">Baseline ({{$it.Source}})</span>{{end}}</dd></div>
+    {{if not $it.DueAt.IsZero}}<div><dt>Due</dt><dd>{{$it.DueAt.Format "2006-01-02"}}</dd></div>{{end}}
+    {{range $v.SLAs}}{{if or .Running (eq .State "breached")}}<div><dt>{{title .Metric}} SLA</dt><dd>{{template "sla-state" .}}{{with .Left}} <span class="muted small">{{.}}</span>{{end}}</dd></div>{{end}}{{end}}
+    <div><dt>Updated</dt><dd>{{time $it.UpdatedAt}}</dd></div>
+  </dl>
+  <div class="transitions" aria-label="Transitions">
+    {{template "work-transitions" (dict "It" $it "T" $v.Transitions "Users" $v.Users "Resolutions" $v.Resolutions "Base" .Base)}}
+  </div>
+  <p class="muted small">{{$it.WorkflowName}} v{{$it.WorkflowVersion}}</p>
+</section>
+
+<section class="panel">
+  {{template "work-view-sections" (dict "S" $v.Sections "It" $it "Base" .Base)}}
+  <dl class="facts">
+    <dt>Created</dt><dd>{{time $it.CreatedAt}}</dd>
+    {{if not $it.ResolvedAt.IsZero}}<dt>Resolved</dt><dd>{{time $it.ResolvedAt}}</dd>{{end}}
+    <dt>Watchers</dt><dd>{{range $i, $u := $v.Watchers}}{{if $i}}, {{end}}{{$u.DisplayName}}{{else}}<span class="muted">none</span>{{end}}</dd>
+  </dl>
+</section>
+
+<section class="panel related-pane" id="related" aria-label="Related lists">
+<nav class="tabs">
+{{range $v.RelTabs}}<a href="{{$.Base}}{{$v.RelURL .Key}}#related"{{if eq $v.Rel .Key}} aria-current="page"{{end}}>{{.Label}}{{if .Count}} ({{.Count}}){{end}}</a>
+{{end}}
+</nav>
+
+{{if eq $v.Rel "cis"}}
+<div class="table-wrap"><table>
+  <thead><tr><th>CI</th><th>Type</th><th>Role</th><th></th></tr></thead>
+  <tbody>{{range $v.CIs}}<tr>
+    <td><a href="{{$.Base}}{{.Link}}">{{.CI.Name}}</a>{{if ne .CI.Status "active"}} <span class="muted">{{.CI.Status}}</span>{{end}}</td>
+    <td>{{.CI.TypeLabel}}</td><td>{{human .Role}}</td>
+    <td class="actions"><form method="post" action="{{$.Base}}/work/{{$it.Ref}}/cis/delete"><input type="hidden" name="rel" value="cis"><input type="hidden" name="ci" value="{{.CI.ID}}"><input type="hidden" name="role" value="{{.Role}}"><button class="small danger">Unlink</button></form></td>
+  </tr>{{else}}<tr><td colspan="4" class="muted">None linked.</td></tr>{{end}}</tbody>
+</table></div>
+{{if $v.Targets}}
+<form class="inline-form" method="post" action="{{.Base}}/work/{{$it.Ref}}/cis"><input type="hidden" name="rel" value="cis">
+  <label>CI<select name="ci" required><option value="">Choose…</option>{{range $v.Targets}}<option value="{{.ID}}">{{.Name}} ({{.TypeLabel}})</option>{{end}}</select></label>
+  <label>Role<select name="role">{{range $v.CIRoles}}<option value="{{.}}">{{human .}}</option>{{end}}</select></label>
+  <button>Link CI</button>
+</form>
+{{end}}
+
+{{else if eq $v.Rel "changes"}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Change</th><th>Title</th><th>Link</th><th>State</th><th></th></tr></thead>
+  <tbody>{{range $v.Changes}}<tr>
+    <td class="nowrap"><a href="{{$.Base}}/changes/{{.Change.ID}}"><strong>{{.Change.Ref}}</strong></a></td>
+    <td>{{.Change.Title}}</td><td>{{.Kind}}</td>
+    <td class="nowrap">{{template "change-state" .Change}}</td>
+    <td class="actions"><form method="post" action="{{$.Base}}/work/{{$it.Ref}}/changes/delete"><input type="hidden" name="rel" value="changes"><input type="hidden" name="change" value="{{.Change.Number}}"><input type="hidden" name="kind" value="{{.Kind}}"><button class="small danger">Unlink</button></form></td>
+  </tr>{{else}}<tr><td colspan="5" class="muted">None linked.</td></tr>{{end}}</tbody>
+</table></div>
+<form class="inline-form" method="post" action="{{.Base}}/work/{{$it.Ref}}/changes"><input type="hidden" name="rel" value="changes">
+  <label>This item is<select name="kind">{{range $v.ChangeKinds}}<option value="{{.}}">{{if eq . "fixes"}}fixed by{{else if eq . "implements"}}implemented by{{else}}caused by{{end}}</option>{{end}}</select></label>
+  <label>Change<input name="change" placeholder="CHG-000123" required></label>
+  <button>Link change</button>
+</form>
+
+{{else if eq $v.Rel "links"}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Link</th><th>Item</th><th>Status</th><th></th></tr></thead>
+  <tbody>{{range $v.Links}}<tr>
+    <td>{{if .Outgoing}}this <strong>{{human .Kind}}</strong> →{{else}}← <strong>{{human .Kind}}</strong> this{{end}}</td>
+    <td><a href="{{$.Base}}/work/{{.Other.Ref}}"><strong>{{.Other.Ref}}</strong></a> {{.Other.Title}}</td>
+    <td class="nowrap">{{template "item-state" .Other}}</td>
+    <td class="actions"><form method="post" action="{{$.Base}}/work/{{$it.Ref}}/links/delete"><input type="hidden" name="rel" value="links"><input type="hidden" name="other" value="{{.Other.Ref}}"><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="direction" value="{{if .Outgoing}}out{{else}}in{{end}}"><button class="small danger">Unlink</button></form></td>
+  </tr>{{else}}<tr><td colspan="4" class="muted">None yet.</td></tr>{{end}}</tbody>
+</table></div>
+<form class="inline-form" method="post" action="{{.Base}}/work/{{$it.Ref}}/links"><input type="hidden" name="rel" value="links">
+  <label>Direction<select name="direction"><option value="out">this →</option><option value="in">→ this</option></select></label>
+  <label>Link<select name="kind">{{range $v.LinkKinds}}<option value="{{.}}">{{human .}}</option>{{end}}</select></label>
+  <label>Other item<input name="other" placeholder="OPS-42" required></label>
+  <button>Link item</button>
+</form>
+
+{{else if eq $v.Rel "children"}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Item</th><th>Title</th><th>Status</th><th>Assignee</th></tr></thead>
+  <tbody>{{range $v.Children}}<tr{{if .Done}} class="dim"{{end}}>
+    <td class="nowrap"><a href="{{$.Base}}/work/{{.Ref}}"><strong>{{.Ref}}</strong></a></td>
+    <td>{{.Title}} <span class="muted small">{{.TypeName}}</span></td>
+    <td class="nowrap">{{template "item-state" .}}</td>
+    <td>{{with .Assignee}}{{.}}{{else}}<span class="muted">nobody</span>{{end}}</td>
+  </tr>{{else}}<tr><td colspan="4" class="muted">None.</td></tr>{{end}}</tbody>
+</table></div>
+<p><a class="button small" href="{{.Base}}/work/new?project={{$it.ProjectKey}}&amp;parent={{$it.Ref}}">Add a child item</a></p>
+
+{{else if eq $v.Rel "slas"}}
+<div class="table-wrap"><table>
+  <thead><tr><th>SLA</th><th>Policy</th><th>Target</th><th>Due</th><th>State</th></tr></thead>
+  <tbody>{{range $v.SLAs}}<tr>
+    <td>{{title .Metric}}</td><td>{{.PolicyName}}</td><td>{{mins .TargetMinutes}}</td>
+    <td class="nowrap">{{time .TargetAt}}</td>
+    <td class="nowrap">{{template "sla-state" .}}{{with .Left}} <span class="muted small">{{.}}</span>{{end}}{{if not .Running}} <span class="muted small">at {{time .MetAt}}</span>{{end}}</td>
+  </tr>{{else}}<tr><td colspan="5" class="muted">No SLA policy covered this item when it was created.</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+</section>
+
+<h2 id="activity">Activity</h2>
+<form class="panel stack-form" method="post" action="{{.Base}}/work/{{$it.Ref}}/comments">
+  <input type="hidden" name="rel" value="{{$v.Rel}}">
+  <label>Add a comment<textarea name="body" rows="3" required></textarea></label>
+  <label class="check-line"><input type="checkbox" name="internal" value="1"> Work note (internal)</label>
+  <div><button>Add</button></div>
+</form>
+<nav class="tabs" aria-label="Activity filter">
+{{range $v.Filters}}<a href="{{$.Base}}{{$v.ActivityURL .Key}}#activity"{{if eq $v.Activity .Key}} aria-current="page"{{end}}>{{.Label}}{{if .Count}} <span class="count">{{.Count}}</span>{{end}}</a>
+{{end}}
+</nav>
+<ol class="activity">
+{{range $v.Activities}}
+{{if .Comment}}{{with .Comment}}
+<li class="panel comment{{if .Internal}} internal{{end}}">
+  <p class="muted small">{{with .Author}}{{.}}{{else}}Baseline{{end}} · {{time .At}} · {{if .Internal}}<span class="tag caution">work note</span>{{else}}<span class="tag">comment</span>{{end}}</p>
+  <p class="pre">{{.Body}}</p>
+</li>
+{{end}}{{else}}{{$e := .}}{{with .Event}}
+<li class="event {{$e.Kind}}">
+  <p><span class="muted small nowrap">{{time .At}}</span>
+  <span>{{if eq $e.Kind "created"}}Created
+  {{- else if eq $e.Kind "transition"}}<strong>{{.Transition}}</strong>{{with $e.Move}}: {{value .From}} → {{value .To}}{{end}}
+  {{- else if eq $e.Kind "migration"}}Moved ({{.Migration}}){{with $e.Move}}: {{value .From}} → {{value .To}}{{end}}
+  {{- else}}{{.Summary}}{{end}}</span>
+  <span class="muted small">by {{with .ActorName}}{{.}}{{else}}<code>{{$it.Source}}</code>{{end}}</span></p>
+  {{if and (ne $e.Kind "created") (not $e.RestEmpty)}}{{$d := $e.Rest}}
+  <table class="diff">
+    {{range $d.Changed}}<tr><td class="op chg">~</td><td class="mono">{{.Field}}</td><td><del>{{value .From}}</del> → <ins>{{value .To}}</ins></td></tr>{{end}}
+    {{range $d.Added}}<tr><td class="op add">+</td><td class="mono">{{.Field}}</td><td><ins>{{value .To}}</ins></td></tr>{{end}}
+    {{range $d.Removed}}<tr><td class="op del">−</td><td class="mono">{{.Field}}</td><td><del>{{value .From}}</del></td></tr>{{end}}
+  </table>
+  {{end}}
+</li>
+{{end}}{{end}}
+{{else}}<li class="muted">Nothing here yet.</li>{{end}}
+</ol>
+{{end}}

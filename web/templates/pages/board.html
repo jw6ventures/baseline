@@ -1,0 +1,66 @@
+{{define "head"}}<script src="{{.Base}}/static/board.js" defer></script>{{end}}
+{{define "content"}}
+{{$v := .Body}}{{$b := $v.Board}}
+<div class="titlebar">
+  <div>
+    <h1>{{$b.Name}}</h1>
+    <p class="muted sub">{{if $b.ProjectKey}}<a href="{{.Base}}/projects/{{$b.ProjectKey}}">{{$b.ProjectKey}} {{$b.ProjectName}}</a>{{else}}Every project{{end}}
+      · {{plural $v.Shown "item"}}{{if gt $v.Total $v.Shown}} of {{$v.Total}}{{end}}</p>
+  </div>
+  <div>
+    {{if $b.ProjectKey}}<a class="button" href="{{.Base}}/work/new?project={{$b.ProjectKey}}">New work item</a>{{end}}
+    {{if $v.CanEdit}}<a class="button secondary" href="{{.Base}}/boards/{{$b.ID}}/edit">Edit board</a>{{end}}
+  </div>
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{range $v.Problems}}<p class="notice warn">The board's filter skips a condition: {{.}}</p>{{end}}
+{{if $v.Filter}}<p class="muted small board-filter">Showing items where {{range $i, $g := $v.Filter}}{{if $i}} <span class="or">or</span> {{end}}<span class="crumb">{{$g}}</span>{{end}}.</p>{{end}}
+{{if gt $v.Total $v.Shown}}<p class="notice warn">The board shows the first {{$v.Shown}} of {{$v.Total}} matching items, by priority. Narrow its filter to see the rest.</p>{{end}}
+{{if $v.Unplaced}}<p class="muted small">{{plural $v.Unplaced "matching item"}} {{if eq $v.Unplaced 1}}is{{else}}are{{end}} in a status no column takes.</p>{{end}}
+
+<form id="board-move" method="post" action="{{.Base}}/boards/{{$b.ID}}/move" hidden>
+  <input type="hidden" name="item"><input type="hidden" name="transition">
+</form>
+
+<div class="board" data-board>
+  {{range $v.Columns}}
+  <section class="board-col" data-col="{{.Index}}" aria-label="{{.Name}}">
+    <h2>{{.Name}} <span class="muted small">{{len .Cards}}</span></h2>
+    <div class="board-cards">
+    {{range .Cards}}{{$c := .}}
+      <article class="board-card{{if .Done}} done{{end}}" draggable="true" data-item="{{.ID}}" data-ref="{{.Ref}}" data-assignee="{{.AssigneeID}}" data-targets="{{.TargetsJSON}}">
+        <p class="card-head"><a href="{{$.Base}}/work/{{.Ref}}"><strong>{{.Ref}}</strong></a> <span class="muted small">{{.TypeName}}</span></p>
+        <p class="card-title">{{.Title}}</p>
+        <p class="card-meta">{{template "item-state" .WorkItem}} {{template "item-priority" .Priority}}
+          <span class="muted small">{{with .Assignee}}{{.}}{{else}}nobody{{end}}</span></p>
+        {{if .Targets}}
+        <details class="card-move">
+          <summary class="small">Move</summary>
+          <ul>{{range .Targets}}
+            <li>{{if not .Allowed}}<button class="small" disabled title="You may not run this transition">{{.Name}} → {{.To}}</button>
+            {{else if .Screen}}<a class="button small secondary" href="{{$.Base}}/work/{{$c.Ref}}" data-move="{{.ID}}">{{.Name}} → {{.To}}…</a>
+            {{else}}<form class="inline" method="post" action="{{$.Base}}/boards/{{$b.ID}}/move" data-move-form>
+              <input type="hidden" name="item" value="{{$c.ID}}"><input type="hidden" name="transition" value="{{.ID}}">
+              <button class="small">{{.Name}} → {{.To}}</button></form>{{end}}</li>
+          {{end}}</ul>
+        </details>
+        {{end}}
+      </article>
+    {{else}}<p class="muted small board-empty">Nothing here.</p>{{end}}
+    </div>
+  </section>
+  {{end}}
+</div>
+
+<dialog id="board-screen" class="panel">
+  <form class="stack-form" method="post" action="{{.Base}}/boards/{{$b.ID}}/move">
+    <h2 data-screen-title>Transition</h2>
+    <input type="hidden" name="item"><input type="hidden" name="transition">
+    <label data-screen="resolution">Resolution<select name="resolution">{{range $v.Resolutions}}<option value="{{.}}">{{.}}</option>{{end}}</select></label>
+    <label data-screen="assignee">Assignee<select name="assignee"><option value="">Nobody</option>{{range $v.Users}}<option value="{{.ID}}">{{.DisplayName}}</option>{{end}}</select></label>
+    <label data-screen="comment">Comment<textarea name="comment" rows="3"></textarea></label>
+    <div><button>Move</button> <button type="button" class="link" data-screen-cancel>Cancel</button></div>
+  </form>
+</dialog>
+{{end}}

@@ -1,0 +1,36 @@
+{{define "content"}}
+{{$v := .Body}}{{$p := $v.Project}}
+<div class="titlebar">
+  <div>
+    <h1><span class="muted">{{$p.Key}}</span> {{$p.Name}}</h1>
+    <p class="muted sub">{{human $p.Kind}}{{if $p.Archived}} · <span class="tag">archived</span>{{end}}</p>
+  </div>
+  <div>
+    {{if not $p.Archived}}<a class="button" href="{{.Base}}/work/new?project={{$p.Key}}">New work item</a>{{end}}
+    {{if $v.CanEdit}}<a class="button" href="{{.Base}}/projects/{{$p.Key}}/edit">Edit</a>{{end}}
+  </div>
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+<section class="panel">
+  {{with $p.Description}}<p class="pre">{{.}}</p>{{end}}
+  <dl class="facts">
+    <dt>Ticket types</dt><dd>{{range $i, $t := $p.Types}}{{if $i}}, {{end}}{{if $v.CanEdit}}<a href="{{$.Base}}/projects/{{$p.Key}}/types/{{$t.Key}}" title="Fields and layouts">{{$t.Name}}</a>{{else}}{{$t.Name}}{{end}}{{if $t.Default}} <span class="muted small">(default)</span>{{end}} <span class="muted small">{{$t.WorkflowName}} workflow</span>{{end}}</dd>
+    <dt>Category</dt><dd>{{with $p.Category.ID}}<a href="{{$.Base}}/projects?cf=category&amp;co=eq&amp;cv={{.}}"><span class="tag"{{with $p.Category.ShownColor}} style="{{chipStyle .}}"{{end}}>{{$p.Category.Path}}</span></a>{{else}}<span class="muted">none</span>{{end}}</dd>
+    <dt>Tags</dt><dd>{{range $p.Tags}}<a href="{{$.Base}}/projects?cf=tags&amp;co=has&amp;cv={{.Name}}"><span class="tag"{{with .Color}} style="{{chipStyle .}}"{{end}}>{{.Name}}</span></a> {{else}}<span class="muted">none</span>{{end}}</dd>
+    <dt>Host group</dt><dd>{{with $p.HostGroupName}}{{.}}{{else}}<span class="muted">none</span>{{end}}</dd>
+    <dt>Created</dt><dd>{{time $p.CreatedAt}}</dd>
+  </dl>
+</section>
+<h2>Open work items</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Item</th><th>Title</th><th>Type</th><th>Status</th><th>Priority</th><th>Assignee</th></tr></thead>
+  <tbody>{{range $v.Items}}<tr>
+    <td class="nowrap"><a href="{{$.Base}}/work/{{.Ref}}"><strong>{{.Ref}}</strong></a></td>
+    <td>{{.Title}}</td><td>{{.TypeName}}</td>
+    <td class="nowrap">{{template "item-state" .}}</td>
+    <td>{{template "item-priority" .Priority}}</td>
+    <td>{{with .Assignee}}{{.}}{{else}}<span class="muted">nobody</span>{{end}}</td>
+  </tr>{{else}}<tr><td colspan="6" class="muted">Nothing open.</td></tr>{{end}}</tbody>
+</table></div>
+<p><a href="{{.Base}}/work?project={{$p.Key}}&amp;status=all">All of {{$p.Key}}'s work items</a></p>
+{{end}}

@@ -1,0 +1,24 @@
+{{define "content"}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+{{with .Body.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with .Body.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<section class="panel">
+  <h2>Registry logins</h2>
+  <p class="muted">The server checks container registries itself, anonymously by default. Add a login for a private registry, or for Docker Hub's higher rate limits. Use a read-only token where the registry offers one. Secrets are encrypted with <code>BASELINE_SECRET_KEY</code> and never shown again.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Registry</th><th>Username</th><th>Saved</th><th></th></tr></thead>
+    <tbody>{{range .Body.Creds}}<tr><td class="mono">{{.Registry}}</td><td>{{.Username}}</td><td>{{time .CreatedAt}}</td>
+      <td class="actions"><form method="post" action="{{$.Base}}/settings/registries/{{.ID}}/delete"><button class="small danger">Remove</button></form></td></tr>
+    {{else}}<tr><td colspan="4" class="muted">None: every registry is asked anonymously.</td></tr>{{end}}</tbody>
+  </table></div>
+  <form class="inline-form" method="post" action="{{.Base}}/settings/registries" autocomplete="off">
+    <label>Registry<input name="registry" placeholder="ghcr.io or docker.io" required></label>
+    <label>Username<input name="username" required></label>
+    <label>Password or token<input type="password" name="secret" required></label>
+    <button>Save login</button>
+  </form>
+  <p class="muted small">Saving a login for a registry that has one replaces it.</p>
+</section>
+{{end}}

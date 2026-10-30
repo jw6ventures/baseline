@@ -1,0 +1,55 @@
+{{define "content"}}
+{{template "settings-tabs" .}}
+<h1>Enrollment</h1>
+{{with .Body.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with .Body.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+{{if .Body.NewToken}}
+<section class="panel highlight">
+  <h2>Token “{{.Body.NewName}}” created</h2>
+  <p>Copy it now: it is shown only once. On each host, run:</p>
+  <pre class="copy">{{.Body.InstallCmd}}</pre>
+  <p class="muted">The script installs the agent under <code>/usr/local/libexec/baseline</code>, adds a systemd unit, enrolls the host against <code>{{.Body.Gateway}}</code> and starts it. It works on Ubuntu, Rocky Linux, Fedora and Bazzite.</p>
+</section>
+{{end}}
+
+<section>
+<h2>Tokens</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Name</th><th>Uses</th><th>Expires</th><th>Host groups</th><th>Created</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {{range .Body.Tokens}}
+  <tr{{if not .Usable}} class="dim"{{end}}>
+    <td><strong>{{.Name}}</strong></td>
+    <td>{{.Uses}}{{if .MaxUses}} / {{.MaxUses}}{{else}} / ∞{{end}}</td>
+    <td class="nowrap">{{time .ExpiresAt}}</td>
+    <td>{{range .GroupNames}}<span class="tag">{{.}}</span> {{end}}</td>
+    <td class="nowrap">{{time .CreatedAt}}{{with .CreatedBy}}<br><span class="muted">{{.}}</span>{{end}}</td>
+    <td>{{if .Revoked}}revoked{{else if .Usable}}active{{else}}expired or used up{{end}}</td>
+    <td class="actions">{{if not .Revoked}}<form method="post" action="{{$.Base}}/settings/enrollment/tokens/{{.ID}}/revoke"><button class="danger small">Revoke</button></form>{{end}}</td>
+  </tr>
+  {{else}}
+  <tr><td colspan="7" class="muted">No tokens yet.</td></tr>
+  {{end}}
+  </tbody>
+</table></div>
+</section>
+
+<section>
+<h2>New token</h2>
+<form class="inline-form" method="post" action="{{.Base}}/settings/enrollment/tokens">
+  <label>Name <input name="name" required placeholder="media servers"></label>
+  <label>Max uses <input name="max_uses" type="number" min="1" value="1" placeholder="unlimited" class="narrow"></label>
+  <label>Expires in
+    <select name="lifetime">{{range .Body.Lifetimes}}<option value="{{.Value}}"{{if eq .Value "24h"}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+  </label>
+  {{with .Body.HostGroups}}
+  <fieldset class="checks"><legend>Add hosts to</legend>
+    {{range .}}<label><input type="checkbox" name="group" value="{{.ID}}"> {{.Name}}</label>{{end}}
+  </fieldset>
+  {{end}}
+  <button>Create token</button>
+</form>
+<p class="muted">Clear “max uses” for a token that enrolls many hosts. Every enrollment creates a new host record; a host whose agent state was wiped shows up next to its old, offline record, which you can revoke. Revoking a token doesn't affect hosts it already enrolled.</p>
+</section>
+{{end}}

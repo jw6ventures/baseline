@@ -1,0 +1,7 @@
+{{define "content"}}
+{{$v := .Body}}{{$r := $v.Revision}}
+<h1>.env of {{$r.Project}}</h1>
+<p class="muted sub">As <a href="{{.Base}}/changes/{{$r.ChangeID}}">{{$r.ChangeRef}}</a> writes it to <a href="{{.Base}}/hosts/{{$v.Host.ID}}">{{$v.Host.DisplayName}}</a> ({{$r.Engine}}) · {{len $r.EnvKeys}} variables · <span class="mono">{{short $r.EnvHash 24}}</span></p>
+<p class="notice warn">These are the stack's secrets. Showing them was recorded in the audit log.</p>
+<pre class="file">{{$v.Env}}</pre>
+{{end}}

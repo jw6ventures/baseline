@@ -1,0 +1,125 @@
+{{define "content"}}
+{{$v := .Body}}{{$c := $v.Change}}
+<div class="titlebar">
+  <div>
+    <h1>{{$c.Ref}} · {{$c.Title}}</h1>
+    <p class="muted sub">{{template "change-state" $c}} · {{template "change-kind" $c.Kind}} change · {{$c.Risk}} risk, {{$c.Impact}} impact · requested by {{$c.RequestedByName}} {{ago $c.CreatedAt}}</p>
+  </div>
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $c.ScheduleNote}}<p class="notice warn">{{title .}}.</p>{{end}}
+
+<div class="grid2">
+<section class="panel">
+  <h2>Plan</h2>
+  <dl class="facts">
+    {{range $c.Plan}}<dt>Action</dt><dd>{{.Summary}} <span class="muted small mono">{{.Action}}</span></dd>{{end}}
+    <dt>Hosts</dt><dd>{{range $i, $id := $c.HostIDs}}{{if $i}}, {{end}}<a href="{{$.Base}}/hosts/{{$id}}/jobs">{{index $c.HostNames $i}}</a>{{end}}</dd>
+    <dt>Rollout</dt><dd>{{plural $c.Concurrency "host"}} at a time{{if $c.StopOnFailure}}, stopping at the first failure{{end}}</dd>
+    {{with $c.Justification}}<dt>Why</dt><dd>{{.}}</dd>{{end}}
+    {{with $c.BackoutPlan}}<dt>Back-out</dt><dd class="pre">{{.}}</dd>{{end}}
+    {{with $c.TestPlan}}<dt>Test</dt><dd class="pre">{{.}}</dd>{{end}}
+    {{if $c.ModelID}}<dt>Model</dt><dd><a href="{{.Base}}/change-models/{{$c.ModelID}}">{{$c.ModelName}}</a> <span class="muted small">(pre-approved)</span></dd>{{end}}
+    {{with $v.Cycle}}<dt>Patch group</dt><dd><a href="{{$.Base}}/patch-groups/{{.GroupID}}">{{.GroupName}}</a>, run of {{time .ScheduledFor}}</dd>{{end}}
+  </dl>
+</section>
+<section class="panel">
+  <h2>Schedule</h2>
+  <dl class="facts">
+    <dt>Window</dt><dd>{{if $c.WindowID}}<a href="{{.Base}}/windows">{{$c.WindowName}}</a>{{if eq $c.OnWindowEnd "fail"}} <span class="muted small">(hosts left when it closes are skipped)</span>{{else}} <span class="muted small">(hosts left when it closes wait for the next opening)</span>{{end}}{{else}}none{{end}}</dd>
+    {{if not $c.PlannedStart.IsZero}}<dt>Planned</dt><dd>{{time $c.PlannedStart}}{{if not $c.PlannedEnd.IsZero}} – {{time $c.PlannedEnd}}{{end}}</dd>{{end}}
+    {{if not $c.ActualStart.IsZero}}<dt>Started</dt><dd>{{time $c.ActualStart}}</dd>{{end}}
+    {{if not $c.WindowEndsAt.IsZero}}<dt>Window closes</dt><dd>{{time $c.WindowEndsAt}}</dd>{{end}}
+    {{if not $c.ActualEnd.IsZero}}<dt>Ended</dt><dd>{{time $c.ActualEnd}}{{with $c.Outcome}} · {{.}}{{end}}</dd>{{end}}
+    {{if not $c.ClosedAt.IsZero}}<dt>Closed</dt><dd>{{time $c.ClosedAt}}</dd>{{end}}
+  </dl>
+</section>
+</div>
+
+<section class="panel">
+  <h2>Approval</h2>
+  {{if eq $c.Kind "standard"}}
+  <p class="muted">A Standard change: its model was approved once, so the change needed no approval of its own.</p>
+  {{else}}
+  <dl class="facts">
+    <dt>Needs</dt><dd>{{plural $c.RequiredApprovals "approval"}} from approvers of every affected host{{if gt $c.RequiredApprovals 1}} ({{$c.Approvals}} so far){{end}}</dd>
+    {{range $v.Approvals}}<dt>{{if eq .Decision "approve"}}Approved{{else}}Rejected{{end}}</dt><dd>by {{.ApproverName}}{{if .SelfApproved}} <span class="tag">self-approved</span>{{end}} <span class="muted small">{{time .At}}</span>{{with .Comment}}<br>“{{.}}”{{end}}</dd>{{end}}
+  </dl>
+  {{end}}
+  {{if $v.CanSubmit}}
+  <form class="inline-form" method="post" action="{{.Base}}/changes/{{$c.ID}}/submit">
+    <span class="muted">A draft: nobody is asked to approve it yet.</span>
+    <button>Submit for approval</button>
+  </form>
+  {{else if $v.CanApprove}}
+  <form class="inline-form" method="post" action="{{.Base}}/changes/{{$c.ID}}/decide">
+    <label>Comment <input name="comment" placeholder="optional"></label>
+    <button name="decision" value="approve">Approve</button>
+    <button class="danger" name="decision" value="reject">Reject</button>
+  </form>
+  {{else if eq $c.State "submitted"}}
+  <p class="muted">Waiting for approvers of every affected host.</p>
+  {{end}}
+</section>
+
+{{range $v.Revisions}}{{$r := .}}
+<section class="panel">
+  <h2>{{if eq .Action "compose.deploy"}}New stack{{else}}Files of stack{{end}} {{.Project}} <span class="muted small">({{.Engine}})</span></h2>
+  {{if .HasCompose}}
+  <details{{if not .BaseSHA256}} open{{end}}>
+    <summary><strong>Compose file</strong> <span class="muted small mono">sha256 {{short .ComposeSHA256 12}}</span></summary>
+    <pre class="file">{{.Compose}}</pre>
+  </details>
+  {{with .BaseCompose}}
+  <details>
+    <summary>The file it replaces, as the host reported it <span class="muted small mono">sha256 {{short $r.BaseSHA256 12}}</span></summary>
+    <pre class="file">{{.}}</pre>
+    <p class="muted small">Values of keys that look like secrets are masked by the agent.</p>
+  </details>
+  {{end}}
+  {{else}}<p class="muted">The Compose file stays as it is.</p>{{end}}
+  {{if .HasEnv}}
+  <p><strong>.env</strong>: {{with .EnvKeys}}<span class="mono small">{{join . ", "}}</span>{{else}}<span class="muted">empty</span>{{end}} <span class="muted small mono">{{short .EnvHash 24}}</span>
+  {{if $v.CanSeeEnv}}<form class="inline" method="post" action="{{$.Base}}/stack-revisions/{{.ID}}/env"><button class="small secondary" title="Recorded in the audit log">Show values</button></form>{{end}}</p>
+  {{else}}<p class="muted">The .env stays as it is.</p>{{end}}
+</section>
+{{end}}
+
+<h2>Jobs</h2>
+{{template "job-table" (dict "Base" .Base "Jobs" $v.Jobs)}}
+
+{{with $v.WorkItems}}
+<h2>Work items</h2>
+{{template "linked-items" (dict "Base" $.Base "Rows" . "Empty" "")}}
+{{end}}
+
+{{if or $c.ReviewNotes $v.CanClose}}
+<section class="panel spaced">
+  <h2>Review</h2>
+  {{with $c.ReviewNotes}}<p class="pre">{{.}}</p><p class="muted small">by {{$c.ReviewedBy}}</p>{{end}}
+  {{if $v.CanClose}}
+  <form class="stack-form" method="post" action="{{.Base}}/changes/{{$c.ID}}/close">
+    {{if $c.NeedsReview}}
+    <p class="muted">{{if eq $c.Kind "emergency"}}Emergency changes{{else}}Changes that failed or were rolled back{{end}} need a post-implementation review before they close: what happened, why, and what follows from it.</p>
+    <label>Review<textarea name="review" rows="4" required></textarea></label>
+    {{else}}
+    <label><span>Review <span class="muted small">(optional)</span></span><textarea name="review" rows="2"></textarea></label>
+    {{end}}
+    <div><button>Close the change</button></div>
+  </form>
+  {{end}}
+</section>
+{{end}}
+
+{{if $v.CanCancel}}
+<section class="panel danger-zone spaced">
+  <h2>Cancel</h2>
+  <p class="muted">Jobs that haven't started won't run. Running jobs are asked to stop; a package manager stopped half-way can leave the host part-upgraded.</p>
+  <form class="inline-form" method="post" action="{{.Base}}/changes/{{$c.ID}}/cancel">
+    <label>Reason <input name="reason" placeholder="optional"></label>
+    <button class="danger">Cancel this change</button>
+  </form>
+</section>
+{{end}}
+{{end}}

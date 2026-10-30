@@ -1,0 +1,18 @@
+{{define "settings-tabs"}}
+<nav class="tabs" aria-label="Settings">
+  <a href="{{.Base}}/settings/access"{{if eq .Path "/settings/access"}} aria-current="page"{{end}}>Access</a>
+  <a href="{{.Base}}/settings/enrollment"{{if eq .Path "/settings/enrollment" "/settings/enrollment/tokens"}} aria-current="page"{{end}}>Enrollment</a>
+  <a href="{{.Base}}/settings/agents"{{if eq .Path "/settings/agents"}} aria-current="page"{{end}}>Agents</a>
+  <a href="{{.Base}}/settings/ticket-types"{{if eq .Path "/settings/ticket-types"}} aria-current="page"{{end}}>Ticket types</a>
+  <a href="{{.Base}}/settings/project-categories"{{if eq .Path "/settings/project-categories"}} aria-current="page"{{end}}>Project categories</a>
+  <a href="{{.Base}}/settings/project-tags"{{if eq .Path "/settings/project-tags"}} aria-current="page"{{end}}>Project tags</a>
+  <a href="{{.Base}}/settings/workflows"{{if hasPrefix .Path "/settings/workflows"}} aria-current="page"{{end}}>Workflows</a>
+  <a href="{{.Base}}/settings/migrations"{{if hasPrefix .Path "/settings/migrations"}} aria-current="page"{{end}}>Migrations</a>
+  <a href="{{.Base}}/settings/fields"{{if eq .Path "/settings/fields"}} aria-current="page"{{end}}>Custom fields</a>
+  <a href="{{.Base}}/settings/field-groups"{{if hasPrefix .Path "/settings/field-groups"}} aria-current="page"{{end}}>Field groups</a>
+  <a href="{{.Base}}/settings/slas"{{if eq .Path "/settings/slas"}} aria-current="page"{{end}}>SLAs</a>
+  <a href="{{.Base}}/settings/registries"{{if eq .Path "/settings/registries"}} aria-current="page"{{end}}>Registries</a>
+  <a href="{{.Base}}/settings/unifi"{{if hasPrefix .Path "/settings/unifi"}} aria-current="page"{{end}}>UniFi</a>
+  <a href="{{.Base}}/settings/notifications"{{if eq .Path "/settings/notifications"}} aria-current="page"{{end}}>Notifications</a>
+</nav>
+{{end}}

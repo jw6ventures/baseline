@@ -1,0 +1,10 @@
+{{define "head"}}{{template "list-head" .}}{{end}}
+{{define "content"}}
+{{$v := .Body}}
+<div class="titlebar">
+  <h1>Work items</h1>
+  {{if $v.CanCreate}}<a class="button" href="{{.Base}}/work/new">New work item</a>{{end}}
+</div>
+<p class="muted">Incidents, requests, problems and project work, each in a <a href="{{.Base}}/projects">project</a> and linked to the CIs and changes it concerns.{{if not $v.CanCreate}} No projects yet: an admin creates them under <a href="{{.Base}}/projects">Projects</a>.{{end}}</p>
+{{template "list" $v.List}}
+{{end}}

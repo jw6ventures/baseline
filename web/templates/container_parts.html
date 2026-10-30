@@ -1,0 +1,33 @@
+{{/* Shared by the container, stack and host pages. Each takes a containerView. */}}
+{{define "ctr-state"}}{{if eq .State "running"}}<span class="dot on"></span>running{{else}}<span class="dot off"></span>{{.State}}{{if and .ExitCode (eq .State "exited")}} <span class="muted">({{.ExitCode}})</span>{{end}}{{end}}{{with .Health}} {{if eq . "healthy"}}<span class="tag ok">healthy</span>{{else if eq . "unhealthy"}}<span class="tag warn">unhealthy</span>{{else}}<span class="tag">{{.}}</span>{{end}}{{end}}{{if gt .RestartCount 0}} <span class="muted small" title="restarts">↻{{.RestartCount}}</span>{{end}}{{end}}
+
+{{define "ctr-update"}}{{if .Pinned}}<span class="muted" title="Its stack is pinned">pinned</span>{{else}}{{if .Drift}}<span class="tag caution" title="The registry serves a newer image for this tag">newer image</span> {{end}}{{with .Advice}}<span class="tag caution" title="A newer version tag the semver rule allows">{{.}} available</span>{{end}}{{if not (or .Drift .Advice)}}{{if not .CheckRef}}<span class="muted" title="Built locally or pinned by digest">not checked</span>{{else if .CheckError}}<span class="bad-text small" title="{{.CheckError}}">check failed</span>{{else if .CheckedAt.IsZero}}<span class="muted">pending</span>{{else}}<span class="muted">current</span>{{end}}{{end}}{{end}}{{end}}
+
+{{/* A table of store.CertRow. */}}
+{{define "cert-table"}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Where</th><th>Subject / names</th><th>Issuer</th><th>Expires</th></tr></thead>
+  <tbody>{{range .}}<tr>
+    <td class="mono small">{{.Location}}{{with .Error}}<br><span class="bad-text">{{.}}</span>{{end}}</td>
+    <td>{{.Subject}}{{with .SANs}}<br><span class="muted small">{{join . ", "}}</span>{{end}}</td>
+    <td class="small">{{.Issuer}}{{if .SelfSigned}} <span class="tag">self-signed</span>{{end}}</td>
+    <td class="nowrap">{{if not .NotAfter.IsZero}}{{$d := .DaysLeft}}{{if lt $d 0}}<span class="tag warn">expired</span>{{else if lt $d 30}}<span class="tag warn">{{$d}} days</span>{{else}}{{$d}} days{{end}}<br><span class="muted small">{{time .NotAfter}}</span>{{end}}</td>
+  </tr>{{else}}<tr><td colspan="4" class="muted">No certificates found.</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
+
+{{define "ci-status"}}{{if eq . "active"}}<span class="tag ok">active</span>{{else if eq . "missing"}}<span class="tag caution">missing</span>{{else}}<span class="tag">{{.}}</span>{{end}}{{end}}
+
+{{/* The hostnames Traefik routes to a container or stack (service_endpoint
+     CIs found in router labels): dict "Base" .Base "Hostnames" []store.CI. */}}
+{{define "served-hostnames"}}{{with .Hostnames}}
+<section class="panel">
+  <h2>Hostnames</h2>
+  <table class="plain">{{range .}}<tr>
+    <td>{{with .Attr "url"}}<a href="{{.}}" rel="noopener">{{.}}</a>{{else}}<span class="mono">{{.Name}}</span>{{end}}</td>
+    <td class="muted small">{{.Attr "matchers"}} · router {{.Attr "routers"}}{{with .Attr "entrypoints"}} · {{.}}{{end}}</td>
+    <td><a class="small" href="{{$.Base}}/cis/{{.ID}}">CI</a></td>
+  </tr>{{end}}</table>
+  <p class="muted small">From the containers' Traefik router labels.</p>
+</section>
+{{end}}{{end}}

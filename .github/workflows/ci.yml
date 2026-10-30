@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call: # release.yml runs the tests before it publishes
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: baseline
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: baseline
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U baseline -d baseline"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      BASELINE_TEST_DB_URL: postgres://baseline:test@localhost:5432/baseline?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Vendor is in sync
+        run: |
+          go mod tidy
+          go mod vendor
+          git diff --exit-code -- go.mod go.sum vendor
+      - name: gofmt
+        run: test -z "$(gofmt -l $(git ls-files '*.go' | grep -v '^vendor/'))"
+      - run: go vet ./...
+      - run: go test -race ./...
+      - run: go build -trimpath -o /dev/null ./cmd/baseline-server

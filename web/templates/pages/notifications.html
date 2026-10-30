@@ -1,0 +1,78 @@
+{{define "content"}}
+{{$v := .Body}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<section class="panel">
+  <h2>Notification channels</h2>
+  <p class="muted">Alert rules notify these. Settings, tokens included, are encrypted with <code>BASELINE_SECRET_KEY</code> and never shown again; to change them, enter them all anew. Messages that can't be delivered are retried with backoff for about 9 hours.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Name</th><th>Where</th><th>Used by</th><th>Last sent</th><th></th></tr></thead>
+    <tbody>{{range $v.Channels}}<tr{{if not .Enabled}} class="dim"{{end}}>
+      <td><strong>{{.Name}}</strong> <span class="muted small">{{.Kind}}</span>{{if not .Enabled}} <span class="tag">off</span>{{end}}</td>
+      <td class="mono small">{{.Summary}}</td>
+      <td class="small">{{with index $v.Rules .ID}}{{join . ", "}}{{else}}<span class="muted">no rule</span>{{end}}</td>
+      <td>{{if .LastSentAt.IsZero}}<span class="muted">never</span>{{else}}{{ago .LastSentAt}}{{end}}{{with .LastError}}<br><span class="bad-text small">{{.}}</span>{{end}}</td>
+      <td class="actions"><div class="row-forms">
+        <form method="post" action="{{$.Base}}/settings/notifications/{{.ID}}/test"><button class="small"{{if not .Enabled}} disabled{{end}}>Send test</button></form>
+        <form method="post" action="{{$.Base}}/settings/notifications/{{.ID}}"><input type="hidden" name="name" value="{{.Name}}">{{if not .Enabled}}<input type="hidden" name="enabled" value="1">{{end}}<button class="small secondary">{{if .Enabled}}Turn off{{else}}Turn on{{end}}</button></form>
+        <form method="post" action="{{$.Base}}/settings/notifications/{{.ID}}/delete"><button class="small danger">Delete</button></form>
+      </div>
+      <details class="sub"><summary class="small">Change</summary>
+        <form class="stack-form" method="post" action="{{$.Base}}/settings/notifications/{{.ID}}" autocomplete="off">
+          <label>Name<input name="name" value="{{.Name}}" required></label>
+          {{if eq .Kind "matrix"}}
+          <label>Homeserver<input name="homeserver" placeholder="https://matrix.example.org"></label>
+          <label>Room<input name="room" placeholder="!abc:example.org or #ops:example.org"></label>
+          {{else}}
+          <label>Server<input name="server" placeholder="https://ntfy.sh"></label>
+          <label>Topic<input name="topic"></label>
+          {{end}}
+          <label>Access token<input type="password" name="token"></label>
+          {{if .Enabled}}<input type="hidden" name="enabled" value="1">{{end}}
+          <p class="muted small hint">Leave the settings empty to keep the stored ones and only rename.</p>
+          <div><button class="small">Save</button></div>
+        </form>
+      </details></td>
+    </tr>{{else}}<tr><td colspan="5" class="muted">None yet: alerts only show in Baseline.</td></tr>{{end}}</tbody>
+  </table></div>
+</section>
+
+<div class="grid2">
+<form class="panel stack-form" method="post" action="{{.Base}}/settings/notifications" autocomplete="off">
+  <h2>Add a Matrix room</h2>
+  <input type="hidden" name="kind" value="matrix">
+  <label>Name<input name="name" required placeholder="ops room"></label>
+  <label>Homeserver<input name="homeserver" required placeholder="https://matrix.example.org"></label>
+  <label>Room<input name="room" required placeholder="!abc:example.org or #ops:example.org"></label>
+  <label>Access token<input type="password" name="token" required></label>
+  <p class="muted small hint">Use a bot account that has joined the room. Its access token is in Element under Settings → Help &amp; About, or from a login with the client API.</p>
+  <div><button>Add</button></div>
+</form>
+<form class="panel stack-form" method="post" action="{{.Base}}/settings/notifications" autocomplete="off">
+  <h2>Add an ntfy topic</h2>
+  <input type="hidden" name="kind" value="ntfy">
+  <label>Name<input name="name" required placeholder="phone"></label>
+  <label>Server<input name="server" required value="https://ntfy.sh"></label>
+  <label>Topic<input name="topic" required></label>
+  <label>Access token <span class="muted small">(optional)</span><input type="password" name="token" placeholder="tk_…"></label>
+  <p class="muted small hint">On ntfy.sh anyone who knows a topic's name can read it: pick a long random name, or use your own server with access control. Critical alerts are sent as urgent, warnings as high priority.</p>
+  <div><button>Add</button></div>
+</form>
+</div>
+
+{{with $v.Recent}}
+<h2>Recent messages</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Queued</th><th>Channel</th><th>Message</th><th>Delivery</th></tr></thead>
+  <tbody>{{range .}}<tr>
+    <td class="nowrap">{{time .CreatedAt}}</td>
+    <td>{{.ChannelName}}</td>
+    <td>{{if .AlertID}}<a href="{{$.Base}}/alerts/{{.AlertID}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}</td>
+    <td>{{template "delivery" .}}</td>
+  </tr>{{end}}</tbody>
+</table></div>
+{{end}}
+{{end}}

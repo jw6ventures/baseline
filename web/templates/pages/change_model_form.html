@@ -1,0 +1,31 @@
+{{define "content"}}
+{{$v := .Body}}{{$f := $v.Form}}
+<h1>{{.Title}}</h1>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{$action := print .Base "/change-models/new"}}{{if $v.ID}}{{$action = print .Base "/change-models/" $v.ID "/edit"}}{{end}}
+{{if not $v.Spec.Name}}
+<p class="muted">Pick the action the model pre-approves. Hosts are chosen for each change made from it.</p>
+<div class="cards">
+{{range $v.Actions}}
+  <a class="card" href="{{$action}}?action={{.Name}}">
+    <span class="badge">{{.Risk}} risk</span>
+    <strong>{{.Label}}</strong>
+    <span class="mono">{{.Name}}</span>
+  </a>
+{{end}}
+</div>
+{{else if and (eq $v.Spec.Name "script.run") (not $v.Script)}}
+{{template "script-chooser" (dict "Base" .Base "V" $v "Action" $action)}}
+{{else}}
+<form class="panel stack-form wide" method="post" action="{{.Base}}/change-models{{with $v.ID}}/{{.}}{{end}}">
+  <input type="hidden" name="action" value="{{$v.Spec.Name}}">
+  <label>Name<input name="name" value="{{$v.Name}}" maxlength="100" required></label>
+  <label><span>Description <span class="muted small">(when it's meant to be used)</span></span><textarea name="description" rows="2">{{$v.Description}}</textarea></label>
+  <p><strong>{{$v.Spec.Label}}</strong> <span class="mono muted small">{{$v.Spec.Name}}</span>{{if hasPrefix $v.Spec.Name "compose."}}, on whichever stack a change names{{end}}</p>
+  {{template "action-params" (dict "Base" .Base "V" $v)}}
+  <label>Risk<select name="risk">{{range $v.Risks}}<option value="{{.}}"{{if eq . $v.Risk}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+  <p class="muted small">Saving {{if $v.ID}}an edited model puts it back to pending{{else}}a model leaves it pending{{end}} until an approver approves it.</p>
+  <div><button>Save</button> <a href="{{.Base}}/change-models">Cancel</a></div>
+</form>
+{{end}}
+{{end}}

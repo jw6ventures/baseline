@@ -1,0 +1,31 @@
+{{define "content"}}
+{{$v := .Body}}{{$p := $v.Project}}
+<h1>{{if $v.New}}New project{{else}}Edit {{$p.Key}}{{end}}</h1>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+<form class="panel stack-form" method="post" action="{{.Base}}/projects{{if not $v.New}}/{{$p.Key}}{{end}}">
+  {{if $v.New}}
+  <label>Key <span class="muted small">(2 to 10 capitals or digits; items are numbered KEY-1, KEY-2, and it can't change later)</span><input name="key" value="{{$p.Key}}" placeholder="OPS" required></label>
+  {{else}}<p class="muted">Key <code>{{$p.Key}}</code></p>{{end}}
+  <label>Name<input name="name" value="{{$p.Name}}" required></label>
+  <label>Kind<select name="kind">{{range $v.Kinds}}<option value="{{.}}"{{if eq . $p.Kind}} selected{{end}}>{{human .}}</option>{{end}}</select></label>
+  <label>Description<textarea name="description" rows="3">{{$p.Description}}</textarea></label>
+  <label>Host group <span class="muted small">(the infrastructure this project supports, optional)</span><select name="host_group"><option value="">None</option>{{range $v.Groups}}<option value="{{.ID}}"{{if eq .ID $p.HostGroupID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+  <label>Category <span class="muted small">(optional; admins keep the list in <a href="{{.Base}}/settings/project-categories">Settings</a>)</span><select name="category"><option value="">None</option>{{range $v.Labels.Cats}}<option value="{{.ID}}"{{if eq .ID $p.CategoryID}} selected{{end}}>{{.Path}}</option>{{end}}</select></label>
+  <fieldset class="checks">
+    <legend>Tags <span class="muted small">(admins keep the list in <a href="{{.Base}}/settings/project-tags">Settings</a>)</span></legend>
+    {{range $v.Labels.Tags}}{{$t := .}}{{$on := false}}{{range $p.Tags}}{{if eq .ID $t.ID}}{{$on = true}}{{end}}{{end}}
+    <label><input type="checkbox" name="tags" value="{{.ID}}"{{if $on}} checked{{end}}> <span class="tag"{{with .Color}} style="{{chipStyle .}}"{{end}}>{{.Name}}</span>{{with .Description}} <span class="muted small">{{.}}</span>{{end}}</label>
+    {{else}}<p class="muted small">No tags yet.</p>{{end}}
+  </fieldset>
+  <fieldset class="checks">
+    <legend>Ticket types <span class="muted small">(the default is what new items start as; each type's items follow its <a href="{{.Base}}/settings/workflows">workflow</a>, and changing it only affects new items)</span></legend>
+    {{range $v.Types}}{{$t := .}}{{$on := false}}{{$def := false}}{{$wf := ""}}{{range $p.Types}}{{if eq .ID $t.ID}}{{$on = true}}{{$def = .Default}}{{$wf = .WorkflowID}}{{end}}{{end}}
+    <label><input type="checkbox" name="types" value="{{.ID}}"{{if $on}} checked{{end}}> {{.Name}} <span class="muted small">{{.BaseKind}}</span>
+      <input type="radio" name="default_type" value="{{.ID}}"{{if $def}} checked{{end}} aria-label="Default type: {{.Name}}"> <span class="muted small">default</span>
+      <select name="workflow_{{.ID}}" aria-label="Workflow for {{.Name}}">{{range $v.Workflows}}<option value="{{.ID}}"{{if $wf}}{{if eq .ID $wf}} selected{{end}}{{else if .Default}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+    {{end}}
+  </fieldset>
+  {{if not $v.New}}<label class="check-line"><input type="checkbox" name="archived" value="1"{{if $p.Archived}} checked{{end}}> Archived: no new items, hidden from the project list</label>{{end}}
+  <div><button>{{if $v.New}}Create{{else}}Save{{end}}</button> <a href="{{.Base}}{{if $v.New}}/projects{{else}}/projects/{{$p.Key}}{{end}}">Cancel</a></div>
+</form>
+{{end}}

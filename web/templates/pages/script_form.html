@@ -1,0 +1,18 @@
+{{define "content"}}
+{{$v := .Body}}
+<h1>{{if $v.New}}New script{{else}}New version of {{$v.Name}}{{end}}</h1>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+<p class="muted">{{if $v.New}}Saving creates version 1.{{else}}Saving creates version {{$v.Next}}; earlier versions never change.{{end}} The script runs as root on the hosts it's run on, from a root-only temporary file, with <code>/</code> as its working directory and a minimal environment.</p>
+<form class="panel stack-form wide" method="post" action="{{.Base}}/scripts{{if not $v.New}}/{{$v.ID}}{{end}}">
+  {{if $v.New}}<label>Name<input name="name" value="{{$v.Name}}" maxlength="100" required></label>{{else}}<input type="hidden" name="name" value="{{$v.Name}}">{{end}}
+  <label>Description<input name="description" value="{{$v.Description}}"></label>
+  <div class="inline-form">
+    <label>Interpreter<select name="interpreter">{{range $v.Interps}}<option{{if eq . $v.Interpreter}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+    <label>Risk<select name="risk">{{range $v.Risks}}<option{{if eq (print .) $v.Risk}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+  </div>
+  <label><span>Parameters <span class="muted small">one per line: <code>name type [required] [/pattern/] [# help]</code>, types string, int or bool</span></span><textarea name="params" rows="3" class="mono" placeholder="days int required # keep this many days">{{$v.Params}}</textarea></label>
+  <label>Script<textarea name="body" rows="18" class="mono" spellcheck="false" required>{{$v.Body}}</textarea></label>
+  <label>Notes on this version<input name="notes" value="{{$v.Notes}}"></label>
+  <div><button>Save version {{$v.Next}}</button> <a href="{{.Base}}/scripts{{if not $v.New}}/{{$v.ID}}{{end}}">Cancel</a></div>
+</form>
+{{end}}

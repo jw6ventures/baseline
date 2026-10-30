@@ -1,0 +1,19 @@
+{{/* Shared by the change, job and host pages. */}}
+{{define "job-state"}}<span class="tag {{jobClass .State}}">{{if and (eq .State "running") .AwaitingReboot}}rebooting{{else}}{{human .State}}{{end}}</span>{{end}}
+
+{{define "change-state"}}<span class="tag {{changeClass .State}}">{{human .State}}</span>{{with .Outcome}}{{if and (ne . "success") (ne . "cancelled")}} <span class="muted small">{{.}}</span>{{end}}{{end}}{{if .SelfApproved}} <span class="tag" title="Approved by the person who requested it; the audit log records it as such">self-approved</span>{{end}}{{end}}
+
+{{/* A table of store.Job: dict "Base" .Base "Jobs" <jobs>. */}}
+{{define "job-table"}}{{$base := .Base}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Job</th><th>Host</th><th>Change</th><th>State</th><th>Started</th><th class="num">Took</th></tr></thead>
+  <tbody>{{range .Jobs}}<tr>
+    <td><a href="{{$base}}/jobs/{{.ID}}">{{.Summary}}</a>{{with .Error}}<br><span class="bad-text small">{{.}}</span>{{end}}</td>
+    <td><a href="{{$base}}/hosts/{{.HostID}}/jobs">{{.Hostname}}</a></td>
+    <td class="nowrap"><a href="{{$base}}/changes/{{.ChangeID}}">{{.ChangeRef}}</a></td>
+    <td class="nowrap">{{template "job-state" .}}{{if and .ExitCode.Valid (ne .ExitCode.Int64 0)}} <span class="muted small" title="exit status">({{.ExitCode.Int64}})</span>{{end}}</td>
+    <td class="nowrap">{{if .StartedAt.IsZero}}<span class="muted">queued {{ago .QueuedAt}}</span>{{else}}{{time .StartedAt}}{{end}}</td>
+    <td class="num">{{if not .StartedAt.IsZero}}{{duration .Duration}}{{end}}</td>
+  </tr>{{else}}<tr><td colspan="6" class="muted">No jobs.</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}

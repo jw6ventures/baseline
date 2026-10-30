@@ -1,0 +1,46 @@
+{{define "content"}}
+{{$v := .Body}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<section class="panel">
+  <h2>UniFi consoles</h2>
+  <p class="muted">Baseline reads a UniFi console (UDM, UCG, Cloud Key or a self-hosted Network application, 9.0 or newer) through its local Integration API every 5 minutes, and never changes it. Its adopted devices become network device CIs, Protect cameras camera CIs, and each wired client is linked to the switch port it is on: to the host, guest or CI with its MAC, or else to a network client CI of its own. A console the server can't reach is polled by the agent of a host that can. API keys are encrypted with <code>BASELINE_SECRET_KEY</code> and never shown again.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Console</th><th>Polled from</th><th>Found</th><th>Last poll</th><th></th></tr></thead>
+    <tbody>{{range $v.Consoles}}<tr>
+      <td><strong>{{.Name}}</strong>{{if not .Enabled}} <span class="muted">paused</span>{{end}}<br><span class="mono small">{{.Config.URL}}</span>
+        {{with .NetworkVersion}}<br><span class="muted small">Network {{.}}</span>{{end}}{{with .ProtectVersion}}<span class="muted small">, Protect {{.}}</span>{{end}}</td>
+      <td>{{if .RunOn}}<a href="{{$.Base}}/hosts/{{.RunOn}}">{{or .RunOnName .RunOn}}</a>{{else}}The server{{end}}</td>
+      <td class="small">{{with .Fingerprint}}<span class="muted">TLS pinned</span><br>{{end}}{{.Sites}} sites, {{.Devices}} devices, {{.Clients}} clients of their own{{if .Config.Protect}}, {{.Protect}} Protect devices{{end}}</td>
+      <td class="small">{{if .LastPoll.IsZero}}<span class="muted">Not yet</span>{{else}}{{ago .LastPoll}} ago{{end}}
+        {{with .LastError}}<br><span class="bad">{{.}}</span>{{end}}
+        {{range .NoteLines}}<br><span class="muted">{{.}}</span>{{end}}</td>
+      <td class="actions"><form class="inline" method="post" action="{{$.Base}}/settings/unifi/{{.ID}}/poll"><button class="small">Poll now</button></form>
+        <a class="button small" href="{{$.Base}}/settings/unifi/{{.ID}}">Edit</a>
+        <form class="inline" method="post" action="{{$.Base}}/settings/unifi/{{.ID}}/delete"><button class="small danger">Remove</button></form></td>
+    </tr>{{else}}<tr><td colspan="5" class="muted">No consoles yet.</td></tr>{{end}}</tbody>
+  </table></div>
+</section>
+
+{{$e := $v.Edit}}
+<form class="panel stack-form" method="post" action="{{.Base}}/settings/unifi{{with $e.ID}}/{{.}}{{end}}" autocomplete="off">
+  <h2>{{if $e.ID}}Edit {{$e.Name}}{{else}}Add a console{{end}}</h2>
+  <label>Name<input name="name" value="{{$e.Name}}" placeholder="UDM Pro" required></label>
+  <label>Address<input name="url" value="{{$e.Config.URL}}" placeholder="https://192.168.1.1" required></label>
+  <label>API key<input type="password" name="api_key" {{if not $e.ID}}required{{else}}placeholder="Leave empty to keep the saved key"{{end}}>
+    <span class="muted small">Make one on the console under UniFi Network → Settings → Control Plane → Integrations. A key from a read-only admin is enough.</span></label>
+  <label>TLS fingerprint (SHA-256)<input name="tls_fingerprint" class="mono" value="{{$e.Config.TLSFingerprint}}" placeholder="Empty: the certificate must verify">
+    <span class="muted small">Consoles ship a self-signed certificate: pin it here. If a poll fails because the certificate isn't trusted, the error shows its fingerprint to check and paste.</span></label>
+  <label>Sites<input name="sites" value="{{join $e.Config.Sites ", "}}" placeholder="Empty: all sites">
+    <span class="muted small">Names or IDs, comma-separated.</span></label>
+  <label>Poll from<select name="run_on"><option value="">The server</option>
+    {{range $v.Hosts}}<option value="{{.ID}}"{{if eq .ID $e.RunOn}} selected{{end}}{{if and (not .Capable) (ne .ID $e.RunOn)}} disabled{{end}}>{{.Name}}{{if not .Capable}} (its agent can't: update it, or check integrations in agent.conf){{end}}</option>{{end}}</select>
+    <span class="muted small">Pick a host when only its network reaches the console. Its agent polls with the key, which it keeps in memory for that poll only.</span></label>
+  <label class="check-line"><input type="checkbox" name="protect" value="1"{{if or (not $e.ID) $e.Config.Protect}} checked{{end}}> Read UniFi Protect too (cameras, doorbells, lights, sensors, chimes, viewers)</label>
+  <label class="check-line"><input type="checkbox" name="enabled" value="1"{{if or (not $e.ID) $e.Enabled}} checked{{end}}> Poll it every 5 minutes</label>
+  <div><button>{{if $e.ID}}Save{{else}}Add console{{end}}</button>{{if $e.ID}} <a href="{{.Base}}/settings/unifi">Cancel</a>{{end}}</div>
+</form>
+{{end}}

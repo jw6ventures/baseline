@@ -1,0 +1,34 @@
+{{define "content"}}
+{{$v := .Body}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<section class="panel">
+  <h2>Custom fields</h2>
+  <p class="muted">Fields are defined once and bundled into <a href="{{.Base}}/settings/field-groups">field groups</a>; a project applies groups to each of its ticket types. Lists of work items can show, filter and sort by any field as <code>cf_</code> and its key.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Label</th><th>Key</th><th>Type</th><th>Options</th><th class="num">Groups</th><th></th></tr></thead>
+    <tbody>{{range $v.Fields}}<tr>
+      <td><strong>{{.Label}}</strong>{{with .Description}}<br><span class="muted small">{{.}}</span>{{end}}</td>
+      <td class="mono">{{.Key}}</td><td>{{fieldType .Type}}</td>
+      <td class="small">{{join .Options ", "}}</td><td class="num">{{.Groups}}</td>
+      <td class="actions"><a class="button small" href="{{$.Base}}/settings/fields?edit={{.ID}}">Edit</a>
+        {{if not .Groups}}<form class="inline" method="post" action="{{$.Base}}/settings/fields/{{.ID}}/delete"><button class="small danger">Delete</button></form>{{end}}</td>
+    </tr>{{else}}<tr><td colspan="6" class="muted">No custom fields yet.</td></tr>{{end}}</tbody>
+  </table></div>
+</section>
+
+{{$e := $v.Edit}}
+<form class="panel stack-form" method="post" action="{{.Base}}/settings/fields{{with $e.ID}}/{{.}}{{end}}">
+  <h2>{{if $e.ID}}Edit {{$e.Label}}{{else}}New field{{end}}</h2>
+  {{if $e.ID}}<p class="muted">Key <code>{{$e.Key}}</code> · {{fieldType $e.Type}} <span class="small">(both fixed once created: stored values depend on them)</span></p>{{else}}
+  <label>Key <span class="muted small">(lower case, fixed once created)</span><input name="key" value="{{$e.Key}}" placeholder="os_version" required></label>
+  <label>Type<select name="type">{{range $v.Types}}<option value="{{.}}"{{if eq . $e.Type}} selected{{end}}>{{fieldType .}}</option>{{end}}</select></label>{{end}}
+  <label>Label<input name="label" value="{{$e.Label}}" required></label>
+  {{if or (not $e.ID) $e.HasOptions}}<label>Options <span class="muted small">(for pick one and pick several: one per line)</span><textarea name="options" rows="4">{{join $e.Options "\n"}}</textarea></label>{{end}}
+  <label>Description <span class="muted small">(shown next to the input)</span><input name="description" value="{{$e.Description}}"></label>
+  <div><button>{{if $e.ID}}Save{{else}}Create{{end}}</button>{{if $e.ID}} <a href="{{.Base}}/settings/fields">Cancel</a>{{end}}</div>
+</form>
+{{end}}

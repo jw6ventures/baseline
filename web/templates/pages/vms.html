@@ -1,0 +1,12 @@
+{{define "head"}}{{template "list-head" .}}{{end}}
+{{define "content"}}
+{{$v := .Body}}
+<h1>Virtual machines</h1>
+<div class="stats">
+  <a class="stat" href="{{.Base}}/vms?show=running"><span class="n">{{$v.Running}}<span class="of"> / {{$v.Total}}</span></span><span>guests running</span></a>
+  <a class="stat" href="{{.Base}}/vms?show=agent"><span class="n">{{$v.WithAgent}}</span><span>with their own agent</span></a>
+  <div class="stat"><span class="n">{{$v.Hypervisors}}</span><span>hypervisors</span></div>
+</div>
+{{template "list" $v.List}}
+<p class="muted small">Agents on Proxmox VE and libvirt hosts report the guests of the node they run on every 5 minutes. When a guest runs an agent too, the two records are joined by its DMI product UUID or, failing that, a NIC's MAC address.</p>
+{{end}}

@@ -1,0 +1,28 @@
+{{define "content"}}
+{{$v := .Body}}
+<div class="titlebar"><h1>Boards</h1></div>
+<p class="muted">A board shows work items in columns, each a set of status categories or statuses. Dropping a card on a column runs a real transition of the item's workflow.</p>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<div class="table-wrap"><table>
+  <thead><tr><th>Board</th><th>Project</th><th>Columns</th><th></th></tr></thead>
+  <tbody>{{range $v.Boards}}<tr>
+    <td><a href="{{$.Base}}/boards/{{.ID}}"><strong>{{.Name}}</strong></a></td>
+    <td>{{if .ProjectKey}}<a href="{{$.Base}}/projects/{{.ProjectKey}}">{{.ProjectKey}} {{.ProjectName}}</a>{{else}}<span class="muted">every project</span>{{end}}</td>
+    <td>{{range $i, $c := .Columns}}{{if $i}} · {{end}}{{$c.Name}}{{end}}</td>
+    <td class="nowrap">{{if .CanEdit}}<a href="{{$.Base}}/boards/{{.ID}}/edit">Edit</a>{{end}}</td>
+  </tr>{{else}}<tr><td colspan="4" class="muted">No boards yet.</td></tr>{{end}}</tbody>
+</table></div>
+
+<form class="panel stack-form" method="post" action="{{.Base}}/boards">
+  <h2>New board</h2>
+  <label>Name<input name="name" value="{{$v.Name}}" maxlength="80" placeholder="OPS sprint" required></label>
+  <label>Project<select name="project">
+    <option value="">Every project</option>
+    {{range $v.Projects}}<option value="{{.Key}}"{{if eq .Key $v.Project}} selected{{end}}>{{.Key}} {{.Name}}</option>{{end}}
+  </select></label>
+  <p class="muted small hint">It starts with a column per status category (To do, In progress, Done) and shows items not done or done in the last two weeks. Edit it to change both.</p>
+  <div><button>Create</button></div>
+</form>
+{{end}}

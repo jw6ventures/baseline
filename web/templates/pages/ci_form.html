@@ -1,0 +1,30 @@
+{{define "content"}}
+{{$v := .Body}}{{$c := $v.CI}}
+<h1>{{if $v.New}}New configuration item{{else}}Edit {{$c.Name}}{{end}}</h1>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{if $v.New}}
+<form class="inline-form" method="get" action="{{.Base}}/cis/new">
+  <label>Type<select name="type">{{range $v.Types}}<option value="{{.Key}}"{{if eq .Key $c.Type}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+  <button class="small">Change type</button>
+</form>
+{{end}}
+<form class="panel stack-form" method="post" action="{{.Base}}/cis{{if not $v.New}}/{{$c.ID}}{{end}}">
+  <input type="hidden" name="type" value="{{$c.Type}}">
+  <p class="muted">{{$v.Type.Label}}</p>
+  <label>Name<input name="name" value="{{$c.Name}}" required></label>
+  <label>Status<select name="status">{{range $v.Statuses}}<option value="{{.}}"{{if eq . $c.Status}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+  <label>Owner<input name="owner" value="{{$c.Owner}}"></label>
+  <label>Description<textarea name="description" rows="3">{{$c.Description}}</textarea></label>
+  <label>Tags <span class="muted small">(comma or space separated)</span><input name="tags" value="{{join $c.Tags ", "}}"></label>
+  {{range $v.Type.Fields}}{{if not .Discovered}}
+  <label>{{.Label}}
+    {{if eq .Type "textarea"}}<textarea name="attr_{{.Key}}" rows="3">{{$c.Attr .Key}}</textarea>
+    {{else if eq .Type "date"}}<input type="date" name="attr_{{.Key}}" value="{{$c.Attr .Key}}">
+    {{else if eq .Type "url"}}<input type="url" name="attr_{{.Key}}" value="{{$c.Attr .Key}}" placeholder="https://">
+    {{else if eq .Type "endpoint"}}<input name="attr_{{.Key}}" value="{{$c.Attr .Key}}" placeholder="host:port — checked for its TLS certificate">
+    {{else}}<input name="attr_{{.Key}}" value="{{$c.Attr .Key}}">{{end}}
+  </label>
+  {{end}}{{end}}
+  <div><button>{{if $v.New}}Create{{else}}Save{{end}}</button> <a href="{{.Base}}{{if $v.New}}/cis{{else}}/cis/{{$c.ID}}{{end}}">Cancel</a></div>
+</form>
+{{end}}

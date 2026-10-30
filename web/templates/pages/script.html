@@ -1,0 +1,48 @@
+{{define "content"}}
+{{$v := .Body}}{{$s := $v.Script}}{{$ver := $v.Shown}}
+<div class="titlebar">
+  <div>
+    <h1>{{$s.Name}}</h1>
+    <p class="muted sub">{{if $s.Archived}}<span class="tag">archived</span> · {{end}}{{plural (len $v.Versions) "version"}} · run {{plural $s.Runs "time"}}</p>
+  </div>
+  <div>
+    {{if $v.CanRun}}<a class="button" href="{{.Base}}/changes/new?action=script.run&amp;script={{$s.ID}}&amp;version={{$s.Latest}}">Run…</a>{{end}}
+    {{if $v.IsAdmin}}<a class="button" href="{{.Base}}/scripts/{{$s.ID}}/edit">New version</a>{{end}}
+  </div>
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{with $s.Description}}<p class="lead">{{.}}</p>{{end}}
+
+<section class="panel">
+  <h2>Version {{$ver.Version}}{{if ne $ver.Version $s.Latest}} <span class="tag caution">not the latest</span>{{end}}</h2>
+  <dl class="facts">
+    <dt>Interpreter</dt><dd class="mono">{{$ver.Interpreter}}</dd>
+    <dt>Risk</dt><dd>{{$ver.Risk}}</dd>
+    <dt>SHA-256</dt><dd class="mono small">{{$ver.SHA256}}</dd>
+    <dt>Saved</dt><dd>{{time $ver.CreatedAt}}{{with $ver.CreatedBy}} by {{.}}{{end}}</dd>
+    {{with $ver.Notes}}<dt>Notes</dt><dd>{{.}}</dd>{{end}}
+    <dt>Parameters</dt><dd>{{range $ver.Params}}<code>{{.Name}}</code> {{.Type}}{{if .Required}}, required{{end}}{{with .Pattern}}, /{{.}}/{{end}}{{with .Help}} <span class="muted">— {{.}}</span>{{end}}<br>{{else}}<span class="muted">none</span>{{end}}
+      {{if $ver.Params}}<span class="muted small">Passed as arguments in this order, and as <code>BASELINE_PARAM_&lt;NAME&gt;</code> variables.</span>{{end}}</dd>
+  </dl>
+  <pre class="file">{{$ver.Body}}</pre>
+  {{if and $v.CanRun (ne $ver.Version $s.Latest)}}<p><a class="button" href="{{.Base}}/changes/new?action=script.run&amp;script={{$s.ID}}&amp;version={{$ver.Version}}">Run version {{$ver.Version}}…</a></p>{{end}}
+</section>
+
+<h2>Versions</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th class="num">Version</th><th>SHA-256</th><th>Risk</th><th>Saved</th><th>Notes</th></tr></thead>
+  <tbody>{{range $v.Versions}}<tr>
+    <td class="num"><a href="{{$.Base}}/scripts/{{$s.ID}}?v={{.Version}}"{{if eq .Version $ver.Version}} aria-current="page"{{end}}>{{.Version}}</a></td>
+    <td class="mono small">{{short .SHA256 16}}</td><td>{{.Risk}}</td>
+    <td class="nowrap">{{time .CreatedAt}}{{with .CreatedBy}}<br><span class="muted small">{{.}}</span>{{end}}</td><td class="small">{{.Notes}}</td>
+  </tr>{{end}}</tbody>
+</table></div>
+
+{{if $v.IsAdmin}}
+<section class="panel spaced">
+  <h2>{{if $s.Archived}}Restore{{else}}Archive{{end}}</h2>
+  <p class="muted">{{if $s.Archived}}Restoring lets it run again.{{else}}An archived script can't be run. Its versions stay, since past jobs refer to them.{{end}}</p>
+  <form method="post" action="{{.Base}}/scripts/{{$s.ID}}/archive"><input type="hidden" name="archived" value="{{if $s.Archived}}0{{else}}1{{end}}"><button class="{{if not $s.Archived}}danger{{end}}">{{if $s.Archived}}Restore{{else}}Archive{{end}}</button></form>
+</section>
+{{end}}
+{{end}}

@@ -1,0 +1,8 @@
+{{define "head"}}{{template "list-head" .}}{{end}}
+{{define "content"}}
+<div class="titlebar">
+  <h1>Hosts</h1>
+  {{if .Body.IsAdmin}}<a class="button" href="{{.Base}}/settings/enrollment">Enroll a host</a>{{end}}
+</div>
+{{template "list" .Body.List}}
+{{end}}

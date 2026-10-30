@@ -1,0 +1,57 @@
+{{define "content"}}
+{{$v := .Body}}{{$f := $v.Filter}}
+<div class="titlebar">
+  <h1>Vulnerabilities</h1>
+  {{if $v.IsAdmin}}<form method="post" action="{{.Base}}/vulnerabilities/sync"><button class="secondary"{{if $v.SyncOff}} disabled title="BASELINE_OSV_URL=off"{{end}}>Sync now</button></form>{{end}}
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+<p class="muted">Installed packages matched against <a href="https://osv.dev/">OSV</a> data for each host's distribution release, by source package and each distro's own version order. A fix is <strong>available</strong> when the version an upgrade would install now is at least the fixed one, so patching closes it today.
+{{- with $v.Sources}} Data:{{range $i, $s := .}}{{if $i}};{{end}} {{$s.Ecosystem}} {{if $s.SyncedAt.IsZero}}<span class="tag caution">not synced yet</span>{{else}}({{plural $s.Vulns "record"}}, synced {{ago $s.SyncedAt}}){{end}}{{with $s.Error}} <span class="bad-text small" title="{{.}}">last sync failed</span>{{end}}{{end}}.{{else}} No OSV data yet: the first sync starts when a covered host reports its OS.{{end}}</p>
+{{with $v.Uncovered}}<p class="muted small">Not covered by OSV, so not matched: {{range $i, $h := .}}{{if $i}}, {{end}}<a href="{{$.Base}}/hosts/{{$h.ID}}?tab=updates">{{$h.DisplayName}}</a>{{end}} (Fedora and image-based hosts rely on their vendor's security updates).</p>{{end}}
+
+<nav class="tabs" aria-label="Views">
+  <a href="{{.Base}}/vulnerabilities?{{$v.VulnsQuery}}"{{if eq $f.View "vulns"}} aria-current="page"{{end}}>By vulnerability</a>
+  <a href="{{.Base}}/vulnerabilities?{{$v.HostsQuery}}"{{if eq $f.View "hosts"}} aria-current="page"{{end}}>By host</a>
+</nav>
+
+{{if eq $f.View "hosts"}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Host</th><th>Data</th><th class="num">Critical</th><th class="num">High</th><th class="num">Medium</th><th class="num">Low</th><th class="num">Fixable</th><th class="num">All</th></tr></thead>
+  <tbody>{{range $v.Hosts}}{{$c := .Counts}}<tr>
+    <td><a href="{{$.Base}}/hosts/{{.Host.ID}}?tab=vulnerabilities"><strong>{{.Host.DisplayName}}</strong></a></td>
+    <td class="small">{{.Host.VulnEcosystem}}<br><span class="muted">matched {{ago .Host.VulnsAt}}</span></td>
+    <td class="num">{{if $c.Critical}}<span class="tag vsev-critical">{{$c.Critical}}</span>{{end}}</td>
+    <td class="num">{{if $c.High}}<span class="tag vsev-high">{{$c.High}}</span>{{end}}</td>
+    <td class="num">{{if $c.Medium}}{{$c.Medium}}{{end}}</td>
+    <td class="num">{{if $c.Low}}{{$c.Low}}{{end}}</td>
+    <td class="num"><strong>{{$c.Fixable}}</strong></td>
+    <td class="num muted">{{$c.Total}}</td>
+  </tr>{{else}}<tr><td colspan="8" class="muted">No host has been matched yet.</td></tr>{{end}}</tbody>
+</table></div>
+<p class="muted small">Severity columns count vulnerabilities pending updates fix; "All" includes those without a fix yet.</p>
+{{else}}
+<form class="search inline-form" method="get" action="{{.Base}}/vulnerabilities">
+  <label>Show<select name="fixable"><option value="1"{{if $f.Fixable}} selected{{end}}>fixable now</option><option value="0"{{if not $f.Fixable}} selected{{end}}>all, fixed or not</option></select></label>
+  <label>Severity<select name="severity"><option value="">any</option>{{range $v.Severities}}<option value="{{.}}"{{if eq $f.MinSeverity .}} selected{{end}}>{{.}} or worse</option>{{end}}</select></label>
+  <label>Search<input name="q" value="{{$f.Query}}" placeholder="CVE-2025-…, openssl"></label>
+  <button class="small">Filter</button>
+</form>
+{{if $v.Vulns}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Vulnerability</th><th>Severity</th><th>Summary</th><th>Packages</th><th class="num">Hosts</th><th class="num">Fixable on</th><th>Found</th></tr></thead>
+  <tbody>{{range $v.Vulns}}<tr>
+    <td class="nowrap">{{template "vuln-ids" dict "Base" $.Base "ID" .ID "Aliases" .Aliases}}</td>
+    <td class="nowrap">{{template "vuln-severity" .Severity}}{{with .CVSSScore}} <span class="muted small" title="CVSS base score">{{score .}}</span>{{end}}</td>
+    <td class="small">{{short .Summary 200}}</td>
+    <td class="small">{{join .Packages ", "}}</td>
+    <td class="num">{{.Hosts}}</td>
+    <td class="num">{{if .FixableHosts}}<strong>{{.FixableHosts}}</strong>{{else}}<span class="muted">0</span>{{end}}</td>
+    <td class="nowrap" title="{{time .FirstSeen}}">{{ago .FirstSeen}}</td>
+  </tr>{{end}}</tbody>
+</table></div>
+{{if $v.Limited}}<p class="muted small">Showing the first 500. Narrow the filter to see the rest.</p>{{end}}
+{{else}}
+<p class="{{if and $f.Fixable (not $f.Query)}}notice ok{{else}}muted{{end}}">{{if and $f.Fixable (not $f.Query)}}Nothing that pending updates fix{{if $f.MinSeverity}} at this severity{{end}}.{{else}}No matches.{{end}}</p>
+{{end}}
+{{end}}
+{{end}}

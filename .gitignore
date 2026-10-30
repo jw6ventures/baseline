@@ -1,0 +1,7 @@
+/bin/
+/baseline-server
+/baseline-agent
+*.test
+*.out
+.env
+/keys/

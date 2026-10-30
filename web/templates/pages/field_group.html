@@ -1,0 +1,29 @@
+{{define "content"}}
+{{$v := .Body}}{{$g := $v.Group}}
+<h1>{{if $v.New}}New field group{{else}}Edit {{$g.Name}}{{end}}</h1>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+<form class="panel stack-form wide-form" method="post" action="{{.Base}}/settings/field-groups{{if not $v.New}}/{{$g.ID}}{{end}}">
+  <label>Name<input name="name" value="{{$g.Name}}" required></label>
+  <label>Description<input name="description" value="{{$g.Description}}"></label>
+  <h2>Fields</h2>
+  {{if not $v.Rows}}<p class="muted">There are no custom fields yet. <a href="{{.Base}}/settings/fields">Define some first.</a></p>{{else}}
+  <p class="muted small">Tick the fields the group holds. They show in the order of their position. Defaults fill new items; pick-several defaults are separated by commas.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>In group</th><th>Field</th><th>Position</th><th>Required</th><th>Default</th></tr></thead>
+    <tbody>{{range $v.Rows}}{{$f := .Field}}<tr>
+      <td><input type="checkbox" name="field" value="{{$f.ID}}"{{if .On}} checked{{end}} aria-label="{{$f.Label}} in group"></td>
+      <td><strong>{{$f.Label}}</strong> <span class="muted small">{{fieldType $f.Type}}</span></td>
+      <td><input type="number" name="pos_{{$f.ID}}" value="{{.Position}}" min="0" class="narrow" aria-label="Position of {{$f.Label}}"></td>
+      <td><input type="checkbox" name="req_{{$f.ID}}" value="1"{{if .Required}} checked{{end}} aria-label="{{$f.Label}} required"></td>
+      <td>{{if fieldDefault $f.Type}}<input name="def_{{$f.ID}}" value="{{.Default}}" aria-label="Default for {{$f.Label}}"{{if $f.HasOptions}} placeholder="{{join $f.Options ", "}}"{{end}}>{{else}}<span class="muted small">none</span>{{end}}</td>
+    </tr>{{end}}</tbody>
+  </table></div>{{end}}
+  <div><button>{{if $v.New}}Create{{else}}Save{{end}}</button> <a href="{{.Base}}/settings/field-groups">Cancel</a></div>
+</form>
+{{if not $v.New}}
+<form class="panel" method="post" action="{{.Base}}/settings/field-groups/{{$g.ID}}/delete">
+  <p class="muted">Deleting the group takes it off every project ticket type that applies it{{with $g.Uses}} ({{.}}){{end}}. Values already on items stay stored.</p>
+  <button class="danger">Delete group</button>
+</form>
+{{end}}
+{{end}}

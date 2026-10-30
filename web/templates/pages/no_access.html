@@ -1,0 +1,6 @@
+{{define "content"}}
+<h1>No access yet</h1>
+<p>You're signed in as <strong>{{.User.User.DisplayName}}</strong>, but none of your Authentik groups has a role in Baseline.</p>
+<p>Your groups: {{range $i, $g := .User.Groups}}{{if $i}}, {{end}}<code>{{$g}}</code>{{else}}none (check that the provider sends the <code>groups</code> claim){{end}}.</p>
+<p>Ask an admin to add a role binding for one of them.</p>
+{{end}}

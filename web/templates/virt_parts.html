@@ -1,0 +1,28 @@
+{{/* Shared by the VM, Kubernetes and host pages. */}}
+{{define "guest-state"}}{{if eq . "running"}}<span class="dot on"></span>running{{else}}<span class="dot off"></span>{{.}}{{end}}{{end}}
+
+{{define "guest-kind"}}{{if eq .Platform "proxmox"}}{{if eq .Kind "lxc"}}LXC{{else}}VM{{end}} <span class="muted small">Proxmox {{.ID}}</span>{{else}}VM <span class="muted small">libvirt {{.Kind}}</span>{{end}}{{end}}
+
+{{/* A table of store.Guest; .Hypervisor says whether to show the hypervisor column. */}}
+{{define "guest-table"}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Guest</th><th>Kind</th>{{if .Hypervisor}}<th>Hypervisor</th>{{end}}<th>State</th><th class="num">vCPU</th><th class="num">Memory</th><th>Agent</th></tr></thead>
+  <tbody>
+  {{range .Guests}}
+  <tr{{if not .Present}} class="dim"{{end}}>
+    <td class="nowrap"><a href="{{$.Base}}/vms/{{.CIID}}"><strong>{{.Name}}</strong></a>{{if .Template}} <span class="tag">template</span>{{end}}{{if not .Present}} <span class="muted">gone</span>{{end}}{{range .Tags}} <span class="tag">{{.}}</span>{{end}}</td>
+    <td class="nowrap">{{template "guest-kind" .}}</td>
+    {{if $.Hypervisor}}<td><a href="{{$.Base}}/hosts/{{.HostID}}/vms">{{.Hostname}}</a>{{if not .HostConnected}} <span class="muted small">offline</span>{{end}}</td>{{end}}
+    <td class="nowrap">{{template "guest-state" .State}}</td>
+    <td class="num">{{.CPUs}}</td>
+    <td class="num nowrap">{{bytes .MemoryBytes}}</td>
+    <td>{{if .AgentHostID}}<a href="{{$.Base}}/hosts/{{.AgentHostID}}">{{.AgentHostname}}</a>{{else}}<span class="muted">—</span>{{end}}</td>
+  </tr>
+  {{else}}
+  <tr><td colspan="{{if .Hypervisor}}7{{else}}6{{end}}" class="muted">{{.Empty}}</td></tr>
+  {{end}}
+  </tbody>
+</table></div>
+{{end}}
+
+{{define "k8s-ready"}}{{if eq .Kind "CronJob"}}<span class="muted">{{if .Workload.Suspend}}suspended{{else}}{{.Workload.Schedule}}{{end}}</span>{{else}}{{$w := .Workload}}<span class="{{if lt $w.Ready $w.Replicas}}tag caution{{end}}">{{$w.Ready}} / {{$w.Replicas}}</span>{{end}}{{end}}

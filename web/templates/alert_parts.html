@@ -1,0 +1,27 @@
+{{define "alert-severity"}}<span class="tag sev-{{.Severity}}">{{.Severity}}</span>{{end}}
+
+{{define "alert-flags"}}{{if .Silenced}} <span class="tag" title="until {{time .SilenceEnds}}">silenced</span>{{end}}{{if .Acked}} <span class="tag ok" title="{{time .AckedAt}}{{with .AckComment}}: {{.}}{{end}}">acknowledged{{with .AckedByName}} by {{.}}{{end}}</span>{{end}}{{end}}
+
+{{define "vuln-severity"}}<span class="tag vsev-{{.}}">{{.}}</span>{{end}}
+
+{{define "vuln-ids"}}<a href="{{.Base}}/vulnerabilities/{{.ID}}" class="mono">{{.ID}}</a>{{with .Aliases}}<br><span class="muted small">{{join . ", "}}</span>{{end}}{{end}}
+
+{{/* host-vulns lists matches; Host says whether to show the host column. */}}
+{{define "host-vulns"}}{{$b := .Base}}{{$host := .Host}}
+{{if .Rows}}
+<div class="table-wrap"><table>
+  <thead><tr>{{if $host}}<th>Host</th>{{end}}<th>Vulnerability</th><th>Severity</th><th>Package</th><th>Installed</th><th>Fixed in</th><th>Patching</th><th>Found</th></tr></thead>
+  <tbody>{{range .Rows}}<tr>
+    {{if $host}}<td><a href="{{$b}}/hosts/{{.HostID}}?tab=vulnerabilities">{{.Hostname}}</a></td>{{end}}
+    <td>{{template "vuln-ids" dict "Base" $b "ID" .VulnID "Aliases" .Aliases}}{{if not $host}}{{with .Summary}}<br><span class="small">{{short . 160}}</span>{{end}}{{end}}</td>
+    <td>{{template "vuln-severity" .Severity}}{{with .CVSSScore}} <span class="muted small" title="CVSS base score">{{score .}}</span>{{end}}</td>
+    <td>{{.Package}}{{with .Arch}} <span class="muted small">{{.}}</span>{{end}}{{with .Source}}<br><span class="muted small">from {{.}}</span>{{end}}</td>
+    <td class="mono small">{{.Installed}}</td>
+    <td class="mono small">{{if .Fixed}}{{.Fixed}}{{else}}<span class="muted">no fix yet</span>{{end}}</td>
+    <td>{{if .FixAvailable}}<span class="tag ok" title="an upgrade installs {{.Candidate}}">fix available</span>{{else if and .Fixed .Candidate}}<span class="muted small" title="the pending update, {{.Candidate}}, is older than the fix">update too old</span>{{else if .Fixed}}<span class="muted small">not in its repositories yet</span>{{else}}<span class="muted small">—</span>{{end}}</td>
+    <td class="nowrap" title="{{time .FirstSeen}}">{{ago .FirstSeen}}</td>
+  </tr>{{end}}</tbody>
+</table></div>
+{{end}}
+{{end}}
+{{define "delivery"}}{{if not .SentAt.IsZero}}<span class="tag ok">sent</span> <span class="muted small">{{ago .SentAt}}</span>{{else if .NextAt.IsZero}}<span class="tag warn">not sent</span> <span class="small">{{.Error}}</span>{{else}}<span class="tag caution">{{if .Attempts}}retrying{{else}}queued{{end}}</span>{{with .Error}} <span class="small">{{.}}</span>{{end}}{{end}}{{end}}

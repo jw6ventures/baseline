@@ -1,0 +1,42 @@
+{{define "content"}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+{{with .Body.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with .Body.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<section class="panel">
+  <h2>Agent releases</h2>
+  <p class="muted">The server publishes the agent binaries built into its image as a signed release each time it starts, and keeps the last 5 versions. An agent checks a release's SHA-256 and its signature against the release key it pinned at enrollment, keeps its current binary, and puts that back by itself if the new one doesn't reach the server within 5 minutes.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Version</th><th>Architectures</th><th>Published</th></tr></thead>
+    <tbody>{{range $i, $r := .Body.Releases}}<tr><td class="mono">{{.Version}}{{if eq $i 0}} <span class="tag ok">newest</span>{{end}}</td><td>{{join .Arches ", "}}</td><td>{{time .PublishedAt}}</td></tr>
+    {{else}}<tr><td colspan="3" class="muted">Nothing published: this server image has no agent binaries in BASELINE_AGENT_DIR.</td></tr>{{end}}</tbody>
+  </table></div>
+  {{if .Body.Releases}}
+  <form class="inline-form" method="post" action="{{.Base}}/settings/agents/update">
+    <label>Update every agent to
+      <select name="version">{{range .Body.Releases}}<option value="{{.Version}}">{{.Version}}</option>{{end}}</select>
+    </label>
+    <button>Update agents</button>
+  </form>
+  <p class="muted small">Connected agents update within seconds; offline ones when they next connect. Agents installed before self-update existed (they don't report an architecture) need install.sh run once more, and so do hosts whose <code>agent.conf</code> has <code>self_update = off</code>: they are skipped.</p>
+  {{end}}
+</section>
+
+<h2>Agents <span class="muted small">{{.Body.Outdated}} not on {{if .Body.Latest}}{{.Body.Latest}}{{else}}the newest release{{end}}{{if .Body.Pending}}, {{.Body.Pending}} updating{{end}}{{if .Body.Refusing}}, {{.Body.Refusing}} with self-update off{{end}}</span></h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Host</th><th>Status</th><th>Version</th><th>Self-update</th></tr></thead>
+  <tbody>
+  {{range .Body.Hosts}}
+  <tr>
+    <td><a href="{{$.Base}}/hosts/{{.ID}}">{{.DisplayName}}</a></td>
+    <td class="nowrap">{{if .Connected}}<span class="dot on"></span>online{{else}}<span class="dot off"></span>offline{{end}}</td>
+    <td><span class="mono">{{.AgentVersion}}</span>{{with .AgentArch}} <span class="muted">({{.}})</span>{{end}}{{if not .AgentVersion}}<span class="muted">never connected</span>{{else if and $.Body.Latest (ne .AgentVersion $.Body.Latest)}} <span class="tag caution">outdated</span>{{end}}</td>
+    <td>{{if .Policy.SelfUpdateOff}}<span class="tag">off in agent.conf</span> <span class="muted">update with install.sh</span>{{end}}{{with .AgentUpdateTarget}}<span class="tag">updating to {{.}}</span>{{end}}{{with .AgentUpdateError}}<span class="bad-text">failed: {{.}}</span>{{end}}{{if and (not .AgentArch) .AgentVersion}}<span class="muted">re-run install.sh to enable</span>{{end}}</td>
+  </tr>
+  {{else}}
+  <tr><td colspan="4" class="muted">No hosts yet.</td></tr>
+  {{end}}
+  </tbody>
+</table></div>
+{{end}}

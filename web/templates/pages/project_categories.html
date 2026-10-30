@@ -1,0 +1,32 @@
+{{define "content"}}
+{{$v := .Body}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<section class="panel">
+  <h2>Project categories</h2>
+  <p class="muted">Each <a href="{{.Base}}/projects">project</a> sits in at most one category. Categories nest: filtering projects or work items by a category matches its subcategories too. A category without a color shows its parent's.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Category</th><th>Description</th><th class="num">Projects</th><th></th></tr></thead>
+    <tbody>{{range $v.Categories}}<tr>
+      <td style="padding-left: {{.Depth}}.5rem">{{if .Depth}}<span class="muted">↳</span> {{end}}<span class="tag"{{with .ShownColor}} style="{{chipStyle .}}"{{end}}>{{.Name}}</span>{{if and (not .Color) .ShownColor}} <span class="muted small">(inherited color)</span>{{end}}</td>
+      <td class="small">{{.Description}}</td>
+      <td class="num"><a href="{{$.Base}}/projects?cf=category&amp;co=eq&amp;cv={{.ID}}">{{.Projects}}</a></td>
+      <td class="actions"><a class="button small" href="{{$.Base}}/settings/project-categories?parent={{.ID}}">Add subcategory</a> <a class="button small" href="{{$.Base}}/settings/project-categories?edit={{.ID}}">Edit</a>{{if not .Children}} <form class="inline" method="post" action="{{$.Base}}/settings/project-categories/{{.ID}}/delete"><button class="danger small">Delete</button></form>{{end}}</td>
+    </tr>{{else}}<tr><td colspan="4" class="muted">No categories yet.</td></tr>{{end}}</tbody>
+  </table></div>
+</section>
+
+{{$e := $v.Edit}}
+<form class="panel stack-form" method="post" action="{{.Base}}/settings/project-categories{{with $e.ID}}/{{.}}{{end}}">
+  <h2>{{if $e.ID}}Edit {{$e.Name}}{{else}}New category{{end}}</h2>
+  <label>Name<input name="name" value="{{$e.Name}}" required></label>
+  <label>Parent<select name="parent"><option value="">None (top level)</option>{{range $v.Parents}}<option value="{{.ID}}"{{if eq .ID $e.ParentID}} selected{{end}}>{{.Path}}</option>{{end}}</select></label>
+  <label>Color<input type="color" name="color" value="{{with $e.Color}}{{.}}{{else}}#4a7bd0{{end}}"></label>
+  <label class="check-line"><input type="checkbox" name="no_color" value="1"{{if not $e.Color}} checked{{end}}> No color{{if not $e.ID}} (use the parent's){{end}}</label>
+  <label>Description<textarea name="description" rows="2">{{$e.Description}}</textarea></label>
+  <div><button>{{if $e.ID}}Save{{else}}Create{{end}}</button>{{if or $e.ID $e.ParentID}} <a href="{{.Base}}/settings/project-categories">Cancel</a>{{end}}</div>
+</form>
+{{end}}

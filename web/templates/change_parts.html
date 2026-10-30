@@ -1,0 +1,187 @@
+{{/* An action's parameter fields, shared by the new-change and the change
+     model forms: dict "Base" .Base "V" <changeFormView>. */}}
+{{define "action-params"}}{{$v := .V}}{{$f := $v.Form}}
+  {{if $v.Files}}{{/* in stack-files */}}
+  {{else if eq $v.Spec.Name "pkg.upgrade"}}
+  <fieldset class="checks">
+    <legend>Install</legend>
+    <label><input type="radio" name="mode" value="all"{{if or (eq ($f.Get "mode") "all") (eq ($f.Get "mode") "")}} checked{{end}}> all updates</label>
+    <label><input type="radio" name="mode" value="security"{{if eq ($f.Get "mode") "security"}} checked{{end}}> security updates only</label>
+    <label><input type="radio" name="mode" value="selected"{{if eq ($f.Get "mode") "selected"}} checked{{end}}> the packages listed below</label>
+  </fieldset>
+  <label><span>Packages <span class="muted small">(selected mode: one per line; <code>flatpak:</code> or <code>snap:</code> in front for those)</span></span><textarea name="packages" rows="4" class="mono">{{$v.Packages}}</textarea></label>
+  <label><span>Leave out <span class="muted small">(names or patterns such as <code>kernel*</code>, separated by spaces)</span></span><input name="exclude" value="{{$f.Get "exclude"}}"></label>
+  <label>Reboot<select name="reboot">
+    <option value="never"{{if eq ($f.Get "reboot") "never"}} selected{{end}}>never</option>
+    <option value="if_required"{{if eq ($f.Get "reboot") "if_required"}} selected{{end}}>if the upgrade requires it</option>
+    <option value="always"{{if eq ($f.Get "reboot") "always"}} selected{{end}}>always, afterwards</option>
+  </select></label>
+  <p class="muted small">Held packages are never upgraded. Image-based hosts (rpm-ostree) only take a whole new image, staged until the next reboot{{if $v.ImageBased}}; security mode skips them{{end}}.</p>
+  {{else if hasPrefix $v.Spec.Name "service."}}
+  <label>Unit<input name="unit" value="{{$f.Get "unit"}}" placeholder="nginx.service" required></label>
+  {{else if eq $v.Spec.Name "host.reboot"}}
+  <label>Reboot after (seconds)<input type="number" name="delay_s" min="5" max="3600" value="{{with $f.Get "delay_s"}}{{.}}{{else}}10{{end}}" class="narrow"></label>
+  <p class="muted small">The job finishes when the agent reconnects after the reboot.</p>
+  {{else if hasPrefix $v.Spec.Name "compose."}}
+  {{if eq $v.Spec.Name "compose.update"}}
+  <label>Time to come up healthy (seconds)<input type="number" name="health_timeout" min="10" max="1800" value="{{with $f.Get "health_timeout"}}{{.}}{{else}}120{{end}}" class="narrow"></label>
+  <p class="muted small">Pulls the images, recreates the services whose image changed, and waits for them to run and pass their healthchecks. If they don't, the previous images are put back and the job ends rolled back. Compose files are never edited.</p>
+  {{else if eq $v.Spec.Name "compose.start"}}
+  <label>Time to come up healthy (seconds)<input type="number" name="health_timeout" min="10" max="1800" value="{{with $f.Get "health_timeout"}}{{.}}{{else}}120{{end}}" class="narrow"></label>
+  <p class="muted small">Runs <code>compose up -d</code> for a stack none of whose containers run, and waits for its services to run and pass their healthchecks. If they don't, the stack is stopped again and the job ends rolled back.</p>
+  {{else if eq $v.Spec.Name "compose.archive"}}
+  <p class="muted small">Takes the stack down with <code>compose down</code> and moves its directory to <code>.archive/&lt;project&gt;-&lt;date&gt;</code> beside it, so nothing is deleted: its files, .env and relative bind mounts go with it, and named volumes and images stay on the host. The stack drops off the stack list. Its directory must hold all of its Compose files, and the host needs Compose stack management on.</p>
+  {{else if eq $v.Spec.Name "compose.move"}}
+  <label>Move to<select name="dest" required>{{range $v.Roots}}<option{{if eq ($f.Get "dest") .}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+  {{if not $v.Roots}}<p class="notice warn">None of the stacks' hosts has Compose roots. Admins add them on a host's Settings tab.</p>{{end}}
+  <label>Time to come up healthy (seconds)<input type="number" name="health_timeout" min="10" max="1800" value="{{with $f.Get "health_timeout"}}{{.}}{{else}}120{{end}}" class="narrow"></label>
+  <p class="muted small">Takes the stack down, moves its directory to <code>&lt;root&gt;/&lt;project&gt;</code> under the Compose root picked (across file systems it is copied, then removed), checks it with <code>compose config</code> and, if it was running, starts it there and waits for its services to run and pass their healthchecks. If any of that fails, it is moved back and started where it was. The project name stays, so named volumes stay attached. The root must be one of each stack's host's.</p>
+  {{else}}
+  <p class="muted small">Pulls the services' images without restarting anything, so a later update is quick.</p>
+  {{end}}
+  {{else if eq $v.Spec.Name "script.run"}}{{with $v.Script}}
+  <input type="hidden" name="script" value="{{.ScriptID}}">
+  <input type="hidden" name="version" value="{{.Version}}">
+  <p>Script <a href="{{$.Base}}/scripts/{{.ScriptID}}?v={{.Version}}"><strong>{{.ScriptName}}</strong> version {{.Version}}</a> · <span class="mono">{{.Interpreter}}</span> · sha256 <span class="mono small">{{short .SHA256 16}}</span></p>
+  {{range .Params}}
+  <label><span><span class="mono">{{.Name}}</span> <span class="muted small">({{.Type}}{{if .Required}}, required{{end}}{{with .Pattern}}, matching /{{.}}/{{end}}){{with .Help}} — {{.}}{{end}}</span></span>
+    {{if eq .Type "bool"}}<select name="arg_{{.Name}}"><option value=""></option><option value="true"{{if eq ($f.Get (print "arg_" .Name)) "true"}} selected{{end}}>true</option><option value="false"{{if eq ($f.Get (print "arg_" .Name)) "false"}} selected{{end}}>false</option></select>
+    {{else}}<input name="arg_{{.Name}}" value="{{$f.Get (print "arg_" .Name)}}"{{if eq .Type "int"}} inputmode="numeric"{{end}}{{if .Required}} required{{end}}>{{end}}
+  </label>
+  {{end}}
+  <label>Time limit (minutes)<input type="number" name="timeout_m" min="1" max="240" value="{{with $f.Get "timeout_m"}}{{.}}{{else}}10{{end}}" class="narrow"></label>
+  {{end}}{{end}}
+{{end}}
+
+{{/* The script chooser shown before a script's parameters: dict "Base"
+     .Base "V" <changeFormView> "Action" <form URL>. */}}
+{{define "script-chooser"}}{{$v := .V}}
+<form class="panel inline-form" method="get" action="{{.Action}}">
+  <input type="hidden" name="action" value="script.run">
+  {{range $k, $vals := $v.Form}}{{if and (ne $k "action") (ne $k "script") (ne $k "version")}}{{range $vals}}<input type="hidden" name="{{$k}}" value="{{.}}">{{end}}{{end}}{{end}}
+  <label>Script<select name="script">{{range $v.Scripts}}<option value="{{.ID}}">{{.Name}} (v{{.Latest}}, {{.Risk}} risk)</option>{{end}}</select></label>
+  <button>Choose</button>
+  {{if not $v.Scripts}}<span class="muted">The library is empty. <a href="{{.Base}}/scripts">Scripts</a> are added by admins.</span>{{end}}
+</form>
+{{end}}
+
+{{/* A change's kind as a tag. */}}
+{{define "change-kind"}}{{if eq . "emergency"}}<span class="tag warn">emergency</span>{{else if eq . "standard"}}<span class="tag ok">standard</span>{{else}}<span class="tag">normal</span>{{end}}{{end}}
+
+{{/* A change model's state as a tag. */}}
+{{define "model-state"}}{{if eq .State "approved"}}<span class="tag ok">approved</span>{{else if eq .State "pending"}}<span class="tag caution">awaiting approval</span>{{else}}<span class="tag">retired</span>{{end}}{{end}}
+
+{{/* The filters above a picker table (web/static/forms.js), hidden until
+     the script shows them: dict "V" <changeFormView> "Placeholder" text
+     "Updates" whether to offer "updates only". */}}
+{{define "picker-filters"}}{{$v := .V}}
+  <div class="inline-form picker-controls" data-picker-controls hidden>
+    <input type="search" data-filter="text" placeholder="{{.Placeholder}}" aria-label="Filter">
+    <label class="check">Environment<select data-filter="env"><option value="">any</option>{{range $v.Envs}}<option>{{.}}</option>{{end}}<option value="none">none</option></select></label>
+    <label class="check">Category<select data-filter="category"><option value="">any</option>{{range $v.Categories}}<option>{{.}}</option>{{end}}<option value="none">none</option></select></label>
+    <label class="check">Visibility<select data-filter="visibility"><option value="">any</option>{{range $v.Visibilities}}<option>{{.}}</option>{{end}}<option value="none">none</option></select></label>
+    {{if .Updates}}<label class="check"><input type="checkbox" data-filter="updates"> Updates only</label>{{end}}
+    <button type="button" class="small secondary" data-picker-all>Tick all shown</button>
+    <button type="button" class="small secondary" data-picker-none>Untick all</button>
+    <span class="muted small" data-picker-count></span>
+  </div>
+{{end}}
+
+{{/* The stacks a compose.* change or a Compose patch group picks from:
+     dict "Base" .Base "V" <a view with Envs, Categories, Visibilities>
+     "Stacks" []stackChoice "Services" whether ticked stacks offer their
+     services "Empty" what to say when there are none. */}}
+{{define "stack-picker"}}{{$v := .V}}
+<fieldset class="picker" data-picker>
+  <legend>Compose stacks</legend>
+  {{if .Stacks}}
+  {{template "picker-filters" (dict "V" $v "Placeholder" "Filter by project, host or directory" "Updates" true)}}
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>Stack</th><th>Host</th><th>Environment</th><th>Category</th><th>Visibility</th><th>Updates</th></tr></thead>
+    <tbody>
+    {{range .Stacks}}
+    <tr class="picker-row{{if .Disabled}} dim{{end}}" data-text="{{.Project}} {{.Hostname}} {{.WorkingDir}}" data-env="{{.Environment}}" data-category="{{.Category}}" data-visibility="{{.Visibility}}" data-updates="{{if and .Drift (not .Pinned)}}1{{end}}"{{with .Disabled}} title="{{.}}"{{end}}>
+      <td><input type="checkbox" name="stack" value="{{.CIID}}" id="pick-{{.CIID}}" aria-label="{{.Project}} on {{.Hostname}}"{{if and .Checked (not .Disabled)}} checked{{end}}{{if .Disabled}} disabled{{end}}></td>
+      <td><label for="pick-{{.CIID}}"><strong>{{.Project}}</strong></label> <a class="small" href="{{$.Base}}/stacks/{{.CIID}}">view</a>{{if .Pinned}} <span class="tag">pinned</span>{{end}}{{with .Disabled}}<br><span class="muted small">{{.}}</span>{{end}}</td>
+      <td>{{.Hostname}}{{if ne .Engine "docker"}} <span class="muted">{{.Engine}}</span>{{end}}</td>
+      <td>{{with .Environment}}{{.}}{{else}}<span class="muted">—</span>{{end}}</td>
+      <td>{{with .Category}}{{.}}{{else}}<span class="muted">—</span>{{end}}</td>
+      <td>{{with .Visibility}}{{.}}{{else}}<span class="muted">—</span>{{end}}</td>
+      <td>{{if .Pinned}}<span class="muted">—</span>{{else if .Drift}}<span class="tag caution">{{.Drift}} image{{if ne .Drift 1}}s{{end}} newer</span>{{end}}</td>
+    </tr>
+    {{if and $.Services .Services (not .Disabled)}}{{$st := .}}
+    <tr class="picker-sub"><td></td><td colspan="6">
+      <span class="muted small">Services (none ticked: all of them):</span>
+      {{range .Services}}<label class="check"><input type="checkbox" name="svc.{{$st.CIID}}" value="{{.}}"{{if has $st.Picked .}} checked{{end}}> {{.}}</label> {{end}}
+    </td></tr>
+    {{end}}
+    {{end}}
+    </tbody>
+  </table></div>
+  <p class="muted small" data-picker-empty hidden>No stack matches the filters.</p>
+  {{else}}
+  <p class="muted">{{.Empty}}</p>
+  {{end}}
+</fieldset>
+{{end}}
+
+{{/* The containers container.restart picks from: dict "Base" .Base "V"
+     <changeFormView>. */}}
+{{define "container-picker"}}{{$v := .V}}
+<fieldset class="picker" data-picker>
+  <legend>Containers</legend>
+  {{if $v.Containers}}
+  {{template "picker-filters" (dict "V" $v "Placeholder" "Filter by name, image, host or stack" "Updates" false)}}
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>Container</th><th>Host</th><th>Image</th><th>State</th><th>Environment</th></tr></thead>
+    <tbody>
+    {{range $v.Containers}}
+    <tr class="picker-row{{if .Disabled}} dim{{end}}" data-text="{{.Name}} {{.Image}} {{.Hostname}} {{.ComposeProject}}" data-env="{{.Environment}}" data-category="{{.Category}}" data-visibility="{{.Visibility}}"{{with .Disabled}} title="{{.}}"{{end}}>
+      <td><input type="checkbox" name="container" value="{{.CIID}}" id="pick-{{.CIID}}" aria-label="{{.Name}} on {{.Hostname}}"{{if and .Checked (not .Disabled)}} checked{{end}}{{if .Disabled}} disabled{{end}}></td>
+      <td><label for="pick-{{.CIID}}"><strong>{{.Name}}</strong></label>{{with .ComposeProject}}<br><span class="muted small">{{.}}</span>{{end}}{{with .Disabled}}<br><span class="muted small">{{.}}</span>{{end}}</td>
+      <td>{{.Hostname}}{{if ne .Engine "docker"}} <span class="muted">{{.Engine}}</span>{{end}}{{if not .HostConnected}} <span class="muted small">offline</span>{{end}}</td>
+      <td class="mono small">{{.Image}}</td>
+      <td class="nowrap">{{template "ctr-state" .}}</td>
+      <td>{{with .Environment}}{{.}}{{else}}<span class="muted">—</span>{{end}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  <p class="muted small" data-picker-empty hidden>No container matches the filters.</p>
+  {{else}}
+  <p class="muted">There are no containers on hosts you can change. Changing a host needs the operator role on it.</p>
+  {{end}}
+</fieldset>
+{{end}}
+
+{{/* The files of a compose.deploy or compose.edit change: dict "Base" .Base
+     "V" <changeFormView>. */}}
+{{define "stack-files"}}{{$v := .V}}{{$f := $v.Form}}{{$x := $v.Files}}
+  <input type="hidden" name="posted" value="1">
+  {{if eq $v.Spec.Name "compose.deploy"}}
+  <input type="hidden" name="host" value="{{$x.Host.ID}}">
+  <p>A new Compose stack on <a href="{{.Base}}/hosts/{{$x.Host.ID}}"><strong>{{$x.Host.DisplayName}}</strong></a>. Its agent writes the files to <code>&lt;root&gt;/&lt;project&gt;</code>, {{if $x.Host.ComposeRoots}}under the Compose root picked below{{else}}under a directory of its own (<code>compose_root</code> in agent.conf, <code>/var/lib/baseline/stacks</code> by default; admins can add Compose roots on the host's <a href="{{.Base}}/hosts/{{$x.Host.ID}}?tab=settings">Settings</a>){{end}}, checks them with <code>compose config</code>, pulls, starts the stack and waits for it to be running and healthy. If it isn't, the stack is taken down again and its files removed.</p>
+  <div class="inline-form">
+    <label>Engine<select name="engine">{{range $x.Engines}}<option{{if eq . ($f.Get "engine")}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+    {{with $x.Host.ComposeRoots}}<label>Compose root<select name="root">{{range .}}<option{{if eq . ($f.Get "root")}} selected{{end}}>{{.}}</option>{{end}}</select></label>{{end}}
+    <label><span>Project name <span class="muted small">(lowercase letters, digits, <code>-</code>, <code>_</code>, <code>.</code>)</span></span><input name="project" value="{{$f.Get "project"}}" pattern="[a-z0-9][a-z0-9_.\-]{0,63}" required></label>
+  </div>
+  {{else}}{{$s := $x.Stack}}
+  <input type="hidden" name="stack" value="{{$s.CIID}}">
+  <p>Stack <a href="{{.Base}}/stacks/{{$s.CIID}}"><strong>{{$s.Project}}</strong></a> on <a href="{{.Base}}/hosts/{{$x.Host.ID}}">{{$x.Host.DisplayName}}</a>{{with $x.File.Path}}, <span class="mono">{{.}}</span>{{end}}{{with $x.File.SHA256}} <span class="muted small">sha256 {{short . 12}}</span>{{end}}. The agent refuses the edit if the file changed on the host in the meantime. It writes the files, checks them with <code>compose config</code> and runs <code>up -d --remove-orphans</code>; if the stack doesn't come up running and healthy, the previous files are put back and the stack started on them again.</p>
+  {{end}}
+
+  {{if eq $v.Spec.Name "compose.edit"}}
+  <label class="check"><input type="checkbox" name="change_compose" value="1"{{if $f.Get "posted"}}{{if $f.Get "change_compose"}} checked{{end}}{{else if not $x.Masked}} checked{{end}}> Change the Compose file</label>
+  {{if $x.Masked}}<p class="notice warn">Baseline has no copy of this file, so it starts from what the host reported, with secret-looking values masked as <code>********</code>. Put the real values back before saving, or better, move them into the .env as <code>${VARIABLES}</code>.</p>{{end}}
+  {{end}}
+  <label><span>Compose file</span><textarea name="compose" rows="20" class="mono" spellcheck="false">{{$f.Get "compose"}}</textarea></label>
+
+  {{if eq $v.Spec.Name "compose.edit"}}
+  <label class="check"><input type="checkbox" name="change_env" value="1"{{if $f.Get "posted"}}{{if $f.Get "change_env"}} checked{{end}}{{else if $x.EnvKnown}} checked{{end}}> Change the .env</label>
+  {{if $x.EnvKnown}}<p class="muted small">The .env Baseline wrote with <a href="{{.Base}}/changes/{{$x.EnvRev.ChangeID}}">{{$x.EnvRev.ChangeRef}}</a> ({{len $x.EnvKeys}} variables, {{short $x.EnvHash 24}}). Opening this form was recorded in the audit log.</p>
+  {{else}}<p class="muted small">Baseline has no copy of this stack's .env. What you enter replaces the .env on the host; leave “Change the .env” unticked to keep it.</p>{{end}}
+  {{end}}
+  <label><span>.env <span class="muted small">(<code>KEY=value</code> lines: the stack's secrets. Baseline keeps it encrypted, shows its values only to operators of the host, and the agent writes it root-only beside the Compose file)</span></span><textarea name="env" rows="8" class="mono" spellcheck="false" autocomplete="off">{{$f.Get "env"}}</textarea></label>
+  <label>Time to come up healthy (seconds)<input type="number" name="health_timeout" min="10" max="1800" value="{{with $f.Get "health_timeout"}}{{.}}{{else}}120{{end}}" class="narrow"></label>
+{{end}}

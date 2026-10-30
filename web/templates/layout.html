@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · Baseline</title>
+<link rel="stylesheet" href="{{.Base}}/static/style.css">
+<link rel="icon" href="{{.Base}}/static/favicon.svg" type="image/svg+xml">
+{{block "head" .}}{{end}}
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="{{.Base}}/">Baseline</a>
+  {{with .User}}
+  <div class="who">
+    <a href="{{$.Base}}/me">{{.User.DisplayName}}</a>
+    <form method="post" action="{{$.Base}}/auth/logout"><button class="link">Sign out</button></form>
+  </div>
+  {{end}}
+</header>
+<div class="shell{{if not .Nav}} bare{{end}}">
+  {{if .Nav}}
+  <nav class="side" aria-label="Main" data-nav>
+    <input type="search" class="nav-filter" placeholder="Filter" aria-label="Filter navigation" data-nav-filter hidden>
+    {{range .Nav}}
+    {{if .Label}}
+    <details class="nav-group" data-nav-group="{{.Key}}"{{if .Open}} open data-nav-current{{end}}>
+      <summary>{{.Label}}</summary>
+      <ul>
+      {{range .Items}}
+        <li><a href="{{$.Base}}{{.Path}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}</a></li>
+      {{end}}
+      </ul>
+    </details>
+    {{else}}
+    <ul>
+    {{range .Items}}
+      <li><a href="{{$.Base}}{{.Path}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}</a></li>
+    {{end}}
+    </ul>
+    {{end}}
+    {{end}}
+    <p class="nav-empty muted small" data-nav-empty hidden>No matches</p>
+  </nav>
+  <script src="{{.Base}}/static/nav.js" defer></script>
+  {{end}}
+  <main>
+    {{template "content" .}}
+  </main>
+</div>
+<footer class="foot">Baseline {{.Version}} · © 2026 James Williams</footer>
+</body>
+</html>

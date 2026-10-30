@@ -1,0 +1,179 @@
+{
+ "kind": "DaemonSetList",
+ "apiVersion": "apps/v1",
+ "metadata": {
+  "resourceVersion": "943"
+ },
+ "items": [
+  {
+   "metadata": {
+    "name": "svclb-traefik-26765718",
+    "namespace": "kube-system",
+    "uid": "2f83de56-2664-40ff-b468-ed36436b8d8c",
+    "resourceVersion": "727",
+    "generation": 1,
+    "creationTimestamp": "2026-10-14T06:38:19Z",
+    "labels": {
+     "objectset.rio.cattle.io/hash": "836fcbce022d5dae5b36694fe1eaf389c93af7dc",
+     "svccontroller.k3s.cattle.io/nodeselector": "false",
+     "svccontroller.k3s.cattle.io/svcname": "traefik",
+     "svccontroller.k3s.cattle.io/svcnamespace": "kube-system"
+    }
+   },
+   "spec": {
+    "selector": {
+     "matchLabels": {
+      "app": "svclb-traefik-26765718"
+     }
+    },
+    "template": {
+     "metadata": {
+      "labels": {
+       "app": "svclb-traefik-26765718",
+       "svccontroller.k3s.cattle.io/svcname": "traefik",
+       "svccontroller.k3s.cattle.io/svcnamespace": "kube-system"
+      }
+     },
+     "spec": {
+      "containers": [
+       {
+        "name": "lb-tcp-80",
+        "image": "rancher/klipper-lb:v0.4.17",
+        "ports": [
+         {
+          "name": "lb-tcp-80",
+          "hostPort": 80,
+          "containerPort": 80,
+          "protocol": "TCP"
+         }
+        ],
+        "env": [
+         {
+          "name": "SRC_PORT",
+          "value": "80"
+         },
+         {
+          "name": "SRC_RANGES",
+          "value": "0.0.0.0/0"
+         },
+         {
+          "name": "DEST_PROTO",
+          "value": "TCP"
+         },
+         {
+          "name": "DEST_PORT",
+          "value": "80"
+         },
+         {
+          "name": "DEST_IPS",
+          "value": "10.43.255.128"
+         }
+        ],
+        "resources": {},
+        "terminationMessagePath": "/dev/termination-log",
+        "terminationMessagePolicy": "File",
+        "imagePullPolicy": "IfNotPresent",
+        "securityContext": {
+         "capabilities": {
+          "add": [
+           "NET_ADMIN"
+          ]
+         }
+        }
+       },
+       {
+        "name": "lb-tcp-443",
+        "image": "rancher/klipper-lb:v0.4.17",
+        "ports": [
+         {
+          "name": "lb-tcp-443",
+          "hostPort": 443,
+          "containerPort": 443,
+          "protocol": "TCP"
+         }
+        ],
+        "env": [
+         {
+          "name": "SRC_PORT",
+          "value": "443"
+         },
+         {
+          "name": "SRC_RANGES",
+          "value": "0.0.0.0/0"
+         },
+         {
+          "name": "DEST_PROTO",
+          "value": "TCP"
+         },
+         {
+          "name": "DEST_PORT",
+          "value": "443"
+         },
+         {
+          "name": "DEST_IPS",
+          "value": "10.43.255.128"
+         }
+        ],
+        "resources": {},
+        "terminationMessagePath": "/dev/termination-log",
+        "terminationMessagePolicy": "File",
+        "imagePullPolicy": "IfNotPresent",
+        "securityContext": {
+         "capabilities": {
+          "add": [
+           "NET_ADMIN"
+          ]
+         }
+        }
+       }
+      ],
+      "restartPolicy": "Always",
+      "terminationGracePeriodSeconds": 30,
+      "dnsPolicy": "ClusterFirst",
+      "serviceAccountName": "svclb",
+      "serviceAccount": "svclb",
+      "automountServiceAccountToken": false,
+      "securityContext": {
+       "sysctls": [
+        {
+         "name": "net.ipv4.ip_forward",
+         "value": "1"
+        }
+       ]
+      },
+      "schedulerName": "default-scheduler",
+      "tolerations": [
+       {
+        "key": "node-role.kubernetes.io/control-plane",
+        "operator": "Exists",
+        "effect": "NoSchedule"
+       },
+       {
+        "key": "CriticalAddonsOnly",
+        "operator": "Exists"
+       }
+      ],
+      "priorityClassName": "system-node-critical"
+     }
+    },
+    "updateStrategy": {
+     "type": "RollingUpdate",
+     "rollingUpdate": {
+      "maxUnavailable": 1,
+      "maxSurge": 0
+     }
+    },
+    "revisionHistoryLimit": 10
+   },
+   "status": {
+    "currentNumberScheduled": 1,
+    "numberMisscheduled": 0,
+    "desiredNumberScheduled": 1,
+    "numberReady": 1,
+    "observedGeneration": 1,
+    "updatedNumberScheduled": 1,
+    "numberAvailable": 1
+   }
+  }
+ ]
+}

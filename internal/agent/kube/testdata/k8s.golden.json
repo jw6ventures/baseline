@@ -1,0 +1,292 @@
+{
+  "cluster": {
+    "uid": "9e4d51ab-82aa-4227-b2c9-a260fd8d4c9b",
+    "name": "homelab",
+    "version": "v1.36.5+k3s1",
+    "platform": "linux/amd64"
+  },
+  "nodes": [
+    {
+      "name": "b0fcff6f35da",
+      "roles": [
+        "control-plane"
+      ],
+      "ready": true,
+      "kubelet_version": "v1.36.5+k3s1",
+      "container_runtime": "containerd://2.3.4-k3s1.36",
+      "os_image": "K3s v1.36.5+k3s1",
+      "kernel_version": "7.0.0-34-generic",
+      "arch": "amd64",
+      "system_uuid": "00000000-0000-0000-0000-ac1f6bd134e0",
+      "internal_ips": [
+        "10.200.0.5"
+      ],
+      "cpu": "64",
+      "memory_bytes": 98552602624,
+      "created": "2026-10-14T06:37:48Z"
+    },
+    {
+      "name": "worker-1",
+      "roles": [
+        "gpu",
+        "worker"
+      ],
+      "ready": false,
+      "unschedulable": true,
+      "kubelet_version": "v1.36.5+k3s1",
+      "container_runtime": "containerd://2.3.4-k3s1.36",
+      "os_image": "Ubuntu 24.04.3 LTS",
+      "kernel_version": "6.8.0-85-generic",
+      "arch": "arm64",
+      "machine_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+      "system_uuid": "4c4c4544-0042-3510-8052-b4c04f4e3732",
+      "internal_ips": [
+        "192.168.1.21",
+        "fd00::21"
+      ],
+      "cpu": "3500m",
+      "memory_bytes": 17179869184,
+      "taints": [
+        "dedicated=gpu:NoSchedule",
+        "node.kubernetes.io/unschedulable:NoSchedule"
+      ],
+      "created": "2026-10-01T10:00:00Z"
+    }
+  ],
+  "namespaces": [
+    "baseline",
+    "default",
+    "demo",
+    "kube-node-lease",
+    "kube-public",
+    "kube-system"
+  ],
+  "workloads": [
+    {
+      "kind": "Deployment",
+      "namespace": "baseline",
+      "name": "baseline-agent",
+      "replicas": 1,
+      "ready": 0,
+      "images": [
+        "baseline-agent:latest"
+      ],
+      "created": "2026-10-14T06:38:22Z"
+    },
+    {
+      "kind": "CronJob",
+      "namespace": "demo",
+      "name": "backup",
+      "replicas": 0,
+      "ready": 0,
+      "images": [
+        "busybox:1.37"
+      ],
+      "schedule": "17 3 * * *",
+      "suspend": true,
+      "created": "2026-10-14T06:38:22Z"
+    },
+    {
+      "kind": "Deployment",
+      "namespace": "demo",
+      "name": "web",
+      "replicas": 2,
+      "ready": 2,
+      "images": [
+        "busybox:1.37",
+        "nginx:1.29-alpine"
+      ],
+      "created": "2026-10-14T06:38:22Z"
+    },
+    {
+      "kind": "Pod",
+      "namespace": "demo",
+      "name": "debug",
+      "replicas": 1,
+      "ready": 1,
+      "images": [
+        "busybox:1.37"
+      ],
+      "node": "b0fcff6f35da",
+      "created": "2026-10-14T06:38:22Z"
+    },
+    {
+      "kind": "StatefulSet",
+      "namespace": "demo",
+      "name": "db",
+      "replicas": 1,
+      "ready": 1,
+      "images": [
+        "busybox:1.37"
+      ],
+      "created": "2026-10-14T06:38:22Z"
+    },
+    {
+      "kind": "DaemonSet",
+      "namespace": "kube-system",
+      "name": "svclb-traefik-26765718",
+      "replicas": 1,
+      "ready": 1,
+      "images": [
+        "rancher/klipper-lb:v0.4.17"
+      ],
+      "created": "2026-10-14T06:38:19Z"
+    },
+    {
+      "kind": "Deployment",
+      "namespace": "kube-system",
+      "name": "coredns",
+      "replicas": 1,
+      "ready": 1,
+      "images": [
+        "rancher/mirrored-coredns-coredns:1.14.7"
+      ],
+      "created": "2026-10-14T06:37:52Z"
+    },
+    {
+      "kind": "Deployment",
+      "namespace": "kube-system",
+      "name": "local-path-provisioner",
+      "replicas": 1,
+      "ready": 1,
+      "images": [
+        "rancher/local-path-provisioner:v0.0.37"
+      ],
+      "created": "2026-10-14T06:37:52Z"
+    },
+    {
+      "kind": "Deployment",
+      "namespace": "kube-system",
+      "name": "traefik",
+      "replicas": 1,
+      "ready": 1,
+      "images": [
+        "rancher/mirrored-library-traefik:3.7.13"
+      ],
+      "created": "2026-10-14T06:38:19Z"
+    }
+  ],
+  "services": [
+    {
+      "namespace": "default",
+      "name": "kubernetes",
+      "type": "ClusterIP",
+      "cluster_ip": "10.43.0.1",
+      "ports": [
+        "443/TCP→6443"
+      ]
+    },
+    {
+      "namespace": "demo",
+      "name": "db",
+      "type": "ClusterIP",
+      "cluster_ip": "None",
+      "ports": [
+        "5432/TCP→5432"
+      ],
+      "selector": {
+        "app": "db"
+      }
+    },
+    {
+      "namespace": "demo",
+      "name": "docs",
+      "type": "ExternalName",
+      "selector": {
+        "app": "docs"
+      },
+      "external_name": "docs.example.test"
+    },
+    {
+      "namespace": "demo",
+      "name": "edge",
+      "type": "LoadBalancer",
+      "cluster_ip": "10.43.7.7",
+      "external_ips": [
+        "198.51.100.7",
+        "lb-1234.elb.example.test"
+      ],
+      "ports": [
+        "443:31443/TCP→https"
+      ],
+      "selector": {
+        "app": "edge"
+      }
+    },
+    {
+      "namespace": "demo",
+      "name": "web",
+      "type": "ClusterIP",
+      "cluster_ip": "10.43.164.47",
+      "ports": [
+        "80/TCP→http"
+      ],
+      "selector": {
+        "app": "web"
+      }
+    },
+    {
+      "namespace": "demo",
+      "name": "web-np",
+      "type": "NodePort",
+      "cluster_ip": "10.43.139.168",
+      "external_ips": [
+        "192.0.2.10"
+      ],
+      "ports": [
+        "8080:30080/TCP→80"
+      ],
+      "selector": {
+        "app": "web"
+      }
+    },
+    {
+      "namespace": "kube-system",
+      "name": "kube-dns",
+      "type": "ClusterIP",
+      "cluster_ip": "10.43.0.10",
+      "ports": [
+        "53/TCP→53",
+        "53/UDP→53",
+        "9153/TCP→9153"
+      ],
+      "selector": {
+        "k8s-app": "kube-dns"
+      }
+    },
+    {
+      "namespace": "kube-system",
+      "name": "traefik",
+      "type": "LoadBalancer",
+      "cluster_ip": "10.43.255.128",
+      "external_ips": [
+        "10.200.0.5"
+      ],
+      "ports": [
+        "443:32359/TCP→websecure",
+        "80:32618/TCP→web"
+      ],
+      "selector": {
+        "app.kubernetes.io/instance": "traefik-kube-system",
+        "app.kubernetes.io/name": "traefik"
+      }
+    }
+  ],
+  "ingresses": [
+    {
+      "namespace": "demo",
+      "name": "web",
+      "class": "traefik",
+      "hosts": [
+        "web.example.test"
+      ],
+      "tls": true,
+      "backends": [
+        "* → web:80",
+        "*/health → web:80",
+        "web.example.test/ → web:http",
+        "web.example.test/api → web-np:8080"
+      ]
+    }
+  ]
+}

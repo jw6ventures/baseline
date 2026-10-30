@@ -1,0 +1,40 @@
+{{define "content"}}
+{{$v := .Body}}{{$f := $v.Workflow}}{{$t := $v.Transition}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+<h2>{{if $v.New}}New transition{{else}}Edit {{$t.Name}}{{end}} <span class="muted">in {{$f.Name}} draft v{{$v.Version.Version}}</span></h2>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+<form class="panel stack-form" method="post" action="{{.Base}}/settings/workflows/{{$f.ID}}/transitions{{if not $v.New}}/{{$t.ID}}{{end}}">
+  <label>Name<input name="name" value="{{$t.Name}}" placeholder="Start progress" required></label>
+  <label>From<select name="from"><option value="">Any status</option>{{range $v.Version.Statuses}}<option value="{{.ID}}"{{if eq .ID $t.FromID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+  <label>To<select name="to" required>{{range $v.Version.Statuses}}<option value="{{.ID}}"{{if eq .ID $t.ToID}} selected{{end}}>{{.Name}} ({{itemStatus .Category}})</option>{{end}}</select></label>
+  <label>Order <span class="muted small">(buttons on an item show in this order)</span><input name="position" type="number" value="{{$t.Position}}"></label>
+
+  <fieldset class="checks">
+    <legend>Who may run it <span class="muted small">(any one ticked is enough; none ticked means anyone)</span></legend>
+    {{range $v.Roles}}<label><input type="checkbox" name="role" value="{{.}}"{{if $v.HasCondition "role" (print .)}} checked{{end}}> Role {{.}} or above</label>{{end}}
+    <label><input type="checkbox" name="cond_assignee" value="1"{{if $v.HasCondition "assignee" ""}} checked{{end}}> The item's assignee</label>
+    <label><input type="checkbox" name="cond_reporter" value="1"{{if $v.HasCondition "reporter" ""}} checked{{end}}> The item's reporter</label>
+  </fieldset>
+
+  <fieldset class="checks">
+    <legend>Requires <span class="muted small">(a Done status always needs a resolution)</span></legend>
+    {{range $v.Fields}}<label><input type="checkbox" name="required" value="{{.}}"{{if $v.HasValidator "field_required" .}} checked{{end}}> {{human .}} set</label>{{end}}
+    {{range $v.Validators}}<label><input type="checkbox" name="validator" value="{{.}}"{{if $v.HasValidator . ""}} checked{{end}}> {{if eq . "linked_change"}}A linked change{{else if eq . "linked_ci"}}A linked CI{{else if eq . "children_done"}}Child items done{{else}}A comment (ask for one below){{end}}</label>{{end}}
+  </fieldset>
+
+  <fieldset class="checks">
+    <legend>Then</legend>
+    {{$assign := $v.PostValue "assign"}}{{$prio := $v.PostValue "set_priority"}}
+    <label>Assignee<select name="assign"><option value="">Leave as is</option>{{range $v.AssignValues}}<option value="{{.}}"{{if eq . $assign}} selected{{end}}>{{if eq . "actor"}}Whoever runs it{{else if eq . "reporter"}}The reporter{{else}}Nobody{{end}}</option>{{end}}</select></label>
+    <label>Priority<select name="set_priority"><option value="">Leave as is</option>{{range $v.Priorities}}<option value="{{.}}"{{if eq . $prio}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+  </fieldset>
+
+  <fieldset class="checks">
+    <legend>Asks for <span class="muted small">(a small form before it runs)</span></legend>
+    {{range $v.ScreenFields}}<label><input type="checkbox" name="screen" value="{{.}}"{{if $t.Asks .}} checked{{end}}> {{human .}}</label>{{end}}
+  </fieldset>
+
+  <div><button>{{if $v.New}}Add{{else}}Save{{end}}</button> <a href="{{.Base}}/settings/workflows/{{$f.ID}}">Cancel</a></div>
+</form>
+{{end}}

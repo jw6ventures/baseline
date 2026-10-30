@@ -1,0 +1,131 @@
+{{define "content"}}
+{{$v := .Body}}{{$s := $v.Stack}}
+<div class="titlebar">
+  <div>
+    <h1>{{$s.Project}}</h1>
+    <p class="muted sub">Compose stack on <a href="{{.Base}}/hosts/{{$s.HostID}}/stacks">{{$s.Hostname}}</a> ({{$s.Engine}}) · {{$s.Running}} of {{$s.Containers}} containers running{{if $s.Pinned}} · <span class="tag">pinned</span>{{end}}</p>
+  </div>
+  <div class="actions">
+    {{if $v.CanUpdate}}
+    {{if $v.StandardOnly}}<a class="button" href="{{.Base}}/changes/new?model={{$s.ModelID}}&amp;stack={{$s.CIID}}">Update now</a>{{else}}<a class="button" href="{{.Base}}/changes/new?action=compose.update&amp;stack={{$s.CIID}}">Update…</a>{{end}}
+    <a class="button secondary" href="{{.Base}}/changes/new?action=compose.pull&amp;stack={{$s.CIID}}">Pull images…</a>
+    {{end}}
+    {{if $v.CanStart}}<a class="button" href="{{.Base}}/changes/new?action=compose.start&amp;stack={{$s.CIID}}">Start…</a>{{end}}
+    {{if $v.CanFiles}}<a class="button secondary" href="{{.Base}}/changes/new?action=compose.edit&amp;stack={{$s.CIID}}">Edit files…</a>{{end}}
+    {{if $v.CanMove}}<a class="button secondary" href="{{.Base}}/changes/new?action=compose.move&amp;stack={{$s.CIID}}">Move…</a>{{end}}
+    {{if $v.CanArchive}}<a class="button secondary" href="{{.Base}}/changes/new?action=compose.archive&amp;stack={{$s.CIID}}">Archive…</a>{{end}}
+    <a class="button secondary" href="{{.Base}}/cis/{{$s.CIID}}">CI and relationships</a>
+  </div>
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{if not $s.Present}}<p class="notice warn">This stack's containers are gone from the host. Its settings are kept in case it comes back.</p>{{end}}
+{{if and $s.Stopped $s.Present}}<p class="notice">Not running: Baseline found it in <code>{{$s.WorkingDir}}</code>, under one of the host's Compose roots, with no containers on the engine.{{if $v.CanStart}} Start it to run it.{{end}}</p>{{end}}
+{{if $s.Orphaned}}<p class="notice warn">Orphaned: its Compose files aren't readable on the host (it was started from somewhere else), so Baseline can't update it.</p>{{end}}
+
+<div class="grid2">
+<section class="panel">
+  <h2>Stack</h2>
+  <dl class="facts">
+    {{if $s.Named}}<dt>Environment</dt><dd>{{$s.Environment}}</dd>
+    <dt>Category</dt><dd>{{$s.Category}}</dd>
+    <dt>Visibility</dt><dd>{{$s.Visibility}}</dd>{{end}}
+    <dt>Directory</dt><dd class="mono">{{with $s.WorkingDir}}{{.}}{{else}}—{{end}}</dd>
+    <dt>Compose files</dt><dd class="mono small">{{range $s.ConfigFiles}}{{.}}<br>{{else}}—{{end}}</dd>
+    <dt>Driven with</dt><dd>{{with $s.CLI}}<code>{{.}}</code>{{else}}<span class="muted">no Compose CLI found on the host</span>{{end}}</dd>
+    <dt>Auto-update</dt><dd>{{if $s.AutoUpdate}}on{{if $s.Pinned}} <span class="muted small">(but pinned, so it never runs)</span>{{else if ne $s.ModelState "approved"}} <span class="muted small">(waiting: its change model isn't approved)</span>{{end}}{{else}}off{{end}}</dd>
+  </dl>
+</section>
+<section class="panel">
+  <h2>Update prompts</h2>
+  {{if $s.Pinned}}
+  <p>Pinned: newer images and tags aren't flagged for this stack. Useful for databases you upgrade deliberately.</p>
+  {{else}}
+  <p class="muted">Newer images behind each service's tag are flagged{{if $s.Drift}} — {{$s.Drift}} now{{end}}. Pin the stack to stop that, e.g. for a database.</p>
+  {{end}}
+  {{if $v.CanEdit}}<form method="post" action="{{.Base}}/stacks/{{$s.CIID}}/pin"><input type="hidden" name="pinned" value="{{if $s.Pinned}}0{{else}}1{{end}}"><button class="small">{{if $s.Pinned}}Unpin{{else}}Pin this stack{{end}}</button></form>{{end}}
+</section>
+</div>
+
+<section class="panel">
+  <h2>Updates</h2>
+  {{with $v.UpdateBlock}}<p class="muted">Baseline can't update this stack: {{.}}.</p>{{end}}
+  <dl class="facts">
+    <dt>Changes</dt><dd>{{if $s.ModelID}}Standard, from model <a href="{{.Base}}/change-models/{{$s.ModelID}}">{{$s.ModelName}}</a>{{if ne $s.ModelState "approved"}} <span class="tag caution">{{$s.ModelState}}</span> <span class="muted small">(Normal changes until it's approved)</span>{{end}}{{else}}Normal: each update is approved by an approver{{end}}</dd>
+    <dt>Window</dt><dd>{{if $s.WindowID}}{{$s.WindowName}}{{else if $v.HostWindow}}none of its own; auto-updates use the host's, {{$v.HostWindow}}{{else}}none: auto-updates run as soon as images drift{{end}}</dd>
+  </dl>
+  {{if $v.CanSettings}}
+  <form class="inline-form" method="post" action="{{.Base}}/stacks/{{$s.CIID}}/updates">
+    <label>Change model<select name="model">
+      <option value="">none (Normal changes)</option>
+      {{range $v.Models}}<option value="{{.ID}}"{{if eq .ID $s.ModelID}} selected{{end}}>{{.Name}}{{if ne .State "approved"}} ({{.State}}){{end}}</option>{{end}}
+    </select></label>
+    <label>Window<select name="window">
+      <option value="">the host's</option>
+      {{range $v.Windows}}<option value="{{.ID}}"{{if eq .ID $s.WindowID}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select></label>
+    <label class="check"><input type="checkbox" name="auto_update" value="1"{{if $s.AutoUpdate}} checked{{end}}> update itself when its images drift</label>
+    <button class="small">Save</button>
+  </form>
+  <p class="muted small">Auto-update only acts on a newer image behind the same tag, never on newer version tags (that would mean editing the Compose file), and leaves the stack alone for a day after an update that failed. It needs a <a href="{{.Base}}/change-models">change model</a> for compose.update, which pre-approves its updates.</p>
+  {{end}}
+  {{with $v.Changes}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Change</th><th>Title</th><th>State</th><th>When</th></tr></thead>
+    <tbody>{{range .}}<tr>
+      <td class="nowrap"><a href="{{$.Base}}/changes/{{.ID}}">{{.Ref}}</a></td><td>{{.Title}}</td>
+      <td class="nowrap">{{template "change-state" .}}</td><td class="nowrap muted small">{{ago .CreatedAt}}</td>
+    </tr>{{end}}</tbody>
+  </table></div>
+  {{end}}
+</section>
+
+{{if or $v.Revisions $v.EditBlock}}
+<section class="panel">
+  <h2>Files from Baseline</h2>
+  {{with $v.EditBlock}}<p class="muted">Its files can't be edited from Baseline now: {{.}}.</p>{{end}}
+  {{if $v.FileDrift}}<p class="notice warn">The Compose file on the host isn't the one Baseline last wrote: it was changed there.</p>{{end}}
+  {{with $v.Revisions}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Change</th><th>What</th><th>Compose file</th><th>.env</th><th>Job</th><th>When</th></tr></thead>
+    <tbody>{{range .}}<tr>
+      <td class="nowrap"><a href="{{$.Base}}/changes/{{.ChangeID}}">{{.ChangeRef}}</a></td>
+      <td>{{if eq .Action "compose.deploy"}}deploy{{else}}edit{{end}}</td>
+      <td class="mono small">{{if .HasCompose}}{{short .ComposeSHA256 12}}{{else}}<span class="muted">unchanged</span>{{end}}</td>
+      <td class="small">{{if .HasEnv}}{{len .EnvKeys}} variables{{if $v.CanSeeEnv}} <form class="inline" method="post" action="{{$.Base}}/stack-revisions/{{.ID}}/env"><button class="small secondary" title="Recorded in the audit log">Show</button></form>{{end}}{{else}}<span class="muted">unchanged</span>{{end}}</td>
+      <td class="nowrap">{{with .JobState}}{{.}}{{else}}<span class="muted">not run</span>{{end}}</td>
+      <td class="nowrap muted small">{{ago .CreatedAt}} by {{.CreatedByName}}</td>
+    </tr>{{end}}</tbody>
+  </table></div>
+  {{end}}
+</section>
+{{end}}
+
+{{template "served-hostnames" dict "Base" .Base "Hostnames" $v.Hostnames}}
+
+<h2>Services</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Service</th><th>Container</th><th>Image</th><th>State</th><th>Update</th></tr></thead>
+  <tbody>
+  {{range $v.Containers}}
+  <tr>
+    <td><strong>{{.ComposeService}}</strong>{{with .Rule}} <span class="tag" title="semver rule">{{.Track}}</span>{{end}}</td>
+    <td><a href="{{$.Base}}/containers/{{.CIID}}">{{.Name}}</a></td>
+    <td class="mono small">{{.Image}}</td>
+    <td class="nowrap">{{template "ctr-state" .}}</td>
+    <td>{{template "ctr-update" .}}</td>
+  </tr>
+  {{else}}
+  <tr><td colspan="5" class="muted">No containers.</td></tr>
+  {{end}}
+  </tbody>
+</table></div>
+
+{{range $v.Files}}
+<details class="panel">
+  <summary><strong class="mono">{{.Path}}</strong> {{if .Error}}<span class="bad-text">{{.Error}}</span>{{else}}<span class="muted small">{{bytes (uint .Size)}} · sha256 {{short .SHA256 12}}</span>{{end}}</summary>
+  {{if not .Error}}<pre class="file">{{.Content}}</pre>{{if .Truncated}}<p class="muted small">Only the beginning of the file is shown.</p>{{end}}{{end}}
+</details>
+{{end}}
+{{if $v.Files}}<p class="muted small">Values of keys that look like secrets (passwords, tokens, keys) are masked by the agent before the file leaves the host.</p>{{end}}
+{{end}}

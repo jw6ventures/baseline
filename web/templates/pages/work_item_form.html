@@ -1,0 +1,25 @@
+{{define "head"}}<script src="{{.Base}}/static/forms.js" defer></script>{{end}}
+{{define "content"}}
+{{$v := .Body}}{{$it := $v.Item}}
+<h1>{{if $v.New}}New work item{{else}}Edit {{$it.Ref}}{{end}}</h1>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{if $v.New}}
+<form class="inline-form" method="get" action="{{.Base}}/work/new">
+  <label>Project<select name="project" data-autosubmit>{{range $v.Projects}}<option value="{{.Key}}"{{if eq .Key $v.Project.Key}} selected{{end}}>{{.Key}} {{.Name}}</option>{{end}}</select></label>
+  <label>Type<select name="type" data-autosubmit>{{range $v.Project.Types}}<option value="{{.ID}}"{{if eq .ID $it.TypeID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+  {{with $it.ParentRef}}<input type="hidden" name="parent" value="{{.}}">{{end}}
+  <button class="small">Change</button>
+</form>
+{{end}}
+<form class="panel stack-form work-form" method="post" action="{{.Base}}/work{{if not $v.New}}/{{$it.Ref}}{{end}}">
+  {{if $v.New}}
+  <input type="hidden" name="project" value="{{$v.Project.Key}}">
+  <input type="hidden" name="type" value="{{$it.TypeID}}">
+  <p class="muted">{{range $v.Project.Types}}{{if eq .ID $it.TypeID}}{{.Name}}{{end}}{{end}} in {{$v.Project.Key}} {{$v.Project.Name}}</p>
+  {{else}}
+  <p class="muted">{{$it.TypeName}} in {{$it.ProjectKey}} {{$it.ProjectName}}</p>
+  {{end}}
+  {{template "work-form-sections" (dict "S" $v.Sections "V" $v)}}
+  <div><button>{{if $v.New}}Create{{else}}Save{{end}}</button> <a href="{{.Base}}{{if $v.New}}/work{{else}}/work/{{$it.Ref}}{{end}}">Cancel</a></div>
+</form>
+{{end}}

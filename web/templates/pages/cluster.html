@@ -1,0 +1,96 @@
+{{define "content"}}
+{{$v := .Body}}{{$c := $v.Cluster}}
+<div class="titlebar">
+  <div>
+    <h1>{{$c.Name}}</h1>
+    <p class="muted sub">Kubernetes <span class="mono">{{$c.Version}}</span>{{with $c.Platform}} · {{.}}{{end}} · agent <a href="{{.Base}}/hosts/{{$c.HostID}}">{{if $c.Connected}}<span class="dot on"></span>online{{else}}<span class="dot off"></span>offline{{end}}</a>{{if not $v.SectionAt.IsZero}} · reported {{ago $v.SectionAt}}{{end}}</p>
+  </div>
+  <div class="actions"><a class="button secondary" href="{{.Base}}/cis/{{$c.CIID}}">CI and relationships</a></div>
+</div>
+{{if eq $c.Status "retired"}}<p class="notice">Retired: its agent was revoked. A newly enrolled agent in the same cluster takes it over.</p>{{end}}
+{{with $v.Section}}{{range .Errors}}<p class="notice warn">Couldn't list <strong>{{.Resource}}</strong>: {{.Error}}. The earlier copy is shown.</p>{{end}}{{end}}
+
+<div class="stats">
+  <a class="stat" href="{{.Base}}/kubernetes/{{$c.CIID}}?tab=nodes"><span class="n{{if lt $c.NodesReady $c.Nodes}} bad{{end}}">{{$c.NodesReady}}<span class="of"> / {{$c.Nodes}}</span></span><span>nodes ready</span></a>
+  <a class="stat" href="{{.Base}}/kubernetes/{{$c.CIID}}?tab=workloads"><span class="n">{{$c.Workloads}}</span><span>workloads</span></a>
+  <a class="stat" href="{{.Base}}/kubernetes/{{$c.CIID}}?tab=workloads"><span class="n{{if $c.Degraded}} caution{{end}}">{{$c.Degraded}}</span><span>not fully ready</span></a>
+</div>
+
+<nav class="tabs" aria-label="Cluster sections">
+{{range $t := list "nodes" "workloads" "services" "ingresses"}}<a href="{{$.Base}}/kubernetes/{{$c.CIID}}?tab={{$t}}"{{if eq $v.Tab $t}} aria-current="page"{{end}}>{{title $t}}</a>{{end}}
+</nav>
+
+{{if ne $v.Tab "nodes"}}
+<form class="search inline-form" method="get" action="{{.Base}}/kubernetes/{{$c.CIID}}">
+  <input type="hidden" name="tab" value="{{$v.Tab}}">
+  <input type="search" name="q" value="{{$v.Query}}" placeholder="Filter" aria-label="Filter">
+  <label>Namespace<select name="ns"><option value="">All</option>{{range $v.Namespaces}}<option{{if eq . $v.Namespace}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+  <button class="small">Filter</button>
+</form>
+{{end}}
+
+{{if eq $v.Tab "nodes"}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Node</th><th>Status</th><th>Kubelet</th><th>OS / runtime</th><th>Addresses</th><th class="num">CPU</th><th class="num">Memory</th><th>Host</th></tr></thead>
+  <tbody>
+  {{range $v.Nodes}}{{$n := .Node}}
+  <tr{{if not .Present}} class="dim"{{end}}>
+    <td class="nowrap"><a href="{{$.Base}}/cis/{{.CIID}}"><strong>{{.Name}}</strong></a>{{range $n.Roles}} <span class="tag">{{.}}</span>{{end}}{{if not .Present}} <span class="muted">gone</span>{{end}}</td>
+    <td class="nowrap">{{if $n.Ready}}<span class="dot on"></span>ready{{else}}<span class="tag warn">not ready</span>{{end}}{{if $n.Unschedulable}} <span class="tag caution">cordoned</span>{{end}}{{range $n.Taints}}<br><span class="muted small mono">{{.}}</span>{{end}}</td>
+    <td class="mono small">{{$n.KubeletVersion}}</td>
+    <td class="small">{{$n.OSImage}}<br><span class="muted mono">{{$n.ContainerRuntime}}</span></td>
+    <td class="mono small">{{join $n.InternalIPs " "}}</td>
+    <td class="num">{{$n.CPU}}</td>
+    <td class="num nowrap">{{if $n.MemoryBytes}}{{bytes (uint $n.MemoryBytes)}}{{end}}</td>
+    <td>{{if .HostID}}<a href="{{$.Base}}/hosts/{{.HostID}}?tab=kubernetes">{{.Hostname}}</a>{{else}}<span class="muted" title="No host agent reports this node's machine-id or DMI UUID">—</span>{{end}}</td>
+  </tr>
+  {{else}}<tr><td colspan="8" class="muted">No nodes reported.</td></tr>{{end}}
+  </tbody>
+</table></div>
+{{else if eq $v.Tab "workloads"}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Workload</th><th>Kind</th><th>Ready</th><th>Images</th></tr></thead>
+  <tbody>
+  {{range $v.Workloads}}
+  <tr{{if not .Present}} class="dim"{{end}}>
+    <td><span class="muted">{{.Namespace}}/</span><a href="{{$.Base}}/cis/{{.CIID}}"><strong>{{.Name}}</strong></a>{{if not .Present}} <span class="muted">gone</span>{{end}}</td>
+    <td>{{.Kind}}{{with .Workload.Node}} <span class="muted small">on {{.}}</span>{{end}}</td>
+    <td class="nowrap">{{template "k8s-ready" .}}</td>
+    <td class="mono small">{{range .Workload.Images}}{{.}}<br>{{end}}</td>
+  </tr>
+  {{else}}<tr><td colspan="4" class="muted">{{if or $v.Query $v.Namespace}}Nothing matches.{{else}}No workloads reported.{{end}}</td></tr>{{end}}
+  </tbody>
+</table></div>
+{{else if eq $v.Tab "services"}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Service</th><th>Type</th><th>Cluster IP</th><th>External</th><th>Ports</th><th>Selector</th></tr></thead>
+  <tbody>
+  {{range $v.Services}}
+  <tr>
+    <td><span class="muted">{{.Namespace}}/</span><strong>{{.Name}}</strong></td>
+    <td>{{.Type}}</td>
+    <td class="mono small">{{.ClusterIP}}</td>
+    <td class="mono small">{{join .ExternalIPs " "}}{{.ExternalName}}</td>
+    <td class="mono small">{{range .Ports}}{{.}}<br>{{end}}</td>
+    <td class="mono small">{{range $k, $val := .Selector}}{{$k}}={{$val}}<br>{{end}}</td>
+  </tr>
+  {{else}}<tr><td colspan="6" class="muted">{{if or $v.Query $v.Namespace}}Nothing matches.{{else}}No services reported.{{end}}</td></tr>{{end}}
+  </tbody>
+</table></div>
+{{else}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Ingress</th><th>Class</th><th>Hosts</th><th>Backends</th></tr></thead>
+  <tbody>
+  {{range $v.Ingresses}}
+  <tr>
+    <td><span class="muted">{{.Namespace}}/</span><strong>{{.Name}}</strong>{{if .TLS}} <span class="tag ok">TLS</span>{{end}}</td>
+    <td>{{.Class}}</td>
+    <td class="mono small">{{range .Hosts}}{{.}}<br>{{end}}</td>
+    <td class="mono small">{{range .Backends}}{{.}}<br>{{end}}</td>
+  </tr>
+  {{else}}<tr><td colspan="4" class="muted">{{if or $v.Query $v.Namespace}}Nothing matches.{{else}}No ingresses reported.{{end}}</td></tr>{{end}}
+  </tbody>
+</table></div>
+{{end}}
+{{if $v.Gone}}<p class="muted small">Dimmed rows are gone from the cluster; their CIs turn missing after an hour and are kept until someone deletes them.</p>{{end}}
+{{end}}

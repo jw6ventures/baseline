@@ -1,0 +1,74 @@
+{
+  "images": [
+    {
+      "id": "sha256:1cf5f116067c67da67f97bff78c4bbc76913f59057c18627b96facaced73ea0b",
+      "repoTags": [
+        "docker.io/rancher/mirrored-coredns-coredns:1.12.3"
+      ],
+      "repoDigests": [
+        "docker.io/rancher/mirrored-coredns-coredns@sha256:4b0dd3fc3fe8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4"
+      ],
+      "size": "22383788",
+      "uid": null,
+      "username": "nonroot",
+      "spec": null,
+      "pinned": false
+    },
+    {
+      "id": "sha256:fbc6d8b1d4ac3fbe8a8b9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a",
+      "repoTags": [
+        "docker.io/rancher/local-path-provisioner:v0.0.32"
+      ],
+      "repoDigests": [
+        "docker.io/rancher/local-path-provisioner@sha256:aee53cadc62bd023911e7f077877d047c5b3c269f9bba25724d558654f43cea0"
+      ],
+      "size": "21524612",
+      "uid": null,
+      "username": "",
+      "spec": null,
+      "pinned": false
+    },
+    {
+      "id": "sha256:9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e",
+      "repoTags": [],
+      "repoDigests": [
+        "docker.io/rancher/klipper-helm@sha256:c35ab4bd2e0d3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a"
+      ],
+      "size": "59874511",
+      "uid": null,
+      "username": "",
+      "spec": null,
+      "pinned": false
+    },
+    {
+      "id": "sha256:4e1b6bae1e48ea2a6b6f8f0d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b",
+      "repoTags": [
+        "docker.io/library/nginx:1.29-alpine"
+      ],
+      "repoDigests": [
+        "docker.io/library/nginx@sha256:42a516af16b852e33b7682d5ef8acbd5d13fe08fecadc7ed98605ba5e3b26ab8"
+      ],
+      "size": "22631890",
+      "uid": null,
+      "username": "",
+      "spec": null,
+      "pinned": false
+    },
+    {
+      "id": "sha256:6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d",
+      "repoTags": [
+        "docker.io/rancher/mirrored-pause:3.6"
+      ],
+      "repoDigests": [
+        "docker.io/rancher/mirrored-pause@sha256:74c4244427b7312c5b901fe0f67cbc53683d06f4f24c6faee65d4182bf0fa893"
+      ],
+      "size": "301463",
+      "uid": {
+        "value": "65535"
+      },
+      "username": "",
+      "spec": null,
+      "pinned": true
+    }
+  ]
+}

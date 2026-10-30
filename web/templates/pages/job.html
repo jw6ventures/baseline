@@ -1,0 +1,62 @@
+{{define "head"}}{{if not .Body.Job.Final}}<script src="{{.Base}}/static/job.js" defer></script>{{end}}{{end}}
+
+{{define "content"}}
+{{$v := .Body}}{{$j := $v.Job}}
+<div class="titlebar">
+  <div>
+    <h1>{{$j.Summary}}</h1>
+    <p class="muted sub">on <a href="{{.Base}}/hosts/{{$v.Host.ID}}/jobs">{{$v.Host.DisplayName}}</a> · <a href="{{.Base}}/changes/{{$j.ChangeID}}">{{$j.ChangeRef}}</a> {{$j.ChangeTitle}}</p>
+  </div>
+  <div><span id="job-state">{{template "job-state" $j}}</span></div>
+</div>
+{{if and (not $j.Final) (not $v.Online)}}<p class="notice warn">The host's agent is offline. The job is sent{{if ne $j.State "queued"}} again{{end}} when it reconnects.</p>{{end}}
+{{if eq $j.ChangeState "submitted"}}<p class="notice warn">Its change is waiting for approval; the job runs once it's approved.</p>{{end}}
+
+<div class="grid2">
+<section class="panel">
+  <h2>Job</h2>
+  <dl class="facts">
+    <dt>Action</dt><dd class="mono">{{$j.Action}}</dd>
+    {{range $k, $val := $v.Params}}<dt>{{$k}}</dt><dd class="mono small">{{value $val}}</dd>{{end}}
+    <dt>Requested by</dt><dd>{{$j.RequestedByName}}</dd>
+    <dt>Time limit</dt><dd>{{duration (secs $j.TimeoutS)}}</dd>
+  </dl>
+</section>
+<section class="panel">
+  <h2>Result</h2>
+  <dl class="facts">
+    <dt>State</dt><dd>{{template "job-state" $j}}{{if and $j.AwaitingReboot (eq $j.State "succeeded")}} <span class="muted small">after a reboot</span>{{end}}</dd>
+    <dt>Queued</dt><dd>{{time $j.QueuedAt}}</dd>
+    {{if not $j.DispatchedAt.IsZero}}<dt>Sent</dt><dd>{{time $j.DispatchedAt}}</dd>{{end}}
+    {{if not $j.StartedAt.IsZero}}<dt>Started</dt><dd>{{time $j.StartedAt}}</dd>{{end}}
+    {{if not $j.FinishedAt.IsZero}}<dt>Finished</dt><dd>{{time $j.FinishedAt}} <span class="muted">({{duration $j.Duration}})</span></dd>{{end}}
+    {{if $j.ExitCode.Valid}}<dt>Exit status</dt><dd class="mono">{{$j.ExitCode.Int64}}</dd>{{end}}
+    {{with $j.Error}}<dt>Error</dt><dd class="bad-text">{{.}}</dd>{{end}}
+  </dl>
+</section>
+</div>
+
+{{with $v.Upgrade}}
+<h2>Packages</h2>
+{{range .Warnings}}<p class="notice warn">{{.}}</p>{{end}}
+{{if or .Changed .Added .Removed}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Package</th><th>Manager</th><th>Before</th><th>After</th></tr></thead>
+  <tbody>
+  {{range .Changed}}<tr><td>{{.Name}}{{with .Arch}} <span class="muted">{{.}}</span>{{end}}</td><td>{{.Manager}}</td><td class="mono"><del>{{.From}}</del></td><td class="mono"><ins>{{.To}}</ins></td></tr>{{end}}
+  {{range .Added}}<tr><td>{{.Name}}{{with .Arch}} <span class="muted">{{.}}</span>{{end}} <span class="tag">new</span></td><td>{{.Manager}}</td><td></td><td class="mono"><ins>{{.To}}</ins></td></tr>{{end}}
+  {{range .Removed}}<tr><td>{{.Name}}{{with .Arch}} <span class="muted">{{.}}</span>{{end}} <span class="tag">removed</span></td><td>{{.Manager}}</td><td class="mono"><del>{{.From}}</del></td><td></td></tr>{{end}}
+  </tbody>
+</table></div>
+{{else}}<p class="muted">No packages changed.</p>{{end}}
+{{if .RebootRequired}}<p class="notice warn">{{if .Rebooting}}The host was rebooted to finish: {{else}}A reboot is still required: {{end}}{{join .RebootReasons "; "}}.</p>{{end}}
+{{end}}
+
+<div class="titlebar spaced">
+  <h2>Output</h2>
+  <a class="small" href="{{.Base}}/jobs/{{$j.ID}}/output.txt">Raw output</a>
+</div>
+<pre class="output" id="output" data-src="{{.Base}}/jobs/{{$j.ID}}/events?after={{$v.LastID}}&amp;state={{$j.State}}">{{range $v.Output}}<span class="{{.Stream}}">{{.Chunk}}</span>{{end}}</pre>
+{{if $v.More}}<p class="muted small">The page shows the start of the output; the rest is in the <a href="{{.Base}}/jobs/{{$j.ID}}/output.txt">raw output</a>.</p>{{end}}
+{{if and (not $j.Final) (not $v.Output)}}<p class="muted small" id="output-wait">Output appears here as the job runs{{if not $j.Final}}; reload the page if it doesn't update by itself{{end}}.</p>{{end}}
+{{end}}

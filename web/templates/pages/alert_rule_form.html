@@ -1,0 +1,53 @@
+{{define "content"}}
+{{$v := .Body}}{{$r := $v.Rule}}
+{{if not $r.Kind}}
+<h1>New alert rule</h1>
+<p class="muted">Pick what the rule watches. Each kind has a rule already; another rule of the same kind can watch other host groups, with other thresholds or channels.</p>
+<div class="kind-list">
+{{range $v.Kinds}}
+  <a class="card" href="{{$.Base}}/alert-rules/new?kind={{.Key}}"><strong>{{.Label}}</strong><span>{{.Help}}</span></a>
+{{end}}
+</div>
+{{else}}
+<h1>{{if $v.New}}New rule: {{$v.Kind.Label}}{{else}}Edit {{$r.Name}}{{end}}</h1>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+<p class="muted">{{$v.Kind.Help}}</p>
+<form class="panel stack-form wide" method="post" action="{{.Base}}/alert-rules{{if not $v.New}}/{{$r.ID}}{{end}}">
+  <input type="hidden" name="kind" value="{{$r.Kind}}">
+  <label>Name<input name="name" value="{{$r.Name}}" maxlength="100" required></label>
+  {{range $v.Kind.Params}}
+    {{if eq .Type "number"}}<label>{{.Label}}<input type="number" min="0" name="{{.Key}}" class="narrow" required value="{{if eq .Key "minutes"}}{{$r.Params.Minutes}}{{else if eq .Key "percent"}}{{$r.Params.Percent}}{{else if eq .Key "days"}}{{$r.Params.Days}}{{else if eq .Key "sectors"}}{{$r.Params.Sectors}}{{else}}{{$r.Params.Hours}}{{end}}"></label>{{with .Help}}<p class="muted small hint">{{.}}</p>{{end}}
+    {{else if eq .Type "bool"}}<label class="check-line"><input type="checkbox" name="{{.Key}}" value="1"{{if or (and (eq .Key "degrading") $r.Params.Degrading) (and (eq .Key "partial") $r.Params.Partial)}} checked{{end}}> {{.Label}}</label>
+    {{else if eq .Type "severity"}}<label>{{.Label}}<select name="{{.Key}}">{{range $v.VulnSeverities}}<option{{if eq . $r.Params.MinSeverity}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+    {{else}}<label>{{.Label}}<input name="{{.Key}}" value="{{$v.Exclude}}" class="mono"></label>{{with .Help}}<p class="muted small hint">{{.}}</p>{{end}}{{end}}
+  {{end}}
+  <label>Severity<select name="severity">{{range $v.Severities}}<option{{if eq . $r.Severity}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+  <div class="inline-form">
+    <label>Fire after<input name="for" value="{{$v.For}}" class="narrow" placeholder="0"></label>
+    <label>Remind every<input name="repeat" value="{{$v.Repeat}}" class="narrow" placeholder="never"></label>
+  </div>
+  <p class="muted small hint">"Fire after" waits until the condition has held that long, so a blip doesn't notify (e.g. 5m). Reminders repeat while the alert fires and nobody has acknowledged it (e.g. 4h; at least 5m). Leave either empty for none.</p>
+  <fieldset class="checks">
+    <legend>Watches <span class="small">(none ticked: everything)</span></legend>
+    {{range $v.Groups}}<label><input type="checkbox" name="scope" value="{{.ID}}"{{if .Checked}} checked{{end}}> {{.Name}} <span class="muted small">{{plural .Hosts "host"}}</span></label>
+    {{else}}<span class="muted">There are no host groups, so it watches everything.</span>{{end}}
+  </fieldset>
+  <p class="muted small hint">Agentless endpoints belong to no group: only rules that watch everything see their certificates.</p>
+  <fieldset class="checks">
+    <legend>Notify</legend>
+    {{range $v.Channels}}<label{{if not .Enabled}} class="dim"{{end}}><input type="checkbox" name="channel" value="{{.ID}}"{{if .Checked}} checked{{end}}> {{.Name}} <span class="muted small">{{.Kind}}: {{.Summary}}{{if not .Enabled}}, turned off{{end}}</span></label>
+    {{else}}<span class="muted">No channels yet: alerts only show in Baseline. <a href="{{.Base}}/settings/notifications">Add one</a>.</span>{{end}}
+  </fieldset>
+  <label class="check-line"><input type="checkbox" name="notify_resolved" value="1"{{if $r.NotifyResolved}} checked{{end}}> Notify when it resolves</label>
+  <label class="check-line"><input type="checkbox" name="enabled" value="1"{{if $r.Enabled}} checked{{end}}> Enabled <span class="muted small">a disabled rule resolves its alerts without notifying</span></label>
+  <div><button>Save</button> <a href="{{.Base}}/alerts?view=rules">Cancel</a></div>
+</form>
+{{if not $v.New}}
+<section class="panel danger-zone">
+  <h2>Delete</h2>
+  <p class="muted">Its alerts and silences go with it. To stop it for a while, untick Enabled instead.</p>
+  <form method="post" action="{{.Base}}/alert-rules/{{$r.ID}}/delete"><button class="danger">Delete {{$r.Name}}</button></form>
+</section>
+{{end}}
+{{end}}
+{{end}}

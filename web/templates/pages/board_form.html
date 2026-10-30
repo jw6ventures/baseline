@@ -1,0 +1,71 @@
+{{define "head"}}{{template "list-head" .}}{{end}}
+{{define "content"}}
+{{$v := .Body}}{{$b := $v.Board}}
+<div class="titlebar"><h1>Edit board <a href="{{.Base}}/boards/{{$b.ID}}">{{$b.Name}}</a></h1></div>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+
+<form class="panel stack-form wide-form" method="post" action="{{.Base}}/boards/{{$b.ID}}">
+  <label>Name<input name="name" value="{{$b.Name}}" maxlength="80" required></label>
+  <label>Project<select name="project">
+    <option value="">Every project</option>
+    {{range $v.Projects}}<option value="{{.Key}}"{{if eq .Key $v.ProjectKey}} selected{{end}}>{{.Key}} {{.Name}}{{if .Archived}} (archived){{end}}</option>{{end}}
+  </select></label>
+
+  <h2>Columns</h2>
+  <p class="muted small hint">A card goes in the first column that names its status, else the first that names its status's category. Order columns by their number; clear a column's name and ticks to remove it. Statuses are those of the workflows {{if $b.ProjectKey}}{{$b.ProjectKey}} uses{{else}}every project uses{{end}}; save after changing the project to see its own.</p>
+  {{range $v.Columns}}{{$c := .}}
+  <fieldset class="form-section board-col-form">
+    <legend>Column {{add .Index 1}}</legend>
+    <input type="hidden" name="col" value="{{.Index}}">
+    <div class="inline-form">
+      <label>Name<input name="name_{{.Index}}" value="{{.Name}}" maxlength="40"></label>
+      <label>Order<input type="number" name="pos_{{.Index}}" value="{{add .Index 1}}" min="1" max="99" class="narrow"></label>
+    </div>
+    <fieldset class="checks"><legend>Categories</legend>
+      {{range $v.Categories}}<label><input type="checkbox" name="cat_{{$c.Index}}" value="{{.}}"{{if has $c.Categories .}} checked{{end}}> {{itemStatus .}}</label>{{end}}
+    </fieldset>
+    {{if $v.Statuses}}<fieldset class="checks"><legend>Statuses</legend>
+      {{range $v.Statuses}}<label title="{{itemStatus .Category}} · key {{.Key}}"><input type="checkbox" name="status_{{$c.Index}}" value="{{.Key}}"{{if has $c.Statuses .Key}} checked{{end}}> {{.Name}}</label>{{end}}
+    </fieldset>{{end}}
+  </fieldset>
+  {{end}}
+
+  <h2>Filter</h2>
+  <p class="muted small hint">Which items the board shows, in the list engine's terms: conditions in a group must all hold, and an item shows if any group holds.{{if $b.ProjectKey}} The board adds “Project is {{$b.ProjectKey}}” itself.{{end}} Times take a span (30m, 12h, 7d, 2w) or a date (2026-10-01).</p>
+  {{range $g, $rows := $v.Builder}}
+  <fieldset class="cond-group"><legend>{{if $g}}or all of{{else}}All of{{end}}</legend>
+    {{range $rows}}{{template "board-cond-row" (dict "V" $v "R" .)}}{{end}}
+  </fieldset>
+  {{end}}
+  <fieldset class="cond-group"><legend>{{if $v.Builder}}or a new group{{else}}All of{{end}}</legend>
+    {{template "board-cond-row" (dict "V" $v "R" $v.NewGroup)}}
+  </fieldset>
+
+  <div><button>Save</button> <a href="{{.Base}}/boards/{{$b.ID}}">Cancel</a></div>
+</form>
+
+<form class="panel inline-form" method="post" action="{{.Base}}/boards/{{$b.ID}}/delete">
+  <span class="muted">Deleting the board leaves its work items as they are.</span>
+  <button class="small danger">Delete board</button>
+</form>
+{{end}}
+
+{{/* A filter condition: dict "V" boardFormView "R" builderRow. Picking
+     "No condition" removes it. */}}
+{{define "board-cond-row"}}{{$r := .R}}{{$v := .V}}
+<div class="cond-row">
+  <input type="hidden" name="cg" value="{{$r.Group}}">
+  <select name="cf" aria-label="Field" data-cond-field>
+    <option value="">{{if $r.Field}}No condition{{else}}Add a condition…{{end}}</option>
+    {{range $v.Fields}}<option value="{{.Key}}" data-type="{{.Type.Name}}"{{with .Options}} data-options="{{optionsJSON .}}"{{end}}{{if and $r.Field (eq .Key $r.Field.Key)}} selected{{end}}>{{.Label}}</option>{{end}}
+  </select>
+  <select name="co" aria-label="Operator" data-cond-op>
+    {{range $v.AllOps}}<option value="{{.}}" data-types="{{opTypes .}}"{{if eq . $r.Op}} selected{{end}}{{if and $r.Field (not (opFits $r.Field .))}} hidden{{end}}>{{.Label}}</option>{{end}}
+  </select>
+  {{if and $r.Field (eq $r.Field.Type.Name "enum")}}
+  <select name="cv" aria-label="Value" data-cond-value>{{range $r.Field.Options}}<option value="{{.Value}}"{{if eq .Value $r.Value}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+  {{else}}
+  <input name="cv" value="{{$r.Value}}" aria-label="Value" placeholder="value" data-cond-value>
+  {{end}}
+</div>
+{{end}}

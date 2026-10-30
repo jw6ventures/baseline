@@ -1,0 +1,9 @@
+{{define "head"}}{{template "list-head" .}}{{end}}
+{{define "content"}}
+<div class="titlebar">
+  <h1>Changes</h1>
+  {{if .Body.CanRun}}<a class="button" href="{{.Base}}/changes/new">New change</a>{{end}}
+</div>
+<p class="muted">Everything that changes a host runs as a job inside a change record. A Normal change runs once approvers approve it (self-approval is allowed and recorded as such), inside its <a href="{{.Base}}/windows">maintenance window</a> if it has one. Standard changes are pre-approved by their <a href="{{.Base}}/change-models">change model</a>; Emergency ones need one approver and run even during a freeze. Emergency changes, and changes that failed, close after a review.</p>
+{{template "list" .Body.List}}
+{{end}}

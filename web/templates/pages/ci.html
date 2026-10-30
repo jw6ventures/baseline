@@ -1,0 +1,87 @@
+{{define "content"}}
+{{$v := .Body}}{{$c := $v.CI}}
+<div class="titlebar">
+  <div>
+    <h1>{{$c.Name}}</h1>
+    <p class="muted sub">{{$c.TypeLabel}} · {{template "ci-status" $c.Status}} · {{if $c.Manual}}added by hand{{else}}discovered{{end}}{{range $c.Tags}} <span class="tag">{{.}}</span>{{end}}</p>
+  </div>
+  <div>
+  {{with $v.Link}}<a class="button" href="{{$.Base}}{{.}}">Open {{$c.TypeLabel | lower}} page</a>{{end}}
+  {{if and $v.CanEdit $c.Manual}}<a class="button" href="{{$.Base}}/cis/{{$c.ID}}/edit">Edit</a>{{end}}
+  </div>
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{if eq $c.Status "missing"}}<p class="notice warn">Missing: discovery hasn't seen this since {{time $c.LastSeen}}. It's kept, with its relationships and history, until someone deletes it.</p>{{end}}
+
+<section class="panel">
+  <dl class="facts">
+    {{with $c.Description}}<dt>Description</dt><dd>{{.}}</dd>{{end}}
+    {{with $c.Owner}}<dt>Owner</dt><dd>{{.}}</dd>{{end}}
+    {{range $v.Type.Fields}}{{$f := .}}{{with $c.Attr .Key}}<dt>{{$f.Label}}</dt><dd>{{if eq $f.Type "url"}}<a href="{{.}}" rel="noopener">{{.}}</a>{{else}}{{.}}{{end}}</dd>{{end}}{{end}}
+    <dt>First seen</dt><dd>{{time $c.FirstSeen}}</dd>
+    {{if not $c.Manual}}<dt>Last seen</dt><dd>{{if eq $c.Status "active"}}present{{else}}{{time $c.LastSeen}}{{end}}</dd>{{end}}
+    <dt>Updated</dt><dd>{{time $c.UpdatedAt}}</dd>
+  </dl>
+</section>
+
+<h2>Relationships</h2>
+{{with $v.Graph}}<figure class="panel graph">{{.}}</figure>{{end}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Relationship</th><th>CI</th><th>Type</th><th>Source</th><th></th></tr></thead>
+  <tbody>{{range $v.Rels}}<tr>
+    <td>{{if .Outgoing}}this <strong>{{.Kind}}</strong> →{{else}}← <strong>{{.Kind}}</strong> this{{end}}{{with .Note}} <span class="muted">({{.}})</span>{{end}}</td>
+    <td><a href="{{$.Base}}{{.Link}}">{{.Other.Name}}</a>{{if ne .Other.Status "active"}} <span class="muted">{{.Other.Status}}</span>{{end}}</td>
+    <td>{{.Other.TypeLabel}}</td><td>{{.Source}}</td>
+    <td class="actions">{{if and $v.CanEdit (eq .Source "manual")}}<form method="post" action="{{$.Base}}/cis/{{$c.ID}}/relationships/{{.ID}}/delete"><button class="small danger">Remove</button></form>{{end}}</td>
+  </tr>{{else}}<tr><td colspan="5" class="muted">None yet.</td></tr>{{end}}</tbody>
+</table></div>
+{{if and $v.CanEdit $v.Targets}}
+<form class="inline-form" method="post" action="{{.Base}}/cis/{{$c.ID}}/relationships">
+  <label>Direction<select name="direction"><option value="out">this →</option><option value="in">→ this</option></select></label>
+  <label>Relationship<select name="kind">{{range $v.Kinds}}<option value="{{.}}">{{.}}</option>{{end}}</select></label>
+  <label>Other CI<select name="other" required>
+    <option value="">Choose…</option>
+    {{range $v.Targets}}<option value="{{.ID}}">{{.Name}} ({{.TypeLabel}})</option>{{end}}
+  </select></label>
+  <button>Add relationship</button>
+</form>
+<p class="muted small">For example: a VM <em>runs_on</em> a hypervisor, a host <em>connected_to</em> a switch, a stack <em>depends_on</em> a NAS. Discovered relationships (a container runs on its host) are maintained by discovery.</p>
+{{end}}
+
+{{with $v.WorkItems}}
+<h2>Work items</h2>
+{{template "linked-items" (dict "Base" $.Base "Rows" . "Empty" "")}}
+{{end}}
+
+{{if or $v.Certs ($c.Attr "tls_endpoint")}}
+<h2>Certificate</h2>
+{{if $c.Manual}}<p class="muted">The server connects to <code>{{$c.Attr "tls_endpoint"}}</code> every 6 hours and reads the certificate it serves.</p>{{end}}
+{{template "cert-table" $v.Certs}}
+{{end}}
+
+{{if $v.History}}
+<h2>History</h2>
+{{range $v.History}}
+<details class="hist">
+  <summary><span class="nowrap">{{time .At}}</span> <span class="tag">{{.Section}}</span> {{if .Initial}}Created{{else}}{{.Summary}}{{end}}</summary>
+  {{if not .Initial}}
+  <table class="diff">
+    {{range .Diff.Changed}}<tr><td class="op chg">~</td><td class="mono">{{.Field}}</td><td><del>{{value .From}}</del> → <ins>{{value .To}}</ins></td></tr>{{end}}
+    {{range .Diff.Added}}<tr><td class="op add">+</td><td class="mono">{{.Field}}</td><td><ins>{{value .To}}</ins></td></tr>{{end}}
+    {{range .Diff.Removed}}<tr><td class="op del">−</td><td class="mono">{{.Field}}</td><td><del>{{value .From}}</del></td></tr>{{end}}
+  </table>
+  {{end}}
+  <p class="muted small">by <code>{{.Actor}}</code></p>
+</details>
+{{end}}
+{{end}}
+
+{{if $v.CanDelete}}
+<section class="panel danger-zone">
+  <h2>Delete</h2>
+  <p class="muted">Deleting removes the CI with its relationships and history. The audit log keeps a record.</p>
+  <form method="post" action="{{.Base}}/cis/{{$c.ID}}/delete"><button class="danger">Delete {{$c.Name}}</button></form>
+</section>
+{{end}}
+{{end}}

@@ -1,0 +1,124 @@
+{{define "head"}}<script src="{{.Base}}/static/mapcore.js" defer></script><script src="{{.Base}}/static/wfmap.js" defer></script>{{end}}
+{{define "content"}}
+{{$v := .Body}}{{$f := $v.Workflow}}{{$ver := $v.Version}}{{$draft := $ver.Draft}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<div class="titlebar">
+  <div>
+    <h2>{{$f.Name}}{{if $f.Default}} <span class="tag">default</span>{{end}}</h2>
+    {{with $f.Description}}<p class="muted sub">{{.}}</p>{{end}}
+  </div>
+  <div>
+    {{if $f.DraftID}}{{if ne $ver.ID $f.DraftID}}<a class="button" href="{{.Base}}/settings/workflows/{{$f.ID}}?v={{$f.DraftID}}">Open the draft</a>{{end}}
+    {{else}}<form class="inline" method="post" action="{{.Base}}/settings/workflows/{{$f.ID}}/edit"><button>Edit (draft v{{$v.NextVersion}})</button></form>{{end}}
+  </div>
+</div>
+
+{{if $ver.ID}}
+<section class="panel">
+  <h2>Version {{$ver.Version}} <span class="tag{{if $draft}} caution{{else if eq $ver.State "published"}} ok{{end}}">{{$ver.State}}</span></h2>
+  {{if $draft}}
+  <p class="muted">A draft changes nothing until it is published. Items already on a published version stay there until they are migrated.</p>
+  {{range $v.Problems}}<p class="notice warn">{{.}}</p>{{end}}
+  <form class="inline" method="post" action="{{.Base}}/settings/workflows/{{$f.ID}}/publish"><button{{if $v.Problems}} disabled{{end}}>Publish v{{$ver.Version}}</button></form>
+  <form class="inline" method="post" action="{{.Base}}/settings/workflows/{{$f.ID}}/discard"><button class="danger">Discard the draft</button></form>
+  {{else}}
+  <p class="muted">Published {{time $ver.PublishedAt}}. {{plural $ver.Items "item"}} on this version. Published versions don't change: edit the workflow to make a new draft.</p>
+  {{end}}
+
+  <div class="wfmap" id="wfmap" data-base="{{.Base}}/settings/workflows/{{$f.ID}}" data-name="{{$f.Name}}" hidden>
+    <div class="titlebar">
+      <h3 id="diagram">Diagram</h3>
+      <div class="actions">
+        <button type="button" class="small secondary" data-act="fit" title="Fit everything in view (F)">Fit</button>
+        {{if $draft}}<button type="button" class="small secondary" data-act="arrange" title="Lay the statuses out in columns from the initial one">Auto-arrange</button>
+        <button type="button" class="small secondary" data-act="add" title="Add a status (or double-click empty space)">Add status</button>{{end}}
+        <button type="button" class="small secondary" data-act="png" title="Download the current view as a PNG">Export PNG</button>
+      </div>
+    </div>
+    <p class="muted small">{{if $draft}}Drag a status to move it. Drag the + on a status's right edge (or shift-drag the status) to another status to add a transition. Double-click empty space to add a status. Click a status or transition for details; Delete removes it.{{else}}Drag to pan, scroll or pinch to zoom, click a status or transition for details. Edit the workflow to change it.{{end}} Dashed tags are transitions from any status.</p>
+    <div class="map-stage wf-stage">
+      <canvas aria-label="Diagram of the statuses and transitions of version {{$ver.Version}}" role="img"></canvas>
+      <p class="map-status muted" hidden></p>
+      <section class="map-info" hidden aria-live="polite"></section>
+    </div>
+    <script type="application/json" id="wfmap-data">{{$v.Diagram}}</script>
+  </div>
+
+  <h3>Statuses</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Status</th><th>Key</th><th>Category</th><th class="num">Order</th><th>Initial</th>{{if $draft}}<th></th>{{end}}</tr></thead>
+    <tbody>{{range $ver.Statuses}}{{if $draft}}<tr>
+      <td colspan="5"><form class="inline-form" method="post" action="{{$.Base}}/settings/workflows/{{$f.ID}}/statuses/{{.ID}}" id="st-{{.ID}}">
+        <label>Name<input name="name" value="{{.Name}}" required></label>
+        <label>Key<code>{{.Key}}</code></label>
+        <label>Category<select name="category">{{$c := .Category}}{{range $v.Categories}}<option value="{{.}}"{{if eq . $c}} selected{{end}}>{{itemStatus .}}</option>{{end}}</select></label>
+        <label>Order<input name="position" type="number" value="{{.Position}}" size="3"></label>
+        <label class="check"><input type="checkbox" name="initial" value="1"{{if .Initial}} checked{{end}}> Initial</label>
+        <button class="small">Save</button>
+      </form></td>
+      <td class="actions"><form method="post" action="{{$.Base}}/settings/workflows/{{$f.ID}}/statuses/{{.ID}}/delete"><button class="small danger">Delete</button></form></td>
+    </tr>{{else}}<tr>
+      <td>{{template "wf-status" .}}</td><td class="mono">{{.Key}}</td><td>{{itemStatus .Category}}</td><td class="num">{{.Position}}</td><td>{{if .Initial}}yes{{end}}</td>
+    </tr>{{end}}{{else}}<tr><td colspan="6" class="muted">No statuses yet.</td></tr>{{end}}</tbody>
+  </table></div>
+  {{if $draft}}
+  <form class="inline-form" method="post" action="{{.Base}}/settings/workflows/{{$f.ID}}/statuses">
+    <label>Name<input name="name" placeholder="In review" required></label>
+    <label>Key <span class="muted small">(fixed once created)</span><input name="key" placeholder="in_review" required></label>
+    <label>Category<select name="category">{{range $v.Categories}}<option value="{{.}}">{{itemStatus .}}</option>{{end}}</select></label>
+    <label>Order<input name="position" type="number" value="{{len $ver.Statuses}}" size="3"></label>
+    <label class="check"><input type="checkbox" name="initial" value="1"> Initial</label>
+    <button>Add status</button>
+  </form>
+  {{end}}
+
+  <h3>Transitions</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Transition</th><th>From</th><th>To</th><th>Who may run it</th><th>Requires</th><th>Then</th><th>Asks for</th>{{if $draft}}<th></th>{{end}}</tr></thead>
+    <tbody>{{range $ver.Transitions}}<tr>
+      <td><strong>{{.Name}}</strong></td>
+      <td>{{with .FromName}}{{.}}{{else}}<span class="muted">any status</span>{{end}}</td>
+      <td>{{.ToName}}</td>
+      <td>{{with rules .Conditions}}{{.}}{{else}}<span class="muted">anyone</span>{{end}}</td>
+      <td>{{rules .Validators}}{{if eq .ToCategory "done"}}{{if .Validators}}, {{end}}<span class="muted">a resolution</span>{{end}}</td>
+      <td>{{rules .PostFunctions}}</td>
+      <td>{{rules .Screen}}</td>
+      {{if $draft}}<td class="actions">
+        <a class="button small" href="{{$.Base}}/settings/workflows/{{$f.ID}}/transitions/{{.ID}}">Edit</a>
+        <form class="inline" method="post" action="{{$.Base}}/settings/workflows/{{$f.ID}}/transitions/{{.ID}}/delete"><button class="small danger">Delete</button></form>
+      </td>{{end}}
+    </tr>{{else}}<tr><td colspan="8" class="muted">No transitions yet.</td></tr>{{end}}</tbody>
+  </table></div>
+  {{if and $draft $ver.Statuses}}<p><a class="button" href="{{.Base}}/settings/workflows/{{$f.ID}}/transitions/new">Add transition</a></p>{{end}}
+</section>
+{{end}}
+
+<section class="panel">
+  <h2>Versions</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Version</th><th>State</th><th class="num">Items</th><th>Published</th><th></th></tr></thead>
+    <tbody>{{range $v.Versions}}<tr{{if eq .ID $ver.ID}} class="selected"{{end}}>
+      <td><a href="{{$.Base}}/settings/workflows/{{$f.ID}}?v={{.ID}}">v{{.Version}}</a></td>
+      <td>{{.State}}</td><td class="num">{{.Items}}</td>
+      <td>{{if .PublishedAt.IsZero}}<span class="muted">not yet</span>{{else}}{{time .PublishedAt}}{{end}}</td>
+      <td class="actions">{{if and .Items (eq .State "published")}}<a class="button small" href="{{$.Base}}/settings/migrations?from_version={{.ID}}">Migrate items</a>{{end}}</td>
+    </tr>{{end}}</tbody>
+  </table></div>
+  <p class="muted small">Used by: {{range $i, $u := $v.Projects}}{{if $i}}, {{end}}<a href="{{$.Base}}/projects/{{$u.ProjectKey}}">{{$u.ProjectKey}}</a> {{$u.TypeName}}{{else}}no project yet{{end}}.</p>
+</section>
+
+<form class="panel stack-form" method="post" action="{{.Base}}/settings/workflows/{{$f.ID}}">
+  <h2>Name and default</h2>
+  <label>Name<input name="name" value="{{$f.Name}}" required></label>
+  <label>Description<textarea name="description" rows="2">{{$f.Description}}</textarea></label>
+  <label class="check-line"><input type="checkbox" name="default" value="1"{{if $f.Default}} checked disabled{{end}}> Default: what a project's ticket types use unless told otherwise{{if $f.Default}}<input type="hidden" name="default" value="1">{{end}}</label>
+  <div><button>Save</button></div>
+</form>
+{{if not $f.Default}}{{if not $f.Uses}}{{if not $f.Items}}
+<form method="post" action="{{.Base}}/settings/workflows/{{$f.ID}}/delete"><button class="danger">Delete this workflow</button></form>
+{{end}}{{end}}{{end}}
+{{end}}

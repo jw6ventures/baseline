@@ -1,0 +1,107 @@
+{{define "head"}}<script src="{{.Base}}/static/forms.js" defer></script>{{end}}
+{{define "content"}}
+{{$v := .Body}}{{$f := $v.Form}}
+<h1>{{.Title}}</h1>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{if not $v.Spec.Name}}
+<p class="muted">Pick what to do. Everything runs as a job inside a change record. A Normal change runs once an approver approves it (approvers can approve their own; it's recorded as self-approval). An Emergency change needs one approver and runs even during a freeze. Standard changes come from a pre-approved <a href="{{.Base}}/change-models">change model</a>.</p>
+<div class="cards">
+{{range $v.Actions}}
+  <a class="card" href="{{$.Base}}/changes/new?action={{.Name}}{{range index $f "host"}}&amp;host={{.}}{{end}}">
+    <span class="badge">{{.Risk}} risk</span>
+    <strong>{{.Label}}</strong>
+    <span class="mono">{{.Name}}</span>
+  </a>
+{{end}}
+</div>
+{{else}}
+
+{{if and (eq $v.Spec.Name "script.run") (not $v.Script)}}
+{{template "script-chooser" (dict "Base" .Base "V" $v "Action" (print .Base "/changes/new"))}}
+{{else if and $v.Files $v.Files.Block}}
+<p class="notice bad">{{$v.Files.Block}}.</p>
+{{else}}
+<form class="panel stack-form wide" method="post" action="{{.Base}}/changes">
+  <input type="hidden" name="action" value="{{$v.Spec.Name}}">
+  {{with $v.Model}}<input type="hidden" name="model" value="{{.ID}}">{{end}}
+
+  {{if $v.Files}}
+    {{template "stack-files" (dict "Base" .Base "V" $v)}}
+  {{else if eq $v.Spec.Name "container.restart"}}
+    {{template "container-picker" (dict "Base" .Base "V" $v)}}
+  {{else if hasPrefix $v.Spec.Name "compose."}}
+    {{template "stack-picker" (dict "Base" .Base "V" $v "Stacks" $v.Stacks "Services" (or (eq $v.Spec.Name "compose.pull") (eq $v.Spec.Name "compose.update")) "Empty" "There are no Compose stacks on hosts you can change. Agents discover them from container labels; changing a host needs the operator role on it.")}}
+    {{with $v.Model}}<p class="muted small">Only stacks whose updates run under {{.Name}} can be picked; an approver sets a stack's model on its page.</p>{{end}}
+  {{else}}
+  <fieldset class="checks">
+    <legend>Hosts</legend>
+    {{range $v.Hosts}}
+    <label{{with .Disabled}} title="{{.}}" class="dim"{{end}}><input type="checkbox" name="host" value="{{.ID}}"{{if and .Checked (not .Disabled)}} checked{{end}}{{if .Disabled}} disabled{{end}}> {{.DisplayName}}{{if not .Connected}} <span class="muted small">offline</span>{{end}}</label>
+    {{else}}
+    <span class="muted">You can't change any host. Requesting changes needs the operator role.</span>
+    {{end}}
+  </fieldset>
+  {{end}}
+
+  {{with $v.Model}}
+  <p>From change model <a href="{{$.Base}}/change-models/{{.ID}}"><strong>{{.Name}}</strong></a>: {{.Summary}} · {{.Risk}} risk. It was approved by {{.ApprovedByName}}, so this change is approved as soon as it's created.</p>
+  {{else}}
+  {{template "action-params" (dict "Base" .Base "V" $v)}}
+  {{end}}
+
+  <label><span>Title <span class="muted small">(optional; describes the action by default)</span></span><input name="title" value="{{$v.Title}}" maxlength="200"></label>
+  <label><span>Why <span class="muted small">(justification, kept with the change)</span></span><textarea name="justification" rows="2">{{$f.Get "justification"}}</textarea></label>
+
+  {{if not $v.Model}}
+  <fieldset class="checks">
+    <legend>Kind</legend>
+    <label><input type="radio" name="kind" value="normal"{{if ne $v.Kind "emergency"}} checked{{end}}> Normal: approved first, then runs in its window</label>
+    <label><input type="radio" name="kind" value="emergency"{{if eq $v.Kind "emergency"}} checked{{end}}> Emergency: one approver, runs even during a freeze; a review is required afterwards</label>
+  </fieldset>
+  <details class="sub"{{if or ($f.Get "backout_plan") ($f.Get "test_plan")}} open{{end}}>
+    <summary>Back-out and test plans</summary>
+    <label><span>Back-out plan <span class="muted small">(how to undo it if it goes wrong)</span></span><textarea name="backout_plan" rows="2">{{$f.Get "backout_plan"}}</textarea></label>
+    <label><span>Test plan <span class="muted small">(how you'll know it worked)</span></span><textarea name="test_plan" rows="2">{{$f.Get "test_plan"}}</textarea></label>
+  </details>
+  <div class="inline-form">
+    <label>Risk<select name="risk">{{range $v.Risks}}<option value="{{.}}"{{if eq . $v.Risk}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+    <label>Impact<select name="impact">{{range $v.Risks}}<option value="{{.}}"{{if eq (print .) ($f.Get "impact")}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+    <label>Approvals needed<input type="number" name="approvals" min="1" max="5" value="{{with $f.Get "approvals"}}{{.}}{{else}}1{{end}}" class="narrow"></label>
+  </div>
+  {{end}}
+
+  <fieldset>
+    <legend>When</legend>
+    <div class="inline-form">
+      <label>Maintenance window<select name="window">
+        <option value="">none: as soon as it's approved</option>
+        {{range $v.Windows}}<option value="{{.ID}}"{{if eq .ID ($f.Get "window")}} selected{{end}}>{{.Name}}{{if not .Global}} ({{join .ScopeNames ", "}}){{end}}</option>{{end}}
+      </select></label>
+      <label><span>Not before <span class="muted small">({{$v.TZ}})</span></span><input type="datetime-local" name="planned_start" value="{{$v.PlannedStart}}"></label>
+      <label>When the window closes<select name="on_window_end">
+        <option value="carry_over">hosts left wait for the next opening</option>
+        <option value="fail"{{if eq ($f.Get "on_window_end") "fail"}} selected{{end}}>hosts left are skipped and the change fails</option>
+      </select></label>
+    </div>
+    <p class="muted small">A job doesn't start unless it's likely to finish before the window closes. Freezes hold every change but Emergency ones.</p>
+  </fieldset>
+
+  <div class="inline-form">
+    <label>{{if hasPrefix $v.Spec.Name "compose."}}Stacks{{else if eq $v.Spec.Name "container.restart"}}Containers{{else}}Hosts{{end}} at a time<input type="number" name="concurrency" min="1" max="100" value="{{with $f.Get "concurrency"}}{{.}}{{else}}1{{end}}" class="narrow"></label>
+    <input type="hidden" name="stop_on_failure_set" value="1">
+    <label class="check"><input type="checkbox" name="stop_on_failure" value="1"{{if or (not ($f.Get "stop_on_failure_set")) ($f.Get "stop_on_failure")}} checked{{end}}> stop at the first failure</label>
+  </div>
+  <div>
+    {{if $v.Model}}
+    <button name="submit" value="standard">Create the Standard change</button>
+    {{else}}
+    <button name="submit" value="submit">Submit for approval</button>
+    {{if $v.CanApprove}}<button name="submit" value="approve" title="You approve it yourself; the audit log records the self-approval">Submit and approve</button>{{end}}
+    <button class="secondary" name="submit" value="draft">Save as draft</button>
+    {{end}}
+    <a href="{{.Base}}/changes">Cancel</a>
+  </div>
+</form>
+{{end}}
+{{end}}
+{{end}}

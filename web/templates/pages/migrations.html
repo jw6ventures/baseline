@@ -1,0 +1,55 @@
+{{define "content"}}
+{{$v := .Body}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<section class="panel">
+  <h2>Migrations</h2>
+  <p class="muted">A migration moves work items off an old <a href="{{.Base}}/settings/workflows">workflow</a> version, or to another project or ticket type, mapping each item's status to one of the target's. You pick the items, check the counts and run it; it runs in the background and leaves a history entry on every item. Transition rules don't apply: it is an admin move.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>From</th><th>To</th><th>State</th><th class="num">Items</th><th>Started</th></tr></thead>
+    <tbody>{{range $v.Migrations}}<tr>
+      <td><a href="{{$.Base}}/settings/migrations/{{.ID}}">{{.From}}</a></td>
+      <td>{{.To}}</td>
+      <td>{{template "migration-state" .}}</td>
+      <td class="num">{{if .Draft}}<span class="muted">—</span>{{else}}{{.Done}} of {{.Total}}{{end}}</td>
+      <td>{{if .Draft}}<span class="muted">not yet</span>{{else}}{{time .StartedAt}}{{end}}</td>
+    </tr>{{else}}<tr><td colspan="5" class="muted">No migrations yet.</td></tr>{{end}}</tbody>
+  </table></div>
+</section>
+
+<form class="panel stack-form" method="post" action="{{.Base}}/settings/migrations">
+  <h2>Migrate a workflow version</h2>
+  <input type="hidden" name="kind" value="workflow">
+  {{if $v.Sources}}
+  <label>Move the items of<select name="from_version">
+    {{range $v.Sources}}<option value="{{.ID}}"{{if eq .ID $v.FromVersion}} selected{{end}}>{{.Workflow.Name}} v{{.Version}} ({{plural .Items "item"}})</option>{{end}}
+  </select></label>
+  <label>To the newest version of<select name="to_workflow">
+    {{range $v.Workflows}}{{if .Latest}}<option value="{{.ID}}"{{if eq .ID $v.ToWorkflow}} selected{{end}}>{{.Name}} (v{{.Latest}})</option>{{end}}{{end}}
+  </select></label>
+  <div><button>Next: map statuses</button></div>
+  {{else}}<p class="muted">No published version has items on it yet.</p>{{end}}
+</form>
+
+<form class="panel stack-form" id="move" method="post" action="{{.Base}}/settings/migrations">
+  <h2>Move items or change their type</h2>
+  <input type="hidden" name="kind" value="move">
+  {{if $v.Projects}}
+  <div class="form-row">
+    <label>From project<select name="from_project">{{range $v.Projects}}<option value="{{.ID}}"{{if eq .ID $v.FromProject}} selected{{end}}>{{.Key}} {{.Name}}</option>{{end}}</select></label>
+    <label>Type<select name="from_type">{{range $v.Types}}<option value="{{.ID}}"{{if eq .ID $v.FromType}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+  </div>
+  <div class="form-row">
+    <label>To project<select name="to_project">{{range $v.Projects}}<option value="{{.ID}}"{{if eq .ID $v.ToProject}} selected{{end}}>{{.Key}} {{.Name}}</option>{{end}}</select></label>
+    <label>Type<select name="to_type">{{range $v.Types}}<option value="{{.ID}}"{{if eq .ID $v.ToType}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+  </div>
+  <label>Only the item <span class="muted small">(optional; else pick items on the next page)</span><input name="ref" value="{{$v.Ref}}" placeholder="OPS-42"></label>
+  <p class="muted small">Items take the target's workflow and, in another project, a new number; their old reference keeps working. Custom fields the target doesn't use are dropped, and the next page lists them.</p>
+  <div><button>Next: map statuses</button></div>
+  {{else}}<p class="muted">No open projects yet.</p>{{end}}
+</form>
+{{end}}
+

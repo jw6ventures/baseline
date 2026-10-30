@@ -1,0 +1,75 @@
+{{define "content"}}
+<h1>Dashboard</h1>
+<div class="stats">
+  <a class="stat" href="{{.Base}}/hosts"><span class="n">{{.Body.Fleet.Total}}</span><span>hosts</span></a>
+  <a class="stat" href="{{.Base}}/hosts"><span class="n ok">{{.Body.Fleet.Online}}</span><span>online</span></a>
+  <a class="stat" href="{{.Base}}/hosts"><span class="n{{if .Body.Fleet.Offline}} bad{{end}}">{{.Body.Fleet.Offline}}</span><span>offline</span></a>
+  {{if .Body.Fleet.Duplicate}}<a class="stat" href="{{.Base}}/hosts"><span class="n bad">{{.Body.Fleet.Duplicate}}</span><span>duplicate identities</span></a>{{end}}
+</div>
+<div class="stats">
+  {{with .Body.Alerts}}<a class="stat" href="{{$.Base}}/alerts"><span class="n{{if .Critical}} bad{{else if .Warning}} caution{{else}} ok{{end}}">{{add .Critical (add .Warning .Info)}}</span><span>alerts firing{{if .Critical}} ({{.Critical}} critical){{end}}</span></a>{{end}}
+  <a class="stat" href="{{.Base}}/vulnerabilities"><span class="n{{if .Body.FixableSevere}} bad{{else if .Body.Fixable}} caution{{end}}">{{.Body.Fixable}}</span><span>fixable CVEs{{if .Body.FixableSevere}} ({{.Body.FixableSevere}} high or critical){{end}}</span></a>
+  <a class="stat" href="{{.Base}}/vulnerabilities?view=hosts"><span class="n">{{.Body.HostsFixable}}</span><span>hosts to patch for them</span></a>
+  <a class="stat" href="{{.Base}}/vulnerabilities?fixable=0"><span class="n">{{.Body.Vulns}}</span><span>known CVEs, fixed or not</span></a>
+</div>
+<div class="stats">
+  <a class="stat" href="{{.Base}}/updates"><span class="n">{{.Body.HostsWithUpdates}}</span><span>hosts with updates</span></a>
+  <a class="stat" href="{{.Base}}/updates/packages"><span class="n">{{.Body.Updates}}</span><span>pending updates</span></a>
+  <a class="stat" href="{{.Base}}/updates?security=1"><span class="n{{if .Body.SecurityUpdates}} bad{{end}}">{{.Body.SecurityUpdates}}</span><span>security updates</span></a>
+  <span class="stat"><span class="n{{if .Body.DisksFailing}} bad{{end}}">{{.Body.DisksFailing}}</span><span>failing drives</span></span>
+  {{if .Body.DisksDegrading}}<span class="stat"><span class="n caution">{{.Body.DisksDegrading}}</span><span>degrading drives</span></span>{{end}}
+  {{if .Body.RebootRequired}}<a class="stat" href="{{.Base}}/hosts"><span class="n caution">{{.Body.RebootRequired}}</span><span>hosts need a reboot</span></a>{{end}}
+  {{if and .Body.IsAdmin .Body.AgentsOutdated}}<a class="stat" href="{{.Base}}/settings/agents"><span class="n">{{.Body.AgentsOutdated}}</span><span>agents to update</span></a>{{end}}
+</div>
+<div class="stats">
+  <a class="stat" href="{{.Base}}/containers"><span class="n">{{.Body.Containers}}</span><span>containers</span></a>
+  <a class="stat" href="{{.Base}}/containers?show=updates"><span class="n{{if .Body.ContainerUpdates}} caution{{end}}">{{.Body.ContainerUpdates}}</span><span>newer images</span></a>
+  {{if .Body.Guests}}<a class="stat" href="{{.Base}}/vms"><span class="n">{{.Body.GuestsRunning}}<span class="of"> / {{.Body.Guests}}</span></span><span>VMs and LXC running</span></a>{{end}}
+  {{if .Body.Clusters}}<a class="stat" href="{{.Base}}/kubernetes"><span class="n{{if .Body.NodesNotReady}} bad{{end}}">{{.Body.NodesNotReady}}</span><span>Kubernetes nodes not ready</span></a>{{end}}
+  <span class="stat"><span class="n{{if .Body.FailedServices}} bad{{end}}">{{.Body.FailedServices}}</span><span>failed services</span></span>
+  <span class="stat"><span class="n{{if .Body.Expiring}} bad{{end}}">{{len .Body.Expiring}}</span><span>certificates expiring in 30 days</span></span>
+</div>
+{{with .Body.Attention}}
+<h2>Needs attention</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Host</th><th>Problems</th><th>Drives</th><th class="num">Security updates</th></tr></thead>
+  <tbody>{{range .}}<tr>
+    <td><a href="{{$.Base}}/hosts/{{.ID}}"><strong>{{.DisplayName}}</strong></a></td>
+    <td>{{if .RebootRequired}}<span class="tag caution" title="{{join .RebootReasons "; "}}">reboot required</span> {{end}}{{if .FailedServices}}<a href="{{$.Base}}/hosts/{{.ID}}?tab=services"><span class="tag warn">{{.FailedServices}} failed service{{if ne .FailedServices 1}}s{{end}}</span></a>{{end}}</td>
+    <td>{{if .DisksFailing}}<a href="{{$.Base}}/hosts/{{.ID}}?tab=hardware#drive-health"><span class="tag warn">{{.DisksFailing}} failing</span></a> {{end}}{{if .DisksDegrading}}<a href="{{$.Base}}/hosts/{{.ID}}?tab=hardware#drive-health"><span class="tag caution">{{.DisksDegrading}} degrading</span></a>{{end}}</td>
+    <td class="num">{{if .SecurityUpdates}}<a href="{{$.Base}}/hosts/{{.ID}}?tab=updates">{{.SecurityUpdates}}</a>{{end}}</td>
+  </tr>{{end}}</tbody>
+</table></div>
+{{end}}
+{{with .Body.Expiring}}
+<h2>Certificates expiring soon</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>On</th><th>Where</th><th>Subject</th><th>Expires</th></tr></thead>
+  <tbody>{{range .}}<tr>
+    <td><a href="{{$.Base}}{{if eq .CIType "host"}}/hosts/{{.CIID}}?tab=certificates{{else}}/cis/{{.CIID}}{{end}}">{{.CIName}}</a></td>
+    <td class="mono small">{{.Location}}</td><td>{{.Subject}}</td>
+    <td class="nowrap">{{$d := .DaysLeft}}{{if lt $d 0}}<span class="tag warn">expired</span>{{else}}<span class="tag warn">{{$d}} days</span>{{end}} <span class="muted small">{{time .NotAfter}}</span></td>
+  </tr>{{end}}</tbody>
+</table></div>
+{{end}}
+{{with .Body.Changes}}{{if or .AwaitingApproval .InProgress .Scheduled .AwaitingReview}}
+<div class="stats">
+  <a class="stat" href="{{$.Base}}/changes?show=approval"><span class="n{{if .AwaitingApproval}} caution{{end}}">{{.AwaitingApproval}}</span><span>changes awaiting approval</span></a>
+  <a class="stat" href="{{$.Base}}/calendar"><span class="n">{{.Scheduled}}</span><span>changes scheduled</span></a>
+  <a class="stat" href="{{$.Base}}/changes?show=open"><span class="n">{{.InProgress}}</span><span>changes in progress</span></a>
+  {{if .AwaitingReview}}<a class="stat" href="{{$.Base}}/changes?show=review"><span class="n caution">{{.AwaitingReview}}</span><span>changes to review</span></a>{{end}}
+</div>
+{{end}}{{end}}
+{{with .Body.Upcoming}}
+<h2>Upcoming windows</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Window</th><th>Opens</th><th>Closes</th><th>Applies to</th></tr></thead>
+  <tbody>{{range .}}<tr>
+    <td>{{if eq .Kind "freeze"}}<span class="tag warn">freeze</span> {{end}}<a href="{{$.Base}}/windows">{{.Name}}</a></td>
+    <td class="nowrap">{{if .Open}}<span class="tag ok">open now</span>{{else}}{{time .Start}}{{end}}</td>
+    <td class="nowrap">{{time .End}}</td>
+    <td class="small">{{if .Scope}}{{join .Scope ", "}}{{else}}all hosts{{end}}</td>
+  </tr>{{end}}</tbody>
+</table></div>
+{{end}}
+{{end}}

@@ -1,0 +1,17 @@
+{{define "head"}}{{template "list-head" .}}{{end}}
+{{define "content"}}
+<div class="titlebar">
+  <h1>Audit log</h1>
+  {{if .Body.IsAdmin}}
+  <form method="post" action="{{.Base}}/audit/verify"><button>Verify hash chain</button></form>
+  {{end}}
+</div>
+{{with .Body.Verified}}
+  {{if .OK}}
+  <p class="notice ok">Chain intact: {{.Checked}} entries verified.</p>
+  {{else}}
+  <p class="notice bad">Chain broken at entry #{{.BrokenAt}}: {{.Reason}}. Checked {{.Checked}} entries.</p>
+  {{end}}
+{{end}}
+{{template "list" .Body.List}}
+{{end}}

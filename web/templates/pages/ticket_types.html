@@ -1,0 +1,33 @@
+{{define "content"}}
+{{$v := .Body}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<section class="panel">
+  <h2>Ticket types</h2>
+  <p class="muted">Ticket types are shared: each <a href="{{.Base}}/projects">project</a> picks the ones it offers. The kind tells Baseline what a type is whatever it's called, for features such as SLAs and alerts (incident) and parenting (epic).</p>
+  <p class="muted">Each type's layouts are the default create and view screens; a project can override them for itself.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Name</th><th>Key</th><th>Kind</th><th class="num">Projects</th><th></th></tr></thead>
+    <tbody>{{range $v.Types}}<tr>
+      <td><strong>{{with .Icon}}{{.}} {{end}}{{.Name}}</strong>{{with .Description}}<br><span class="muted small">{{.}}</span>{{end}}</td>
+      <td class="mono">{{.Key}}</td><td>{{.BaseKind}}</td><td class="num">{{.Projects}}</td>
+      <td class="actions"><a class="button small" href="{{$.Base}}/settings/ticket-types/{{.ID}}/layouts/create">Create layout</a> <a class="button small" href="{{$.Base}}/settings/ticket-types/{{.ID}}/layouts/view">View layout</a> <a class="button small" href="{{$.Base}}/settings/ticket-types?edit={{.ID}}">Edit</a></td>
+    </tr>{{end}}</tbody>
+  </table></div>
+</section>
+
+{{$e := $v.Edit}}
+<form class="panel stack-form" method="post" action="{{.Base}}/settings/ticket-types{{with $e.ID}}/{{.}}{{end}}">
+  <h2>{{if $e.ID}}Edit {{$e.Name}}{{else}}New ticket type{{end}}</h2>
+  {{if $e.ID}}<p class="muted">Key <code>{{$e.Key}}</code></p>{{else}}
+  <label>Key <span class="muted small">(lower case, fixed once created)</span><input name="key" value="{{$e.Key}}" placeholder="change_request" required></label>{{end}}
+  <label>Name<input name="name" value="{{$e.Name}}" required></label>
+  <label>Kind<select name="base_kind">{{range $v.BaseKinds}}<option value="{{.}}"{{if eq . $e.BaseKind}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+  <label>Icon <span class="muted small">(an emoji or short text, optional)</span><input name="icon" value="{{$e.Icon}}"></label>
+  <label>Description<textarea name="description" rows="2">{{$e.Description}}</textarea></label>
+  <div><button>{{if $e.ID}}Save{{else}}Create{{end}}</button>{{if $e.ID}} <a href="{{.Base}}/settings/ticket-types">Cancel</a>{{end}}</div>
+</form>
+{{end}}

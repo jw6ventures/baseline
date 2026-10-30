@@ -1,0 +1,60 @@
+{{define "head"}}<script src="{{.Base}}/static/forms.js" defer></script>{{end}}
+{{define "content"}}
+{{$v := .Body}}
+<h1>{{if $v.New}}New patch group{{else}}Edit {{$v.Name}}{{end}}</h1>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+<p class="muted">At each scheduled time the group's hosts get a Standard change made from its change model. Groups it waits for must have succeeded first; with promotion on, it installs only the package versions they validated. With a <span class="mono">compose.update</span> model the group updates the Compose stacks you pick instead, and with promotion on a Test, Staging or Prod stack takes only the images its Dev or Test copy already runs.</p>
+<form class="panel stack-form wide" method="post" action="{{.Base}}/patch-groups{{if not $v.New}}/{{$v.ID}}{{end}}">
+  <label>Name<input name="name" value="{{$v.Name}}" maxlength="100" required></label>
+  <label>Description<input name="description" value="{{$v.Description}}"></label>
+  <label><span>Change model <span class="muted small">(runs are skipped unless it's approved; <span class="mono">pkg.upgrade</span> and <span class="mono">compose.update</span> models promote validated versions)</span></span><select name="model" required data-switch>
+    <option value="">Choose…</option>
+    {{range $v.Models}}<option value="{{.ID}}" data-kind="{{if hasPrefix .Action "compose."}}compose{{else}}hosts{{end}}"{{if eq .ID $v.ModelID}} selected{{end}}>{{.Name}} ({{.Action}}{{if ne .State "approved"}}, {{.State}}{{end}})</option>{{end}}
+  </select></label>
+  {{if not $v.Models}}<p class="notice warn">There are no change models yet. <a href="{{.Base}}/change-models/new">Create one</a> (usually <em>Install updates</em>, or <em>Update a Compose stack</em> for stacks) and have an approver approve it.</p>{{end}}
+  <div class="switch-part" data-switch-for="model" data-kind="hosts">
+  <label><span>Host group <span class="muted small">(for models other than compose.update)</span></span><select name="host_group">
+    <option value="">Choose…</option>
+    {{range $v.HostGroups}}<option value="{{.ID}}"{{if eq .ID $v.HostGroupID}} selected{{end}}>{{.Name}} ({{plural .Hosts "host"}})</option>{{end}}
+  </select></label>
+  {{if not $v.HostGroups}}<p class="notice warn">There are no host groups yet. Create one under <a href="{{.Base}}/settings/access">Settings › Access</a> first.</p>{{end}}
+  </div>
+  <div class="switch-part" data-switch-for="model" data-kind="compose">
+  {{template "stack-picker" (dict "Base" .Base "V" $v "Stacks" $v.StackChoices "Services" false "Empty" "No Compose stacks are known yet. Agents discover them from container labels.")}}
+  <p class="muted small hint">For compose.update models. Each run updates the picked stacks that have newer images behind their tags; stacks that are pinned, orphaned or busy with another change are left alone.</p>
+  </div>
+
+  <div class="inline-form">
+    <label>Runs at (cron)<input name="cron" value="{{$v.Cron}}" class="mono" required placeholder="0 3 * * SAT"></label>
+    <label>Time zone<input name="tz" value="{{$v.TZ}}" list="zones" required></label>
+  </div>
+  <datalist id="zones">{{range $v.ExampleZones}}<option value="{{.}}">{{end}}</datalist>
+  {{if $v.Preview}}<div class="preview"><span class="muted small">Next runs, in {{$v.DisplayTZ}}:</span><ul>{{range $v.Preview}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
+  {{with $v.PreviewNote}}<p class="notice warn">{{.}}</p>{{end}}
+  <label><span>Maintenance window <span class="muted small">(optional: the change waits for it to open, and starts no jobs once it closes)</span></span><select name="window">
+    <option value="">none</option>
+    {{range $v.Windows}}<option value="{{.ID}}"{{if eq .ID $v.WindowID}} selected{{end}}>{{.Name}}{{if not .Active}} (inactive){{end}}</option>{{end}}
+  </select></label>
+
+
+  <fieldset class="checks">
+    <legend>Waits for <span class="small">(blocked by these groups)</span></legend>
+    {{range $v.Others}}<label><input type="checkbox" name="blocked_by" value="{{.ID}}"{{if has $v.BlockedBy .ID}} checked{{end}}> {{.Name}}</label>
+    {{else}}<span class="muted">No other patch groups.</span>{{end}}
+  </fieldset>
+  <div class="inline-form">
+    <label>Soak<input name="soak" value="{{$v.Soak}}" class="narrow" placeholder="48h"></label>
+    <label>Success threshold (%)<input name="threshold" type="number" min="1" max="100" value="{{$v.Threshold}}" class="narrow"></label>
+  </div>
+  <p class="muted small hint">Soak is how long after a blocking group's run finishes before this one may run (<code>0</code>, <code>48h</code>, <code>2d</code>); the threshold is the share of its hosts that must have succeeded.</p>
+  <label class="check-line"><input type="checkbox" name="promote" value="1"{{if $v.Promote}} checked{{end}}> Promote validated versions <span class="muted small">install only the package versions the blocking groups installed successfully</span></label>
+  <p class="muted small hint">For Compose stacks, promotion goes by their names: a Test or Staging stack takes only the images its Dev copy runs, and a Prod stack only those its Test or Staging (else Dev) copy runs, for at least the soak time.</p>
+
+  <div class="inline-form">
+    <label>Hosts (or stacks) at a time<input name="concurrency" type="number" min="1" max="1000" value="{{$v.Concurrency}}" class="narrow"></label>
+  </div>
+  <label class="check-line"><input type="checkbox" name="stop_on_failure" value="1"{{if $v.StopOnFailure}} checked{{end}}> Stop at the first failure</label>
+  <label class="check-line"><input type="checkbox" name="enabled" value="1"{{if $v.Enabled}} checked{{end}}> Enabled <span class="muted small">a disabled group doesn't run on its schedule</span></label>
+  <div><button>Save</button> <a href="{{.Base}}/patch-groups{{if not $v.New}}/{{$v.ID}}{{end}}">Cancel</a></div>
+</form>
+{{end}}

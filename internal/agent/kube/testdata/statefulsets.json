@@ -1,0 +1,79 @@
+{
+ "kind": "StatefulSetList",
+ "apiVersion": "apps/v1",
+ "metadata": {
+  "resourceVersion": "959"
+ },
+ "items": [
+  {
+   "metadata": {
+    "name": "db",
+    "namespace": "demo",
+    "uid": "2ae81b91-c239-4e0d-8714-3c38b1d9318b",
+    "resourceVersion": "792",
+    "generation": 1,
+    "creationTimestamp": "2026-10-14T06:38:22Z"
+   },
+   "spec": {
+    "replicas": 1,
+    "selector": {
+     "matchLabels": {
+      "app": "db"
+     }
+    },
+    "template": {
+     "metadata": {
+      "labels": {
+       "app": "db"
+      }
+     },
+     "spec": {
+      "containers": [
+       {
+        "name": "db",
+        "image": "busybox:1.37",
+        "command": [
+         "sleep",
+         "86400"
+        ],
+        "resources": {},
+        "terminationMessagePath": "/dev/termination-log",
+        "terminationMessagePolicy": "File",
+        "imagePullPolicy": "IfNotPresent"
+       }
+      ],
+      "restartPolicy": "Always",
+      "terminationGracePeriodSeconds": 30,
+      "dnsPolicy": "ClusterFirst",
+      "securityContext": {},
+      "schedulerName": "default-scheduler"
+     }
+    },
+    "serviceName": "db",
+    "podManagementPolicy": "OrderedReady",
+    "updateStrategy": {
+     "type": "RollingUpdate",
+     "rollingUpdate": {
+      "partition": 0
+     }
+    },
+    "revisionHistoryLimit": 10,
+    "persistentVolumeClaimRetentionPolicy": {
+     "whenDeleted": "Retain",
+     "whenScaled": "Retain"
+    }
+   },
+   "status": {
+    "observedGeneration": 1,
+    "replicas": 1,
+    "readyReplicas": 1,
+    "currentReplicas": 1,
+    "updatedReplicas": 1,
+    "currentRevision": "db-dc7d5b748",
+    "updateRevision": "db-dc7d5b748",
+    "collisionCount": 0,
+    "availableReplicas": 1
+   }
+  }
+ ]
+}

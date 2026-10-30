@@ -1,0 +1,103 @@
+{{define "content"}}
+{{$v := .Body}}{{$c := $v.C}}
+<div class="titlebar">
+  <div>
+    <h1>{{$c.Name}}</h1>
+    <p class="muted sub">{{template "ctr-state" $c}} · on <a href="{{.Base}}/hosts/{{$c.HostID}}/containers">{{$c.Hostname}}</a> ({{$c.Engine}}){{with $v.Stack}} · stack <a href="{{$.Base}}/stacks/{{.CIID}}">{{.Project}}</a>{{if $c.ComposeService}}, service {{$c.ComposeService}}{{end}}{{end}}</p>
+  </div>
+  <div>
+    {{if and $c.CanEdit $c.HostConnected}}<a class="button" href="{{.Base}}/changes/new?action=container.restart&amp;container={{$c.CIID}}">Restart…</a>{{end}}
+    <a class="button" href="{{.Base}}/cis/{{$c.CIID}}">CI and relationships</a>
+  </div>
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.MaskedRouters}}<p class="notice warn">This host's agent masked the rule of Traefik router{{if gt (len .) 1}}s{{end}} {{join . ", "}} as if it were a secret, so the hostnames it routes are missing. Update the agent (Settings → Agents) and they appear with its next report.</p>{{end}}
+{{if not $c.HostConnected}}<p class="notice warn">The host's agent is offline: this is the last state it reported.</p>{{end}}
+
+<div class="grid2">
+<section class="panel">
+  <h2>Image</h2>
+  <dl class="facts">
+    <dt>Reference</dt><dd class="mono">{{$c.Image}}</dd>
+    {{if and $c.CheckRef (ne $c.CheckRef $c.Image)}}<dt>Checked as</dt><dd class="mono small">{{$c.CheckRef}}</dd>{{end}}
+    <dt>Image ID</dt><dd class="mono small" title="{{$c.ImageID}}">{{short $c.ImageID 19}}</dd>
+    <dt>Pulled by</dt><dd class="mono small">{{range $c.ImageDigests}}<span title="{{.}}">{{digest .}}</span><br>{{else}}<span class="muted">no registry digest (built locally or loaded)</span>{{end}}</dd>
+    <dt>Registry</dt><dd>
+      {{if not $c.CheckRef}}<span class="muted">Not checked: the image was built locally or is pinned by digest.</span>
+      {{else if $c.CheckedAt.IsZero}}<span class="muted">Not checked yet.</span>
+      {{else}}
+        {{if $c.Pinned}}<span class="muted">Its stack is pinned, so updates aren't prompted.</span><br>{{end}}
+        {{if $c.Drift}}<span class="tag caution">newer image</span> the tag now points to <span class="mono small" title="{{$c.LatestDigest}}">{{digest $c.LatestDigest}}</span>
+        {{else if $c.LatestDigest}}<span class="tag ok">current</span> <span class="mono small" title="{{$c.LatestDigest}}">{{digest $c.LatestDigest}}</span>{{end}}
+        {{with $c.CheckError}}<br><span class="bad-text">Last check failed: {{.}}</span>{{end}}
+        <br><span class="muted small">checked {{ago $c.CheckedAt}}</span>
+      {{end}}
+      {{if and $c.CanEdit $c.CheckRef}}<form class="inline" method="post" action="{{.Base}}/containers/{{$c.CIID}}/check"><button class="small">Check now</button></form>{{end}}
+    </dd>
+  </dl>
+</section>
+
+<section class="panel">
+  <h2>Version tags</h2>
+  {{with $c.Rule}}
+    <p>Watching for newer <strong>{{.Track}}</strong> versions{{with .Include}}, tags matching <code>{{.}}</code>{{end}}{{with .Exclude}}, except <code>{{.}}</code>{{end}}{{if and $v.Stack $c.ComposeService}}, for every container of service {{$c.ComposeService}}{{end}}.</p>
+    {{with $c.Advice}}<p><span class="tag caution">{{.}} available</span> — changing the tag in the Compose file is up to you; Baseline never edits it.</p>{{else}}<p class="muted">No newer tag allowed by the rule{{if not $c.CheckRef}} (this image can't be checked){{end}}.</p>{{end}}
+  {{else}}
+    <p class="muted">Off. A semver rule suggests newer version tags, e.g. 1.5.2 when this runs 1.4.7. It's advice only: Baseline doesn't edit Compose files.</p>
+  {{end}}
+  {{if $c.CanEdit}}
+  <form class="inline-form" method="post" action="{{.Base}}/containers/{{$c.CIID}}/rule">
+    <label>Track
+      <select name="track">
+        <option value="off">off</option>
+        {{range $v.Tracks}}<option value="{{.}}"{{if and $c.Rule (eq $c.Rule.Track .)}} selected{{end}}>{{.}}</option>{{end}}
+      </select>
+    </label>
+    <label>Include (regexp)<input name="include" value="{{with $c.Rule}}{{.Include}}{{end}}" placeholder="optional"></label>
+    <label>Exclude (regexp)<input name="exclude" value="{{with $c.Rule}}{{.Exclude}}{{end}}" placeholder="optional"></label>
+    <button>Save</button>
+  </form>
+  <p class="muted small">patch: 1.4.x · minor: 1.x · major: anything newer. Tags with a suffix (1.27-alpine) are compared with tags of the same flavor.</p>
+  {{end}}
+</section>
+</div>
+
+<div class="grid2">
+<section class="panel">
+  <h2>Runtime</h2>
+  <dl class="facts">
+    <dt>State</dt><dd>{{template "ctr-state" $c}}</dd>
+    <dt>Started</dt><dd>{{ts $c.StartedAt}}</dd>
+    <dt>Created</dt><dd>{{ts $c.Created}}</dd>
+    <dt>Restart policy</dt><dd>{{$c.RestartPolicy}}</dd>
+    <dt>Engine ID</dt><dd class="mono small">{{short $c.ID 12}}</dd>
+    {{with $c.Pod}}<dt>Pod</dt><dd>{{.}}</dd>{{end}}
+    <dt>Networks</dt><dd>{{range $c.Networks}}<span class="tag">{{.}}</span> {{else}}—{{end}}</dd>
+  </dl>
+</section>
+<section class="panel">
+  <h2>Ports</h2>
+  {{with $c.Ports}}
+  <table class="plain">{{range .}}<tr><td class="mono">{{if .HostPort}}{{with .HostIP}}{{.}}:{{end}}{{.HostPort}} → {{end}}{{.ContainerPort}}/{{.Proto}}</td><td class="muted small">{{if not .HostPort}}exposed only{{end}}</td></tr>{{end}}</table>
+  {{else}}<p class="muted">None.</p>{{end}}
+</section>
+</div>
+
+{{template "served-hostnames" dict "Base" .Base "Hostnames" $v.Hostnames}}
+
+<h2>Mounts</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Destination</th><th>Type</th><th>Source</th><th>Mode</th></tr></thead>
+  <tbody>{{range $c.Mounts}}<tr><td class="mono">{{.Destination}}</td><td>{{.Type}}</td><td class="mono small">{{.Source}}</td><td>{{if .RW}}rw{{else}}ro{{end}}</td></tr>{{else}}<tr><td colspan="4" class="muted">None.</td></tr>{{end}}</tbody>
+</table></div>
+
+{{with $c.Labels}}
+<details class="panel"><summary><strong>Labels ({{len .}})</strong></summary>
+<div class="table-wrap"><table>
+  <tbody>{{range $k, $val := .}}<tr><td class="mono small">{{$k}}</td><td class="mono small wrap">{{$val}}</td></tr>{{end}}</tbody>
+</table></div>
+</details>
+{{end}}
+<p class="muted small">Changes to this container (image, ports, mounts…) are in the host's <a href="{{.Base}}/hosts/{{$c.HostID}}?tab=history">history</a>. CPU and memory are on its <a href="{{.Base}}/hosts/{{$c.HostID}}?tab=metrics">Metrics</a> tab.</p>
+{{end}}

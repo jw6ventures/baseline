@@ -1,0 +1,22 @@
+{{define "pg-result"}}<span class="tag{{if eq . "success"}} ok{{else if eq . "failed"}} warn{{else if or (eq . "partial") (eq . "blocked") (eq . "running")}} caution{{end}}">{{.}}</span>{{end}}
+{{define "content"}}
+{{$v := .Body}}
+<div class="titlebar">
+  <h1>Patch groups</h1>
+  {{if $v.IsAdmin}}<a class="button" href="{{.Base}}/patch-groups/new">New patch group</a>{{end}}
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+<p class="muted">A patch group patches a host group, or updates a list of Compose stacks, on a schedule. Each run is a Standard change made from an approved change model, so it needs no approval of its own. A group can wait for others: it runs only once the groups blocking it have succeeded and soaked, and with promotion on it installs only the package versions they validated, so <em>canary</em> tests what <em>prod</em> gets.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Group</th><th>Patches</th><th>Schedule</th><th>Change model</th><th>Waits for</th><th>Last run</th><th>Next run</th></tr></thead>
+  <tbody>{{range $v.Groups}}<tr{{if not .Enabled}} class="dim"{{end}}>
+    <td><a href="{{$.Base}}/patch-groups/{{.ID}}"><strong>{{.Name}}</strong></a>{{if not .Enabled}} <span class="tag">disabled</span>{{end}}{{with .Description}}<br><span class="muted small">{{.}}</span>{{end}}</td>
+    <td>{{if .Compose}}{{.Targets}}<br><span class="muted small">{{join .StackNames ", "}}</span>{{else}}{{.HostGroupName}}<br><span class="muted small">{{plural .Hosts "host"}}</span>{{end}}</td>
+    <td>{{with .Words}}{{.}}<br>{{end}}<span class="mono small">{{.Cron}}</span> <span class="muted small">{{.TZ}}</span>{{with .WindowName}}<br><span class="small">in {{.}}</span>{{end}}</td>
+    <td>{{.ModelName}}{{if ne .ModelState "approved"}}<br><span class="tag warn" title="Runs are skipped until the model is approved">{{.ModelState}}: runs skipped</span>{{end}}</td>
+    <td class="small">{{if .BlockedByNames}}{{join .BlockedByNames ", "}}{{if ne .Soak "0"}}<br><span class="muted">soak {{.Soak}}</span>{{end}}{{if lt .SuccessThreshold 100}}<br><span class="muted">≥{{.SuccessThreshold}}% of hosts</span>{{end}}{{else}}<span class="muted">—</span>{{end}}</td>
+    <td class="nowrap">{{with .Last}}{{template "pg-result" .Result}}<br><span class="muted small">{{ago .StartedAt}}</span>{{else}}<span class="muted">never</span>{{end}}</td>
+    <td class="nowrap">{{if .NextRun}}{{.NextRun}}<br><span class="muted small">{{.NextIn}}</span>{{else}}<span class="muted">—</span>{{end}}</td>
+  </tr>{{else}}<tr><td colspan="7" class="muted">No patch groups yet.{{if $v.IsAdmin}} <a href="{{$.Base}}/patch-groups/new">Add one</a>; it needs a host group and an approved change model (usually <em>Install updates</em>).{{end}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}

@@ -1,0 +1,331 @@
+{
+ "kind": "ServiceList",
+ "apiVersion": "v1",
+ "metadata": {
+  "resourceVersion": "959"
+ },
+ "items": [
+  {
+   "metadata": {
+    "name": "kubernetes",
+    "namespace": "default",
+    "uid": "7d83977f-1b2c-4db8-8330-538f2c83ecea",
+    "resourceVersion": "203",
+    "creationTimestamp": "2026-10-14T06:37:47Z",
+    "labels": {
+     "component": "apiserver",
+     "provider": "kubernetes"
+    }
+   },
+   "spec": {
+    "ports": [
+     {
+      "name": "https",
+      "protocol": "TCP",
+      "port": 443,
+      "targetPort": 6443
+     }
+    ],
+    "clusterIP": "10.43.0.1",
+    "clusterIPs": [
+     "10.43.0.1"
+    ],
+    "type": "ClusterIP",
+    "sessionAffinity": "None",
+    "ipFamilies": [
+     "IPv4"
+    ],
+    "ipFamilyPolicy": "SingleStack",
+    "internalTrafficPolicy": "Cluster"
+   },
+   "status": {
+    "loadBalancer": {}
+   }
+  },
+  {
+   "metadata": {
+    "name": "db",
+    "namespace": "demo",
+    "uid": "e2d64785-d46b-495c-8ff0-7815108628c9",
+    "resourceVersion": "730",
+    "creationTimestamp": "2026-10-14T06:38:22Z"
+   },
+   "spec": {
+    "ports": [
+     {
+      "protocol": "TCP",
+      "port": 5432,
+      "targetPort": 5432
+     }
+    ],
+    "selector": {
+     "app": "db"
+    },
+    "clusterIP": "None",
+    "clusterIPs": [
+     "None"
+    ],
+    "type": "ClusterIP",
+    "sessionAffinity": "None",
+    "ipFamilies": [
+     "IPv4"
+    ],
+    "ipFamilyPolicy": "SingleStack",
+    "internalTrafficPolicy": "Cluster"
+   },
+   "status": {
+    "loadBalancer": {}
+   }
+  },
+  {
+   "metadata": {
+    "name": "docs",
+    "namespace": "demo",
+    "uid": "d47fccd3-a571-4270-bfc6-70349f6ab51d",
+    "resourceVersion": "957",
+    "creationTimestamp": "2026-10-14T06:41:07Z",
+    "labels": {
+     "app": "docs"
+    }
+   },
+   "spec": {
+    "selector": {
+     "app": "docs"
+    },
+    "type": "ExternalName",
+    "sessionAffinity": "None",
+    "externalName": "docs.example.test"
+   },
+   "status": {
+    "loadBalancer": {}
+   }
+  },
+  {
+   "metadata": {
+    "name": "web",
+    "namespace": "demo",
+    "uid": "831a92be-7043-4e6b-9cbd-3f3dac82b23e",
+    "resourceVersion": "705",
+    "creationTimestamp": "2026-10-14T06:38:22Z"
+   },
+   "spec": {
+    "ports": [
+     {
+      "protocol": "TCP",
+      "port": 80,
+      "targetPort": "http"
+     }
+    ],
+    "selector": {
+     "app": "web"
+    },
+    "clusterIP": "10.43.164.47",
+    "clusterIPs": [
+     "10.43.164.47"
+    ],
+    "type": "ClusterIP",
+    "sessionAffinity": "None",
+    "ipFamilies": [
+     "IPv4"
+    ],
+    "ipFamilyPolicy": "SingleStack",
+    "internalTrafficPolicy": "Cluster"
+   },
+   "status": {
+    "loadBalancer": {}
+   }
+  },
+  {
+   "metadata": {
+    "name": "web-np",
+    "namespace": "demo",
+    "uid": "fcb2a023-92e5-4862-8a90-128163ea7816",
+    "resourceVersion": "956",
+    "creationTimestamp": "2026-10-14T06:38:22Z"
+   },
+   "spec": {
+    "ports": [
+     {
+      "protocol": "TCP",
+      "port": 8080,
+      "targetPort": 80,
+      "nodePort": 30080
+     }
+    ],
+    "selector": {
+     "app": "web"
+    },
+    "clusterIP": "10.43.139.168",
+    "clusterIPs": [
+     "10.43.139.168"
+    ],
+    "type": "NodePort",
+    "externalIPs": [
+     "192.0.2.10"
+    ],
+    "sessionAffinity": "None",
+    "externalTrafficPolicy": "Cluster",
+    "ipFamilies": [
+     "IPv4"
+    ],
+    "ipFamilyPolicy": "SingleStack",
+    "internalTrafficPolicy": "Cluster"
+   },
+   "status": {
+    "loadBalancer": {}
+   }
+  },
+  {
+   "metadata": {
+    "name": "kube-dns",
+    "namespace": "kube-system",
+    "uid": "8500fff7-222a-4ec8-9d21-cd95097f2058",
+    "resourceVersion": "290",
+    "creationTimestamp": "2026-10-14T06:37:52Z",
+    "labels": {
+     "k8s-app": "kube-dns",
+     "kubernetes.io/cluster-service": "true",
+     "kubernetes.io/name": "CoreDNS",
+     "objectset.rio.cattle.io/hash": "bce283298811743a0386ab510f2f67ef74240c57"
+    }
+   },
+   "spec": {
+    "ports": [
+     {
+      "name": "dns",
+      "protocol": "UDP",
+      "port": 53,
+      "targetPort": 53
+     },
+     {
+      "name": "dns-tcp",
+      "protocol": "TCP",
+      "port": 53,
+      "targetPort": 53
+     },
+     {
+      "name": "metrics",
+      "protocol": "TCP",
+      "port": 9153,
+      "targetPort": 9153
+     }
+    ],
+    "selector": {
+     "k8s-app": "kube-dns"
+    },
+    "clusterIP": "10.43.0.10",
+    "clusterIPs": [
+     "10.43.0.10"
+    ],
+    "type": "ClusterIP",
+    "sessionAffinity": "None",
+    "ipFamilies": [
+     "IPv4"
+    ],
+    "ipFamilyPolicy": "SingleStack",
+    "internalTrafficPolicy": "Cluster"
+   },
+   "status": {
+    "loadBalancer": {}
+   }
+  },
+  {
+   "metadata": {
+    "name": "traefik",
+    "namespace": "kube-system",
+    "uid": "26765718-2a5c-4005-a717-909ed5ac3a65",
+    "resourceVersion": "723",
+    "creationTimestamp": "2026-10-14T06:38:19Z",
+    "labels": {
+     "app.kubernetes.io/instance": "traefik-kube-system",
+     "app.kubernetes.io/managed-by": "Helm",
+     "app.kubernetes.io/name": "traefik",
+     "helm.sh/chart": "traefik-40.1.5_up40.1.0"
+    },
+    "finalizers": [
+     "service.kubernetes.io/load-balancer-cleanup"
+    ]
+   },
+   "spec": {
+    "ports": [
+     {
+      "name": "web",
+      "protocol": "TCP",
+      "port": 80,
+      "targetPort": "web",
+      "nodePort": 32618
+     },
+     {
+      "name": "websecure",
+      "protocol": "TCP",
+      "port": 443,
+      "targetPort": "websecure",
+      "nodePort": 32359
+     }
+    ],
+    "selector": {
+     "app.kubernetes.io/instance": "traefik-kube-system",
+     "app.kubernetes.io/name": "traefik"
+    },
+    "clusterIP": "10.43.255.128",
+    "clusterIPs": [
+     "10.43.255.128"
+    ],
+    "type": "LoadBalancer",
+    "sessionAffinity": "None",
+    "externalTrafficPolicy": "Cluster",
+    "ipFamilies": [
+     "IPv4"
+    ],
+    "ipFamilyPolicy": "PreferDualStack",
+    "allocateLoadBalancerNodePorts": true,
+    "internalTrafficPolicy": "Cluster"
+   },
+   "status": {
+    "loadBalancer": {
+     "ingress": [
+      {
+       "ip": "10.200.0.5",
+       "ipMode": "VIP"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "metadata": {
+    "name": "edge",
+    "namespace": "demo",
+    "creationTimestamp": "2026-10-14T06:40:00Z"
+   },
+   "spec": {
+    "type": "LoadBalancer",
+    "clusterIP": "10.43.7.7",
+    "ports": [
+     {
+      "name": "https",
+      "protocol": "TCP",
+      "port": 443,
+      "targetPort": "https",
+      "nodePort": 31443
+     }
+    ],
+    "selector": {
+     "app": "edge"
+    }
+   },
+   "status": {
+    "loadBalancer": {
+     "ingress": [
+      {
+       "hostname": "lb-1234.elb.example.test"
+      },
+      {
+       "ip": "198.51.100.7"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

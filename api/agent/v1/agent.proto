@@ -1,0 +1,265 @@
+// Agent <-> server protocol (docs/architecture.md §3).
+//
+// The agent always dials out. Enroll uses server-authenticated TLS (the
+// agent pins the CA by the fingerprint in its enrollment token); everything
+// else uses mutual TLS with the client cert issued at enrollment.
+//
+// Regenerate with `make proto`. The generated code is committed.
+
+syntax = "proto3";
+
+package baseline.agent.v1;
+
+option go_package = "github.com/jw6ventures/baseline/api/agent/v1;agentv1";
+
+service AgentGateway {
+  rpc Enroll(EnrollRequest) returns (EnrollResponse);
+  rpc Connect(stream AgentMessage) returns (stream ServerMessage);
+  // DownloadRelease streams an agent binary for self-update (mTLS).
+  rpc DownloadRelease(ReleaseRequest) returns (stream ReleaseChunk);
+}
+
+// HostIdentity is how the server recognizes a machine, and how it spots
+// clones (two hosts reporting the same machine-id or DMI UUID).
+message HostIdentity {
+  string machine_id = 1; // /etc/machine-id
+  string dmi_uuid = 2;   // /sys/class/dmi/id/product_uuid, if readable
+  string hostname = 3;
+}
+
+message EnrollRequest {
+  string token = 1;   // the full enrollment token
+  bytes csr_der = 2;  // the agent generates its key; it never leaves the host
+  HostIdentity identity = 3;
+  string agent_version = 4;
+}
+
+message EnrollResponse {
+  string agent_id = 1;          // subject of the client cert
+  bytes client_cert_der = 2;    // 90-day client cert
+  bytes ca_cert_der = 3;        // internal CA, pinned from now on
+  // The server's own release key. Only agents older than CI signing use
+  // it; current agents trust the release keys built into them.
+  bytes release_public_key = 4;
+}
+
+message AgentMessage {
+  oneof msg {
+    Hello hello = 1;
+    InventorySection inventory = 2;
+    Heartbeat heartbeat = 3;
+    CertRenewRequest cert_renew = 4;
+    MetricBatch metrics = 5;
+    JobEvent job_event = 6;
+    UpdateResult update_result = 7;
+    IntegrationResult integration_result = 8;
+  }
+}
+
+// Hello is the first message on every stream.
+message Hello {
+  string agent_version = 1;
+  HostIdentity identity = 2;
+  string boot_id = 3;              // /proc/sys/kernel/random/boot_id
+  int64 boot_time_unix = 4;        // btime from /proc/stat
+  repeated string capabilities = 5; // tools detected: apt, dnf, smartctl, docker...
+  // Content hash of each inventory section the agent currently holds. The
+  // server asks for the sections whose hash differs from its stored copy.
+  map<string, string> section_hashes = 6;
+  string arch = 7; // GOARCH of the running binary, for self-update
+  // The host owner's local policy from agent.conf. Agents that predate jobs
+  // (M4) don't send it, and the server sends them none.
+  Policy policy = 8;
+}
+
+// Policy limits what jobs a host accepts, whatever the server asks
+// (docs/architecture.md §5.3).
+message Policy {
+  bool allow_scripts = 1;
+  bool restrict_actions = 2;           // false: every action category is allowed
+  repeated string allowed_actions = 3; // categories, when restrict_actions is set
+  // self_update = off: the agent refuses UpdateAgent, and the server stops
+  // offering it updates.
+  bool self_update_off = 4;
+}
+
+// InventorySection is a full snapshot of one section. Sections are sent
+// whole, never as deltas; the server diffs them against its stored copy.
+message InventorySection {
+  string section = 1;      // os | hardware | packages | updates | smart | ...
+  uint32 schema_version = 2;
+  string content_hash = 3; // hex SHA-256 of payload_json
+  bytes payload_json = 4;  // internal/model types, JSON-encoded
+  string job_id = 5;       // set when collected again after a job, which caused the change
+}
+
+message Heartbeat {}
+
+message CertRenewRequest {
+  bytes csr_der = 1;
+}
+
+// MetricBatch is one collection of readings. The agent buffers batches while
+// it is disconnected and sends them in order when it reconnects.
+message MetricBatch {
+  int64 ts_unix = 1;   // when the readings were taken (agent clock)
+  int64 sent_unix = 2; // when the batch was sent (agent clock), to correct skew
+  repeated Metric metrics = 3;
+}
+
+message Metric {
+  string kind = 1;     // cpu | load | mem | disk | fs | net | smart
+  string name = 2;     // e.g. "read_iops"
+  string instance = 3; // device, mount or interface; "" for host-level
+  double value = 4;
+}
+
+// UpdateResult reports a self-update that failed: a bad download or
+// signature, or a new version that never connected and was rolled back.
+// Success shows as the new version in the next Hello.
+message UpdateResult {
+  string version = 1;
+  string error = 2;
+}
+
+message ServerMessage {
+  oneof msg {
+    Config config = 1;
+    RequestInventory request_inventory = 2;
+    CertRenewResponse cert_renew = 3;
+    RunJob run_job = 4;
+    CancelJob cancel_job = 5;
+    UpdateAgent update_agent = 6;
+    IntegrationPoll integration_poll = 7;
+  }
+}
+
+// Config is pushed on connect and whenever it changes.
+message Config {
+  map<string, uint32> interval_seconds = 1; // per section
+  uint32 heartbeat_seconds = 2;
+  uint32 metrics_seconds = 3;
+  // high_security: collect peripherals and NIC link state with hardware,
+  // and re-collect it as soon as the kernel reports a device or link
+  // coming or going.
+  bool high_security = 4;
+  // compose_roots: the directories the host's Compose stacks are deployed
+  // under (set on the server, while Compose stack management is on). The
+  // agent lists the stacks it finds there that aren't running.
+  repeated string compose_roots = 5;
+}
+
+message RequestInventory {
+  repeated string sections = 1; // empty = all
+}
+
+message CertRenewResponse {
+  bytes client_cert_der = 1;
+  string error = 2;
+}
+
+// UpdateAgent asks the agent to replace itself. It fetches the binary with
+// DownloadRelease and installs it only if the SHA-256 matches and one of
+// the signatures verifies against a release key built into the agent.
+message UpdateAgent {
+  string version = 1;
+  string arch = 2;
+  string sha256 = 3; // hex
+  // The server's own signature, for agents older than CI signing, which
+  // verify it against the key they pinned at enrollment.
+  bytes signature = 4;
+  int64 size = 5;
+  // Signatures made in CI when the release was built, each ed25519 over
+  // pki.ReleaseStatement(version, arch, sha256). The server only passes
+  // them on.
+  repeated bytes signatures = 6;
+}
+
+// IntegrationPoll asks the agent to read a system the server can't reach
+// itself, such as a UniFi controller on the host's network, and send back
+// what it found. Only agents that report the integration's capability get
+// one. The secret is held in memory for the one poll and never written.
+message IntegrationPoll {
+  string request_id = 1;   // echoed in the IntegrationResult
+  string kind = 2;         // unifi
+  bytes config_json = 3;   // the integration's settings (internal/unifi.Config)
+  string secret = 4;       // the API key
+  uint32 timeout_seconds = 5;
+}
+
+// IntegrationResult answers an IntegrationPoll: the snapshot as JSON
+// (internal/model), or why it couldn't be read.
+message IntegrationResult {
+  string request_id = 1;
+  bytes payload_json = 2;
+  string error = 3;
+}
+
+message ReleaseRequest {
+  string version = 1;
+  string arch = 2;
+}
+
+message ReleaseChunk {
+  bytes data = 1;
+}
+
+// RunJob asks the agent to run one typed action. job_id is an idempotency
+// key: an agent that already ran the job answers with the stored result
+// instead of running it again, and one still running it ignores the repeat.
+// The server sends unfinished jobs again whenever an agent connects.
+message RunJob {
+  string job_id = 1;
+  string action = 2;             // internal/action: pkg.upgrade, service.restart...
+  bytes params_json = 3;         // the action's parameters, validated by the server
+  uint32 timeout_seconds = 4;
+  string change_id = 5;          // the change record the job belongs to
+  Script script = 6;             // script.run only
+  StackFiles stack_files = 7;    // compose.deploy and compose.edit only
+}
+
+// StackFiles are the files of a compose.deploy or compose.edit job, kept out
+// of params_json, which the server stores and audits. The agent checks each
+// against its SHA-256 in the parameters.
+message StackFiles {
+  bytes compose = 1; // the new Compose file; empty when it stays as it is
+  bytes env = 2;     // the new .env; empty when it stays as it is
+}
+
+// Script is a library script version. The agent checks the body against
+// sha256 before it writes and runs it.
+message Script {
+  string interpreter = 1; // /bin/sh, /bin/bash or /usr/bin/python3
+  bytes body = 2;
+  string sha256 = 3;      // hex
+  repeated string args = 4;
+  map<string, string> env = 5;
+}
+
+// CancelJob is best effort: the agent stops the job's processes.
+message CancelJob {
+  string job_id = 1;
+}
+
+// JobEvent reports a job's progress. Output chunks are numbered per job, so
+// the server drops the ones it already has when the agent resends after a
+// reconnect.
+message JobEvent {
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    STARTED = 1;
+    OUTPUT = 2;
+    RESULT = 3;
+  }
+  string job_id = 1;
+  Type type = 2;
+  uint64 seq = 3;      // OUTPUT: 1, 2, 3... per job
+  string stream = 4;   // OUTPUT: stdout | stderr | info
+  bytes data = 5;      // OUTPUT
+  // RESULT: succeeded | failed | cancelled | timed_out | rejected, or
+  // rebooting for a job that finishes once the host is back.
+  string state = 6;
+  int32 exit_code = 7;
+  bytes result_json = 8; // structured result, e.g. package versions before and after
+  string error = 9;
+}

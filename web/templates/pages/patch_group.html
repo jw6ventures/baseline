@@ -1,0 +1,100 @@
+{{define "pg-result"}}<span class="tag{{if eq . "success"}} ok{{else if eq . "failed"}} warn{{else if or (eq . "partial") (eq . "blocked") (eq . "running")}} caution{{end}}">{{.}}</span>{{end}}
+{{define "content"}}
+{{$v := .Body}}{{$g := $v.Group}}
+<div class="titlebar">
+  <div>
+    <h1>{{$g.Name}}</h1>
+    <p class="muted sub">{{if not $g.Enabled}}<span class="tag">disabled</span> · {{end}}patch group · {{if $g.Compose}}{{$g.Targets}}{{else}}{{$g.HostGroupName}}, {{plural $g.Hosts "host"}}{{end}}</p>
+  </div>
+  <div>
+    {{if $v.CanRun}}<form method="post" action="{{.Base}}/patch-groups/{{$g.ID}}/run"><button>Run now</button></form>{{end}}
+    {{if $v.IsAdmin}}<a class="button" href="{{.Base}}/patch-groups/{{$g.ID}}/edit">Edit</a>{{end}}
+  </div>
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{with $v.Warn}}<p class="notice warn">{{.}}</p>{{end}}
+{{with $g.Description}}<p class="lead">{{.}}</p>{{end}}
+{{if ne $g.ModelState "approved"}}<p class="notice warn">Its change model, {{$g.ModelName}}, is {{$g.ModelState}}: runs are skipped until an approved model is in place.</p>{{end}}
+
+<section class="panel">
+  <h2>Settings</h2>
+  <dl class="facts">
+    {{if $g.Compose}}
+    <dt>Stacks</dt><dd>{{range $i, $id := $g.Stacks}}{{if $i}}<br>{{end}}<a href="{{$.Base}}/stacks/{{$id}}">{{index $g.StackNames $i}}</a>{{else}}<span class="muted">none: they were deleted</span>{{end}}</dd>
+    {{else}}
+    <dt>Hosts</dt><dd>{{$g.HostGroupName}} <span class="muted">({{plural $g.Hosts "host"}})</span></dd>
+    {{end}}
+    <dt>Schedule</dt><dd>{{with $v.Words}}{{.}}, {{end}}<span class="mono">{{$g.Cron}}</span> <span class="muted">{{$g.TZ}}</span></dd>
+    <dt>Window</dt><dd>{{with $g.WindowName}}<a href="{{$.Base}}/windows#w-{{$g.WindowID}}">{{.}}</a>{{else}}<span class="muted">none: runs start at the scheduled time</span>{{end}}</dd>
+    <dt>Change model</dt><dd><a href="{{.Base}}/change-models/{{$g.ModelID}}">{{$g.ModelName}}</a> {{if eq $g.ModelState "approved"}}<span class="tag ok">approved</span>{{else}}<span class="tag warn">{{$g.ModelState}}</span>{{end}} <span class="mono small">{{$v.Action}}</span></dd>
+    <dt>Waits for</dt><dd>{{range $i, $id := $g.BlockedBy}}{{if $i}}, {{end}}<a href="{{$.Base}}/patch-groups/{{$id}}">{{index $g.BlockedByNames $i}}</a>{{else}}<span class="muted">nothing</span>{{end}}
+      {{if $g.BlockedBy}}<br><span class="muted small">Their last run must have succeeded on at least {{$g.SuccessThreshold}}% of hosts{{if ne $v.Soak "0"}}, at least {{$v.Soak}} before this one{{end}}, and since this group last ran.</span>{{end}}</dd>
+    {{if $g.Compose}}<dt>Promotion</dt><dd>{{if $v.Promotes}}Dev, then Test or Staging, then Prod: a stack takes only the images its copy at the stage before has run{{if ne $v.Soak "0"}} for at least {{$v.Soak}}{{end}}; stacks without an earlier copy take everything newer{{else}}off: every stack takes whatever is newer{{end}}</dd>
+    {{else if $g.BlockedBy}}<dt>Promotion</dt><dd>{{if $v.Promotes}}installs only the package versions they validated; anything newer waits for the next cycle{{else if $g.PromoteValidated}}<span class="muted">on, but it applies only to pkg.upgrade models</span>{{else}}off: installs whatever is pending{{end}}</dd>{{end}}
+    {{with $v.Blocks}}<dt>Blocks</dt><dd>{{range $i, $o := .}}{{if $i}}, {{end}}<a href="{{$.Base}}/patch-groups/{{$o.ID}}">{{$o.Name}}</a>{{end}}</dd>{{end}}
+    <dt>Rollout</dt><dd>{{plural $g.Concurrency (or (and $g.Compose "stack") "host")}} at a time{{if $g.StopOnFailure}}, stopping at the first failure{{end}}</dd>
+    <dt>Next runs</dt><dd>{{if $g.Enabled}}{{range $v.NextRuns}}{{.}}<br>{{else}}<span class="muted">none</span>{{end}}{{else}}<span class="muted">disabled</span>{{end}}</dd>
+  </dl>
+  {{if $v.CanRun}}<p class="muted small">Run now starts a cycle at once, with the same checks as a scheduled run; the schedule is unchanged.</p>{{end}}
+</section>
+
+<h2>Cycles</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Scheduled for</th><th>Started</th><th>Result</th><th class="num">{{if $g.Compose}}Stacks{{else}}Hosts{{end}}</th><th>Change</th></tr></thead>
+  <tbody>{{range $v.Cycles}}<tr>
+    <td class="nowrap">{{time .ScheduledFor}}</td>
+    <td class="nowrap">{{time .StartedAt}}{{if not .FinishedAt.IsZero}}<br><span class="muted small">finished {{ago .FinishedAt}}</span>{{end}}</td>
+    <td>{{template "pg-result" .Result}}{{with .Reason}}<br><span class="muted small">{{.}}</span>{{end}}</td>
+    <td class="num">{{if .Hosts}}{{.Succeeded}}/{{.Hosts}}{{else}}—{{end}}</td>
+    <td class="nowrap">{{if .ChangeID}}<a href="{{$.Base}}/changes/{{.ChangeID}}">{{.ChangeRef}}</a>{{with .ChangeState}} <span class="muted small">{{human .}}</span>{{end}}{{else}}<span class="muted">—</span>{{end}}</td>
+  </tr>{{else}}<tr><td colspan="5" class="muted">It hasn't run yet.</td></tr>{{end}}</tbody>
+</table></div>
+
+{{range $i, $c := $v.Cycles}}{{if and (lt $i 3) (or $c.Planned $c.Validated)}}
+<details class="panel spaced"{{if eq $i 0}} open{{end}}>
+  <summary><strong>{{time $c.ScheduledFor}}</strong> {{template "pg-result" $c.Result}} <span class="muted small">{{plural (len $c.Planned) (or (and $g.Compose "stack") "host")}} planned{{if $c.Validated}}, {{plural (len $c.Validated) "package"}} validated{{end}}</span></summary>
+  {{if and $c.Planned $g.Compose}}
+  <h3>Plan</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Stack</th><th>Host</th><th>Updates</th><th class="num">Deferred</th><th>Note</th></tr></thead>
+    <tbody>{{range $c.Planned}}<tr{{if not .Job}} class="dim"{{end}}>
+      <td>{{if .StackID}}<a href="{{$.Base}}/stacks/{{.StackID}}">{{.Project}}</a>{{else}}{{.Project}}{{end}}</td>
+      <td><a href="{{$.Base}}/hosts/{{.HostID}}">{{.Hostname}}</a></td>
+      <td class="small">{{if .Services}}{{range $j, $s := .Services}}{{if $j}}, {{end}}<span class="mono">{{$s}}</span>{{end}}{{else if .Job}}<span class="muted">every service with a newer image</span>{{else}}<span class="muted">nothing</span>{{end}}</td>
+      <td class="num">{{if .Deferred}}{{.Deferred}}{{end}}</td>
+      <td class="small">{{.Note}}</td>
+    </tr>{{end}}</tbody>
+  </table></div>
+  {{else if $c.Planned}}
+  <h3>Plan</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Host</th><th>OS</th><th>Installs</th><th class="num">Deferred</th><th>Note</th></tr></thead>
+    <tbody>{{range $c.Planned}}{{$h := .}}<tr{{if not .Job}} class="dim"{{end}}>
+      <td><a href="{{$.Base}}/hosts/{{.HostID}}">{{.Hostname}}</a></td>
+      <td class="small">{{if ne .OS ":"}}{{.OS}}{{else}}<span class="muted">unknown</span>{{end}}</td>
+      <td class="small">{{if .Packages}}{{range $j, $p := .Packages}}{{if $j}}, {{end}}<span class="mono">{{$p}}</span>{{with index $h.Versions $p}} {{.}}{{end}}{{end}}{{else if .Job}}<span class="muted">everything pending, per the model</span>{{else}}<span class="muted">nothing</span>{{end}}
+        {{with .Image}}<br>image <span class="mono">{{.}}</span> {{$h.ImageVersion}}{{end}}</td>
+      <td class="num">{{if .Deferred}}{{.Deferred}}{{end}}</td>
+      <td class="small">{{.Note}}</td>
+    </tr>{{end}}</tbody>
+  </table></div>
+  {{end}}
+  {{if $c.Validated}}
+  <h3>Validated</h3>
+  <p class="muted small">Package versions this cycle installed successfully; groups it blocks install only these.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>OS</th><th>Manager</th><th>Package</th><th>Version</th></tr></thead>
+    <tbody>{{range $c.Validated}}<tr><td class="small">{{if ne .OS ":"}}{{.OS}}{{else}}<span class="muted">unknown</span>{{end}}</td><td class="small">{{.Manager}}</td><td class="mono small">{{.Name}}{{with .Arch}}.{{.}}{{end}}</td><td class="mono small">{{.Version}}</td></tr>{{end}}</tbody>
+  </table></div>
+  {{end}}
+</details>
+{{end}}{{end}}
+
+{{if $v.IsAdmin}}
+<section class="panel danger-zone spaced">
+  <h2>Delete</h2>
+  <p class="muted">Deleting removes the group and its cycle history; changes it made stay. Groups waiting for it stop waiting.</p>
+  <form method="post" action="{{.Base}}/patch-groups/{{$g.ID}}/delete"><button class="danger">Delete {{$g.Name}}</button></form>
+</section>
+{{end}}
+{{end}}

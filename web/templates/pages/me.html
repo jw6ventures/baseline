@@ -1,0 +1,66 @@
+{{define "content"}}
+<h1>Your access</h1>
+{{with .Body.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with .Body.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+<dl class="facts">
+  <dt>Name</dt><dd>{{.User.User.Name}}</dd>
+  <dt>Email</dt><dd>{{.User.User.Email}}</dd>
+  <dt>Subject</dt><dd><code>{{.User.User.OIDCSub}}</code></dd>
+  <dt>Authentik groups</dt><dd>{{range $i, $g := .User.Groups}}{{if $i}}, {{end}}<code>{{$g}}</code>{{else}}none{{end}}</dd>
+  <dt>Global roles</dt><dd>{{range $i, $r := .Body.Global}}{{if $i}}, {{end}}{{$r}}{{else}}none{{end}}</dd>
+  {{range .Body.Scoped}}
+  <dt>On host group {{.Group}}</dt><dd>{{range $i, $r := .Roles}}{{if $i}}, {{end}}{{$r}}{{end}}</dd>
+  {{end}}
+</dl>
+<p class="muted">Roles come from role bindings on your Authentik groups and are re-read on every request.</p>
+
+<h2>API tokens</h2>
+<p class="muted">A token lets a script call the JSON API at <code>{{.Body.APIURL}}</code> as you, with at most the roles you give it. Send it as <code>Authorization: Bearer …</code>. The API reads everything the UI shows you and can create and submit changes; it never approves one.</p>
+
+{{if .Body.NewToken}}
+<section class="panel highlight">
+  <h3>Token “{{.Body.NewName}}” created</h3>
+  <p>Copy it now: it is shown only once.</p>
+  <pre class="copy">{{.Body.NewToken}}</pre>
+  <p class="muted">Try it: <code>curl -H "Authorization: Bearer {{.Body.NewToken}}" {{.Body.APIURL}}/me</code></p>
+</section>
+{{end}}
+
+<div class="table-wrap"><table>
+  <thead><tr><th>Name</th><th>Roles</th><th>Created</th><th>Last used</th><th>Expires</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {{range .Body.Tokens}}
+  <tr{{if not .Usable}} class="dim"{{end}}>
+    <td><strong>{{.Name}}</strong></td>
+    <td>{{range .Roles}}<span class="tag">{{.}}</span> {{end}}</td>
+    <td class="nowrap">{{time .CreatedAt}}</td>
+    <td class="nowrap">{{if .LastUsed.IsZero}}never{{else}}{{time .LastUsed}}{{end}}</td>
+    <td class="nowrap">{{if .ExpiresAt.IsZero}}never{{else}}{{time .ExpiresAt}}{{end}}</td>
+    <td>{{if .Revoked}}revoked{{else if .Usable}}active{{else}}expired{{end}}</td>
+    <td class="actions">{{if not .Revoked}}<form method="post" action="{{$.Base}}/me/tokens/{{.ID}}/revoke"><button class="danger small">Revoke</button></form>{{end}}</td>
+  </tr>
+  {{else}}
+  <tr><td colspan="7" class="muted">No tokens yet.</td></tr>
+  {{end}}
+  </tbody>
+</table></div>
+
+{{if .Body.Roles}}
+<section>
+<h3>New token</h3>
+<form class="inline-form" method="post" action="{{.Base}}/me/tokens">
+  <label>Name <input name="name" required maxlength="100" placeholder="backup script"></label>
+  <fieldset class="checks"><legend>Roles</legend>
+    {{range .Body.Roles}}<label><input type="checkbox" name="role" value="{{.}}"{{if eq . "viewer"}} checked{{end}}> {{.}}</label>{{end}}
+  </fieldset>
+  <label>Expires in
+    <select name="lifetime">{{range .Body.Lifetimes}}<option value="{{.Value}}"{{if eq .Value "2160h"}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+  </label>
+  <button>Create token</button>
+</form>
+<p class="muted">A token has your access of today, limited to the roles you pick: viewer reads, operator also creates and submits changes. It keeps the Authentik groups of this session; new role bindings apply to it at once, like they do to you.</p>
+</section>
+{{else}}
+<p class="muted">You have no role yet, so you can't create a token.</p>
+{{end}}
+{{end}}

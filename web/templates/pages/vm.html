@@ -1,0 +1,49 @@
+{{define "content"}}
+{{$v := .Body}}{{$g := $v.Guest}}
+<div class="titlebar">
+  <div>
+    <h1>{{$g.Name}}</h1>
+    <p class="muted sub">{{template "guest-kind" $g}} on <a href="{{.Base}}/hosts/{{$g.HostID}}/vms">{{$g.Hostname}}</a> · {{template "guest-state" $g.State}}{{if $g.Template}} · <span class="tag">template</span>{{end}}{{range $g.Tags}} <span class="tag">{{.}}</span>{{end}}</p>
+  </div>
+  <div class="actions"><a class="button secondary" href="{{.Base}}/cis/{{$g.CIID}}">CI and relationships</a></div>
+</div>
+{{if not $g.Present}}<p class="notice warn">Gone: {{$g.Hostname}} hasn't reported this guest since {{time $v.Seen}}. {{if eq $g.Status "missing"}}Its CI is marked missing and kept, with its relationships and history, until someone deletes it.{{else}}Its CI turns missing an hour after that unless it shows up again, here or on another node.{{end}}</p>{{end}}
+{{if eq $g.Status "retired"}}<p class="notice">Retired: its hypervisor's agent was revoked.</p>{{end}}
+
+<div class="grid2">
+<section class="panel">
+  <h2>Guest</h2>
+  <dl class="facts">
+    <dt>Hypervisor</dt><dd><a href="{{.Base}}/hosts/{{$g.HostID}}/vms">{{$g.Hostname}}</a>{{if not $g.HostConnected}} <span class="muted">(offline)</span>{{end}}</dd>
+    <dt>{{if eq $g.Platform "proxmox"}}VMID{{else}}Domain UUID{{end}}</dt><dd class="mono">{{$g.ID}}</dd>
+    {{with $g.UUID}}{{if ne . $g.ID}}<dt>SMBIOS UUID</dt><dd class="mono">{{.}}</dd>{{end}}{{end}}
+    <dt>vCPUs</dt><dd>{{$g.CPUs}}</dd>
+    <dt>Memory</dt><dd>{{bytes $g.MemoryBytes}}</dd>
+    {{with $g.OSType}}<dt>OS type</dt><dd class="mono">{{.}}</dd>{{end}}
+    {{with $g.Machine}}<dt>Machine</dt><dd class="mono">{{.}}</dd>{{end}}
+    <dt>Starts on boot</dt><dd>{{if $g.Autostart}}yes{{else}}no{{end}}</dd>
+    {{with $g.HAState}}<dt>HA</dt><dd>{{.}}</dd>{{end}}
+  </dl>
+</section>
+<section class="panel">
+  <h2>Inside the guest</h2>
+  {{if $g.AgentHostID}}
+  <p>Its own agent reports as <a href="{{.Base}}/hosts/{{$g.AgentHostID}}"><strong>{{$g.AgentHostname}}</strong></a>: packages, updates, services and the rest are on that host's page.</p>
+  {{else}}
+  <p class="muted">No agent reports from inside this guest{{if eq $g.Kind "lxc"}}: none whose NIC MAC address matches{{else}}: none whose DMI product UUID or NIC MAC address matches{{end}}. What's shown here is what the hypervisor knows.</p>
+  {{end}}
+</section>
+</div>
+
+<h2>Disks</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Device</th><th>Source</th><th class="num">Size</th></tr></thead>
+  <tbody>{{range $g.Disks}}<tr><td class="mono">{{.Name}}{{if eq .Device "cdrom"}} <span class="tag">CD-ROM</span>{{end}}</td><td class="mono small">{{with .Source}}{{.}}{{else}}<span class="muted">empty</span>{{end}}</td><td class="num">{{if .SizeBytes}}{{bytes .SizeBytes}}{{end}}</td></tr>{{else}}<tr><td colspan="3" class="muted">None reported.</td></tr>{{end}}</tbody>
+</table></div>
+
+<h2>Network</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Interface</th><th>MAC</th><th>Bridge / network</th><th>Model</th><th>VLAN</th></tr></thead>
+  <tbody>{{range $g.NICs}}<tr><td class="mono">{{.Name}}</td><td class="mono">{{.MAC}}</td><td>{{with .Bridge}}{{.}}{{else}}{{.Network}}{{end}}</td><td>{{.Model}}</td><td>{{if .VLAN}}{{.VLAN}}{{end}}</td></tr>{{else}}<tr><td colspan="5" class="muted">None.</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}

@@ -1,0 +1,4 @@
+Version:  0.1.0
+RuntimeName:  containerd
+RuntimeVersion:  v2.3.4-k3s1.36
+RuntimeApiVersion:  v1

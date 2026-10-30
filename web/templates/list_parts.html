@@ -1,0 +1,171 @@
+{{/* The list engine (internal/list, docs/lists.md): one list UI for every
+     table. Everything works as plain links and GET forms; htmx (vendored)
+     swaps #list in place and list.js adds the cell menu, the builder's
+     operator narrowing and inline edits. */}}
+
+{{define "list-head"}}<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"historyCacheSize":0}'>
+<script src="{{.Base}}/static/vendor/htmx.min.js" defer></script>
+<script src="{{.Base}}/static/list.js" defer></script>{{end}}
+
+{{/* A list: *listView. */}}
+{{define "list"}}{{$v := .}}{{$b := .Base}}
+<div id="list" class="list" hx-boost="true" hx-target="#list" hx-select="#list" hx-swap="outerHTML"
+     data-path="{{$b}}{{.Path}}" data-query="{{.Encoded}}" data-groups="{{len .Query.Groups}}">
+{{with .Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{with .Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{range .Problems}}<p class="notice warn">{{.}}</p>{{end}}
+{{with .SelectForm}}<input type="hidden" name="query" value="{{$v.Encoded}}" form="{{.}}">{{end}}
+
+<nav class="ranges list-views" aria-label="Lists">
+  {{range .Views}}<a href="{{$b}}{{.URL}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
+  {{range .Saved}}<a href="{{$b}}{{.URL}}"{{if .Current}} aria-current="page"{{end}} title="{{if .Shared}}Shared list{{else}}Only you see this list{{end}}">{{.Name}}{{if .Shared}} <span class="small">· shared</span>{{end}}</a>{{end}}
+</nav>
+
+<form class="list-tools" method="get" action="{{$b}}{{.Path}}">
+  <input type="hidden" name="sort" value="{{if .Query.Sort.Desc}}-{{end}}{{.Query.Sort.Field}}">
+  <div class="list-bar">
+    <input type="search" name="q" value="{{.Query.Search}}" placeholder="Search {{lower .Table.Label}}" aria-label="Search">
+    <label class="list-group">Group by <select name="group" data-autosubmit>
+      <option value="">nothing</option>
+      {{range .GroupFields}}<option value="{{.Key}}"{{if eq .Key $v.Query.GroupBy}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select></label>
+    <button class="small">Search</button>
+  </div>
+
+  <details class="list-builder"{{if .Problems}} open{{end}}>
+    <summary>Filter{{with .Query.Groups}} · {{plural (len .) "group"}}{{end}}</summary>
+    {{range $g, $rows := .Builder}}
+    <fieldset class="cond-group"><legend>{{if $g}}or all of{{else}}All of{{end}}</legend>
+      {{range $rows}}{{template "cond-row" (dict "V" $v "R" .)}}{{end}}
+    </fieldset>
+    {{end}}
+    <fieldset class="cond-group"><legend>{{if .Builder}}or a new group{{else}}All of{{end}}</legend>
+      {{template "cond-row" (dict "V" $v "R" .NewGroup)}}
+    </fieldset>
+    <p class="muted small">Times take a span (30m, 12h, 7d, 2w) or a date (2026-10-01). Click a cell to show or hide rows like it.</p>
+    <button class="small">Run</button>
+  </details>
+
+  <details class="list-columns">
+    <summary>Columns</summary>
+    <fieldset class="checks">
+      {{range .Columns}}<label class="check"><input type="checkbox" name="cols" value="{{.Key}}"{{if .On}} checked{{end}}> {{.Label}}</label>{{end}}
+    </fieldset>
+    <button class="small">Apply</button>
+  </details>
+</form>
+
+{{if not .SelectURL}}<details class="list-save">
+  <summary>Save list</summary>
+  <form class="inline-form" method="post" action="{{$b}}/lists/{{.Table.Key}}/saved">
+    <input type="hidden" name="query" value="{{.Encoded}}">
+    <input type="hidden" name="path" value="{{.Path}}">
+    <input name="name" required maxlength="80" placeholder="Name" aria-label="List name">
+    {{if .CanShare}}<label class="check"><input type="checkbox" name="shared" value="1"> Share with everyone</label>{{end}}
+    <button class="small">Save</button>
+  </form>
+  {{range .Saved}}{{if and .Current .CanDelete}}
+  <form class="inline-form" method="post" action="{{$b}}/lists/{{$v.Table.Key}}/saved/{{.ID}}/delete">
+    <input type="hidden" name="back" value="{{$v.Encoded}}">
+    <input type="hidden" name="path" value="{{$v.Path}}">
+    <button class="small danger">Delete “{{.Name}}”</button>
+  </form>
+  {{end}}{{end}}
+</details>{{end}}
+
+{{if .Crumbs}}<p class="crumbs"><a href="{{$b}}{{.ClearURL}}">All {{lower .Table.Label}}</a>
+  {{range $g, $cs := .Crumbs}}{{if $g}} <span class="or">or</span>{{else}} ›{{end}}
+    {{range $i, $c := $cs}}{{if $i}} <span class="and">and</span>{{end}} <span class="crumb">{{.Label}}<a href="{{$b}}{{.Remove}}" title="Remove this condition" aria-label="Remove {{.Label}}">×</a></span>{{end}}
+  {{end}}</p>{{end}}
+
+{{if .Actions}}
+<form id="bulk-{{.Table.Key}}" class="bulk inline-form" method="post" action="{{$b}}/lists/{{.Table.Key}}/bulk">
+  <input type="hidden" name="back" value="{{.Encoded}}">
+  <input type="hidden" name="path" value="{{.Path}}">
+  <span class="muted small">With selected:</span>
+  <select name="action" aria-label="Action" data-bulk-action>{{range .Actions}}<option value="{{.Key}}">{{.Label}}</option>{{end}}</select>
+  <select name="value" aria-label="Value">{{range .Actions}}{{$a := .}}<optgroup label="{{.Label}}" data-action="{{.Key}}">{{range .Options}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</optgroup>{{end}}</select>
+  <button class="small">Apply</button>
+</form>
+{{end}}
+
+<div class="table-wrap"><table class="list-table">
+  <thead><tr>
+    {{if .SelectURL}}<th class="sel"><input type="checkbox" name="keep" value="1" data-select-all aria-label="Select every row on this page"{{if .AllTicked}} checked{{end}}
+      hx-post="{{$b}}{{.SelectURL}}" hx-include="#list input[name=row]" hx-vals='{"page": "1"}' hx-trigger="change" hx-swap="none"></th>
+    {{else if .Selection}}<th class="sel"><input type="checkbox" data-select-all aria-label="Select all rows"></th>{{end}}
+    {{range .Header}}<th{{with .Class}} class="{{.}}"{{end}}{{if .Sorted}} aria-sort="{{if .Desc}}descending{{else}}ascending{{end}}"{{end}}>{{if .URL}}<a href="{{$b}}{{.URL}}">{{.Label}}{{if .Sorted}}{{if .Desc}} ↓{{else}} ↑{{end}}{{end}}</a>{{else}}{{.Label}}{{end}}</th>{{end}}
+  </tr></thead>
+  <tbody>
+  {{range .Rows}}
+    {{if .GroupStart}}<tr class="group-row"><th colspan="{{$v.Colspan}}">{{$v.GroupField.Label}}: {{if or .Group.Text .Group.Tags}}{{template "list-value" .Group}}{{else}}<span class="muted">none</span>{{end}} <span class="muted small">({{.GroupCount}})</span></th></tr>{{end}}
+    <tr{{if .Dim}} class="dim"{{end}}>
+      {{if $v.SelectURL}}<td class="sel"><input type="hidden" name="row" value="{{.ID}}"><input type="checkbox" name="keep" value="1" data-row{{if not (index $v.Excluded .ID)}} checked{{end}} aria-label="Select row"
+        hx-post="{{$b}}{{$v.SelectURL}}" hx-vals='{"id": "{{.ID}}"}' hx-trigger="change" hx-swap="none"></td>
+      {{else if $v.Selection}}<td class="sel"><input type="checkbox" name="id" value="{{.ID}}" form="bulk-{{$v.Table.Key}}" aria-label="Select row"></td>{{end}}
+      {{range .Cells}}<td{{with .EditTag}} id="{{.}}"{{end}}{{with .Field.Class}} class="{{.}}"{{end}}{{if .Match}} data-f="{{.Field.Key}}" data-op="{{.Match}}" data-nop="{{.Exclude}}"{{if not .Tags}}{{if .Value}} data-v="{{.Value}}"{{end}}{{end}}{{end}}>{{template "list-cell" (dict "Base" $b "Cell" .)}}</td>{{end}}
+    </tr>
+  {{else}}
+    <tr><td colspan="{{$v.Colspan}}" class="muted">{{if or .Query.Groups .Query.Search}}Nothing matches.{{else}}No {{lower .Table.Label}} yet.{{end}}</td></tr>
+  {{end}}
+  </tbody>
+</table></div>
+<p class="list-pager muted small">{{if .Total}}{{.From}}–{{.To}} of {{.Total}}{{end}}{{with .Prev}} · <a href="{{$b}}{{.}}">Previous</a>{{end}}{{with .Next}} · <a href="{{$b}}{{.}}">Next</a>{{end}}</p>
+</div>
+{{end}}
+
+{{/* One builder row: dict "V" *listView "R" builderRow. A blank row (no
+     field) is how conditions are added; it is ignored until a field and,
+     for operators that need one, a value are filled in. */}}
+{{define "cond-row"}}{{$r := .R}}{{$v := .V}}
+<div class="cond-row">
+  <input type="hidden" name="cg" value="{{$r.Group}}">
+  <select name="cf" aria-label="Field" data-cond-field>
+    {{if not $r.Field}}<option value="">Add a condition…</option>{{end}}
+    {{range $v.Fields}}<option value="{{.Key}}" data-type="{{.Type.Name}}"{{with .Options}} data-options="{{optionsJSON .}}"{{end}}{{if and $r.Field (eq .Key $r.Field.Key)}} selected{{end}}>{{.Label}}</option>{{end}}
+  </select>
+  <select name="co" aria-label="Operator" data-cond-op>
+    {{range $v.AllOps}}<option value="{{.}}" data-types="{{opTypes .}}"{{if eq . $r.Op}} selected{{end}}{{if and $r.Field (not (opFits $r.Field .))}} hidden{{end}}>{{.Label}}</option>{{end}}
+  </select>
+  {{if and $r.Field $r.Field.Options}}
+  <select name="cv" aria-label="Value" data-cond-value>{{range $r.Field.Options}}<option value="{{.Value}}"{{if eq .Value $r.Value}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+  {{else}}
+  <input name="cv" value="{{$r.Value}}" aria-label="Value" placeholder="value" data-cond-value>
+  {{end}}
+  {{with $r.Remove}}<a class="cond-remove" href="{{$v.Base}}{{.}}" title="Remove this condition" aria-label="Remove this condition">×</a>{{end}}
+</div>
+{{end}}
+
+{{/* A cell's contents: dict "Base" .Base "Cell" cellView. */}}
+{{define "list-cell"}}{{$c := .Cell}}{{if $c.Link}}<a href="{{.Base}}{{$c.Link}}">{{template "list-value" $c}}</a>{{else}}{{template "list-value" $c}}{{end}}{{if $c.Edit}} <button type="button" class="link cell-edit" hx-get="{{.Base}}{{$c.Edit}}/edit" hx-target="#{{$c.EditTag}}" hx-select="unset" hx-swap="innerHTML" hx-push-url="false" title="Edit" aria-label="Edit {{$c.Field.Label}}">✎</button>{{end}}{{end}}
+
+{{/* A value, styled by its field: cellView. */}}
+{{define "list-value"}}{{if .Tags}}{{$f := .Field}}{{range .Tags}}<span class="tag{{if eq $f.Badge "flag"}} {{flagClass .}}{{end}}"{{if eq $f.Badge "color"}}{{with $f.OptionColor .}} style="{{chipStyle .}}"{{end}}{{end}} data-v="{{.}}">{{.}}</span> {{end}}
+{{- else if eq .Field.Badge "color"}}{{if .Raw}}<span class="tag"{{with .Field.OptionColor .Raw}} style="{{chipStyle .}}"{{end}}>{{.Text}}</span>{{end}}
+{{- else if eq .Field.Badge "job"}}<span class="tag {{jobClass .Raw}}">{{.Text}}</span>
+{{- else if eq .Field.Badge "change"}}<span class="tag {{changeClass .Raw}}">{{.Text}}</span>
+{{- else if eq .Field.Badge "kind"}}{{template "change-kind" .Raw}}
+{{- else if eq .Field.Badge "ci"}}{{template "ci-status" .Raw}}
+{{- else if eq .Field.Badge "host"}}<span class="dot {{if eq .Raw "online"}}on{{else}}off{{end}}"></span>{{.Text}}
+{{- else if eq .Field.Badge "item-status"}}{{template "item-status" .Raw}}
+{{- else if eq .Field.Badge "item-priority"}}{{template "item-priority" .Raw}}
+{{- else if eq .Field.Badge "action"}}{{human .Text}}
+{{- else if eq .Field.Badge "state"}}{{if .Raw}}{{template "guest-state" .Raw}}{{end}}
+{{- else if eq .Field.Badge "health"}}{{if eq .Raw "healthy"}}<span class="tag ok">healthy</span>{{else if eq .Raw "unhealthy"}}<span class="tag warn">unhealthy</span>{{else if .Raw}}<span class="tag">{{.Text}}</span>{{end}}
+{{- else if eq .Field.Badge "update"}}{{if or (eq .Raw "newer_image") (eq .Raw "new_version")}}<span class="tag caution">{{.Text}}</span>{{else if eq .Raw "check_failed"}}<span class="bad-text small">{{.Text}}</span>{{else}}<span class="muted">{{.Text}}</span>{{end}}
+{{- else if eq .Field.Badge "security"}}{{if and .Raw (ne .Raw "0")}}<span class="tag warn">{{.Text}}</span>{{else}}{{.Text}}{{end}}
+{{- else if eq .Field.Badge "severity"}}<span class="tag sev-{{.Raw}}">{{.Text}}</span>
+{{- else if eq .Field.Badge "model"}}{{template "model-state" (dict "State" .Raw)}}
+{{- else if eq .Field.Badge "window-kind"}}{{if eq .Raw "freeze"}}<span class="tag caution">freeze</span>{{else}}{{.Text}}{{end}}
+{{- else if eq .Field.Badge "window-state"}}{{if eq .Raw "open"}}<span class="tag ok">{{.Text}}</span>{{else if eq .Raw "error"}}<span class="bad-text small">{{.Text}}</span>{{else}}<span class="muted">{{.Text}}</span>{{end}}
+{{- else if .Title}}<span title="{{.Title}}">{{.Text}}</span>
+{{- else}}{{.Text}}{{end}}{{end}}
+
+{{/* An inline edit form in place of a cell: cellEditView. */}}
+{{define "list-cell-edit"}}<form class="cell-form" hx-post="{{.Base}}/lists/{{.Table}}/rows/{{.ID}}/{{.Cell.Field.Key}}" hx-target="#{{.Tag}}" hx-select="unset" hx-swap="innerHTML" hx-push-url="false">
+  {{if eq .Editor.Input "select"}}<select name="value" aria-label="{{.Cell.Field.Label}}">{{range .Options}}<option value="{{.Value}}"{{if eq .Value $.Value}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+  {{else}}<input name="value" value="{{.Value}}" aria-label="{{.Cell.Field.Label}}"{{if eq .Editor.Input "tags"}} placeholder="tags, comma separated"{{end}} autofocus>{{end}}
+  <button class="small">Save</button>
+  <button type="button" class="link" hx-get="{{.Base}}/lists/{{.Table}}/rows/{{.ID}}/{{.Cell.Field.Key}}" hx-target="#{{.Tag}}" hx-select="unset" hx-swap="innerHTML" hx-push-url="false">Cancel</button>
+  {{with .Error}}<span class="bad-text small">{{.}}</span>{{end}}
+</form>{{end}}

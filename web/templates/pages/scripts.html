@@ -1,0 +1,17 @@
+{{define "content"}}
+{{$v := .Body}}
+<div class="titlebar">
+  <h1>Scripts</h1>
+  {{if $v.IsAdmin}}<a class="button" href="{{.Base}}/scripts/new">New script</a>{{end}}
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+<p class="muted">The library of scripts that can run on hosts. There's no free-form shell: only these run, each version is immutable and identified by its SHA-256, which the agent checks before running it. Admins add and edit scripts; running one is a change like any other, and a host's <code>agent.conf</code> can refuse scripts altogether (<code>allow_scripts = false</code>).</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Script</th><th>Interpreter</th><th>Risk</th><th class="num">Version</th><th class="num">Runs</th><th>Updated</th></tr></thead>
+  <tbody>{{range $v.Scripts}}<tr{{if .Archived}} class="dim"{{end}}>
+    <td><a href="{{$.Base}}/scripts/{{.ID}}"><strong>{{.Name}}</strong></a>{{if .Archived}} <span class="tag">archived</span>{{end}}{{with .Description}}<br><span class="muted small">{{.}}</span>{{end}}</td>
+    <td class="mono">{{.Interpreter}}</td><td>{{.Risk}}</td><td class="num">{{.Latest}}</td><td class="num">{{.Runs}}</td>
+    <td class="nowrap">{{ago .LatestAt}}</td>
+  </tr>{{else}}<tr><td colspan="6" class="muted">The library is empty.{{if $v.IsAdmin}} <a href="{{$.Base}}/scripts/new">Add a script</a>.{{end}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}

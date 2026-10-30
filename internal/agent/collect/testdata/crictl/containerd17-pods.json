@@ -1,0 +1,106 @@
+{
+  "items": [
+    {
+      "id": "8f1c0e6a3e1b2d4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f",
+      "metadata": {
+        "name": "coredns-64fd4b4794-7xk2p",
+        "uid": "0b6f1d2e-3c4a-4b5c-8d9e-0f1a2b3c4d5e",
+        "namespace": "kube-system",
+        "attempt": 0
+      },
+      "state": "SANDBOX_READY",
+      "createdAt": "1760423515123456789",
+      "labels": {
+        "io.kubernetes.pod.name": "coredns-64fd4b4794-7xk2p",
+        "io.kubernetes.pod.namespace": "kube-system",
+        "io.kubernetes.pod.uid": "0b6f1d2e-3c4a-4b5c-8d9e-0f1a2b3c4d5e",
+        "k8s-app": "kube-dns",
+        "pod-template-hash": "64fd4b4794"
+      },
+      "annotations": {
+        "kubernetes.io/config.seen": "2025-10-14T06:31:54.912345678Z",
+        "kubernetes.io/config.source": "api"
+      },
+      "runtimeHandler": ""
+    },
+    {
+      "id": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
+      "metadata": {
+        "name": "local-path-provisioner-774c6665dc-q8h4m",
+        "uid": "6a7b8c9d-0e1f-4a2b-9c3d-4e5f6a7b8c9d",
+        "namespace": "kube-system",
+        "attempt": 0
+      },
+      "state": "SANDBOX_NOTREADY",
+      "createdAt": "1760423514000000000",
+      "labels": {
+        "io.kubernetes.pod.name": "local-path-provisioner-774c6665dc-q8h4m",
+        "io.kubernetes.pod.namespace": "kube-system",
+        "io.kubernetes.pod.uid": "6a7b8c9d-0e1f-4a2b-9c3d-4e5f6a7b8c9d",
+        "app": "local-path-provisioner",
+        "pod-template-hash": "774c6665dc"
+      },
+      "annotations": {},
+      "runtimeHandler": ""
+    },
+    {
+      "id": "2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c",
+      "metadata": {
+        "name": "local-path-provisioner-774c6665dc-q8h4m",
+        "uid": "6a7b8c9d-0e1f-4a2b-9c3d-4e5f6a7b8c9d",
+        "namespace": "kube-system",
+        "attempt": 1
+      },
+      "state": "SANDBOX_READY",
+      "createdAt": "1760427102000000000",
+      "labels": {
+        "io.kubernetes.pod.name": "local-path-provisioner-774c6665dc-q8h4m",
+        "io.kubernetes.pod.namespace": "kube-system",
+        "io.kubernetes.pod.uid": "6a7b8c9d-0e1f-4a2b-9c3d-4e5f6a7b8c9d",
+        "app": "local-path-provisioner",
+        "pod-template-hash": "774c6665dc"
+      },
+      "annotations": {},
+      "runtimeHandler": ""
+    },
+    {
+      "id": "3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d",
+      "metadata": {
+        "name": "helm-install-traefik-crd-5wz9l",
+        "uid": "7b8c9d0e-1f2a-4b3c-8d4e-5f6a7b8c9d0e",
+        "namespace": "kube-system",
+        "attempt": 0
+      },
+      "state": "SANDBOX_NOTREADY",
+      "createdAt": "1760423516000000000",
+      "labels": {
+        "batch.kubernetes.io/job-name": "helm-install-traefik-crd",
+        "io.kubernetes.pod.name": "helm-install-traefik-crd-5wz9l",
+        "io.kubernetes.pod.namespace": "kube-system",
+        "io.kubernetes.pod.uid": "7b8c9d0e-1f2a-4b3c-8d4e-5f6a7b8c9d0e"
+      },
+      "annotations": {},
+      "runtimeHandler": ""
+    },
+    {
+      "id": "4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e",
+      "metadata": {
+        "name": "web-6d4cf56db6-jx2tq",
+        "uid": "8c9d0e1f-2a3b-4c4d-9e5f-6a7b8c9d0e1f",
+        "namespace": "demo",
+        "attempt": 0
+      },
+      "state": "SANDBOX_READY",
+      "createdAt": "1760424000000000000",
+      "labels": {
+        "app": "web",
+        "io.kubernetes.pod.name": "web-6d4cf56db6-jx2tq",
+        "io.kubernetes.pod.namespace": "demo",
+        "io.kubernetes.pod.uid": "8c9d0e1f-2a3b-4c4d-9e5f-6a7b8c9d0e1f",
+        "pod-template-hash": "6d4cf56db6"
+      },
+      "annotations": {},
+      "runtimeHandler": ""
+    }
+  ]
+}
