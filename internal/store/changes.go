@@ -177,6 +177,8 @@ type NewChange struct {
 	// Revisions are the files of compose.deploy and compose.edit steps,
 	// stored with the change.
 	Revisions []ComposeRevision
+	// Manifests are the manifests of k8s.deploy and k8s.edit steps.
+	Manifests []Manifest
 }
 
 const changeCols = `c.id, c.number, c.kind, c.title, c.description, c.justification, c.risk, c.impact, c.backout_plan,
@@ -405,6 +407,9 @@ func (s *Store) CreateChange(ctx context.Context, actor Actor, nc NewChange) (Ch
 			}
 		}
 		if err := insertRevisions(ctx, tx, id, userID, nc.Revisions); err != nil {
+			return err
+		}
+		if err := insertManifests(ctx, tx, id, userID, nc.Manifests); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `

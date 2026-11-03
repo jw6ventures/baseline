@@ -71,6 +71,12 @@
       "images": [
         "baseline-agent:latest"
       ],
+      "containers": [
+        {
+          "name": "agent",
+          "image": "baseline-agent:latest"
+        }
+      ],
       "created": "2026-10-14T06:38:22Z"
     },
     {
@@ -81,6 +87,12 @@
       "ready": 0,
       "images": [
         "busybox:1.37"
+      ],
+      "containers": [
+        {
+          "name": "backup",
+          "image": "busybox:1.37"
+        }
       ],
       "schedule": "17 3 * * *",
       "suspend": true,
@@ -96,6 +108,17 @@
         "busybox:1.37",
         "nginx:1.29-alpine"
       ],
+      "containers": [
+        {
+          "name": "web",
+          "image": "nginx:1.29-alpine"
+        },
+        {
+          "name": "init",
+          "image": "busybox:1.37",
+          "init": true
+        }
+      ],
       "created": "2026-10-14T06:38:22Z"
     },
     {
@@ -106,6 +129,12 @@
       "ready": 1,
       "images": [
         "busybox:1.37"
+      ],
+      "containers": [
+        {
+          "name": "debug",
+          "image": "busybox:1.37"
+        }
       ],
       "node": "b0fcff6f35da",
       "created": "2026-10-14T06:38:22Z"
@@ -119,6 +148,12 @@
       "images": [
         "busybox:1.37"
       ],
+      "containers": [
+        {
+          "name": "db",
+          "image": "busybox:1.37"
+        }
+      ],
       "created": "2026-10-14T06:38:22Z"
     },
     {
@@ -129,6 +164,16 @@
       "ready": 1,
       "images": [
         "rancher/klipper-lb:v0.4.17"
+      ],
+      "containers": [
+        {
+          "name": "lb-tcp-80",
+          "image": "rancher/klipper-lb:v0.4.17"
+        },
+        {
+          "name": "lb-tcp-443",
+          "image": "rancher/klipper-lb:v0.4.17"
+        }
       ],
       "created": "2026-10-14T06:38:19Z"
     },
@@ -141,6 +186,12 @@
       "images": [
         "rancher/mirrored-coredns-coredns:1.14.7"
       ],
+      "containers": [
+        {
+          "name": "coredns",
+          "image": "rancher/mirrored-coredns-coredns:1.14.7"
+        }
+      ],
       "created": "2026-10-14T06:37:52Z"
     },
     {
@@ -152,6 +203,12 @@
       "images": [
         "rancher/local-path-provisioner:v0.0.37"
       ],
+      "containers": [
+        {
+          "name": "local-path-provisioner",
+          "image": "rancher/local-path-provisioner:v0.0.37"
+        }
+      ],
       "created": "2026-10-14T06:37:52Z"
     },
     {
@@ -162,6 +219,12 @@
       "ready": 1,
       "images": [
         "rancher/mirrored-library-traefik:3.7.13"
+      ],
+      "containers": [
+        {
+          "name": "traefik",
+          "image": "rancher/mirrored-library-traefik:3.7.13"
+        }
       ],
       "created": "2026-10-14T06:38:19Z"
     }

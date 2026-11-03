@@ -86,6 +86,23 @@
 </section>
 {{end}}
 
+{{range $v.Manifests}}
+<section class="panel">
+  <h2>{{if eq .Action "k8s.deploy"}}New bundle{{else}}Manifest of bundle{{end}} {{.Bundle}} <span class="muted small">(namespace {{.Namespace}})</span></h2>
+  <p class="small">{{range $i, $o := .Objects}}{{if $i}}, {{end}}<span class="mono">{{$o}}</span>{{end}}</p>
+  <details{{if not .Base}} open{{end}}>
+    <summary><strong>Manifest</strong> <span class="muted small mono">sha256 {{short .ManifestSHA256 12}}</span></summary>
+    <pre class="file">{{.Manifest}}</pre>
+  </details>
+  {{with .Base}}
+  <details>
+    <summary>The manifest it replaces, from <a href="{{$.Base}}/changes/{{.ChangeID}}">{{.ChangeRef}}</a> <span class="muted small mono">sha256 {{short .ManifestSHA256 12}}</span></summary>
+    <pre class="file">{{.Manifest}}</pre>
+  </details>
+  {{end}}
+</section>
+{{end}}
+
 <h2>Jobs</h2>
 {{template "job-table" (dict "Base" .Base "Jobs" $v.Jobs)}}
 

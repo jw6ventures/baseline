@@ -29,6 +29,12 @@ type changeRequest struct {
 	// each, on its host, with params.services applying to all of them.
 	Stacks []string `json:"stacks"`
 	Stack  string   `json:"stack"` // shorthand for one
+	// Workloads are the Kubernetes workload CIs of a k8s.* change (but
+	// k8s.deploy and k8s.edit): a step for each, on its cluster agent, with
+	// params (pod, replicas, images, health_timeout) applying to all of
+	// them. k8s.set_image and k8s.delete_pod take one.
+	Workloads []string `json:"workloads"`
+	Workload  string   `json:"workload"` // shorthand for one
 	// Model makes a Standard change from an approved change model, which
 	// fixes the action and its parameters.
 	Model string `json:"model"`
@@ -115,7 +121,53 @@ func (s *Server) createChangeFromAPI(r *http.Request, req changeRequest) (store.
 	var fileStep *store.PlanStep
 	var revs []store.ComposeRevision
 	var fileCI, fileObject string
+	var manifests []store.Manifest
+	var wsteps []store.PlanStep
+	var wcis, wobjects []string
+	if req.Workload != "" {
+		req.Workloads = append(req.Workloads, req.Workload)
+	}
+	if len(req.Workloads) > 0 && !action.IsK8sWorkloadAction(spec.Name) {
+		return zero, bad("workloads only apply to the k8s.* workload actions")
+	}
 	switch {
+	case spec.Name == action.K8sDeploy || spec.Name == action.K8sEdit:
+		if model != nil {
+			return zero, bad("Kubernetes manifests don't come from change models")
+		}
+		in, err := apiManifest(spec, req)
+		if err != nil {
+			return zero, err
+		}
+		step, rev, ci, err := s.manifestPlan(r, spec, in, hosts)
+		if err != nil {
+			return zero, bad("%s", err)
+		}
+		fileStep, manifests, fileCI, fileObject = &step, []store.Manifest{rev}, ci, rev.Bundle
+		req.Hosts = step.HostIDs
+	case action.IsK8sWorkloadAction(spec.Name):
+		if model != nil {
+			return zero, bad("Kubernetes actions don't come from change models")
+		}
+		if len(req.Hosts) > 0 || len(req.Stacks) > 0 || len(req.Containers) > 0 {
+			return zero, bad("a %s change names workloads (workloads); their cluster agents follow", spec.Name)
+		}
+		var in k8sInput
+		if len(req.Params) > 0 {
+			if err := strictUnmarshal(req.Params, &in); err != nil {
+				return zero, bad("%s (the workload names kind, namespace and name)", err)
+			}
+		}
+		ws, err := s.loadWorkloads(r, spec, req.Workloads, hosts)
+		if err != nil {
+			return zero, bad("%s", err)
+		}
+		if wsteps, wcis, wobjects, err = workloadSteps(spec, ws, in); err != nil {
+			return zero, bad("%s", err)
+		}
+		for _, wl := range ws {
+			req.Hosts = append(req.Hosts, wl.HostID)
+		}
 	case spec.OwnForm:
 		if model != nil {
 			return zero, bad("deploys and edits of Compose stacks don't come from change models")
@@ -194,6 +246,8 @@ func (s *Server) createChangeFromAPI(r *http.Request, req changeRequest) (store.
 		if fileCI != "" {
 			cis = []string{fileCI}
 		}
+	case wsteps != nil:
+		steps, cis, objects, risk = wsteps, wcis, wobjects, spec.Risk
 	case stacks != nil:
 		for _, st := range stacks {
 			var step store.PlanStep
@@ -275,7 +329,7 @@ func (s *Server) createChangeFromAPI(r *http.Request, req changeRequest) (store.
 		Kind: kind, Description: strings.TrimSpace(req.Description), Justification: strings.TrimSpace(req.Justification),
 		Risk: risk, BackoutPlan: strings.TrimSpace(req.BackoutPlan), TestPlan: strings.TrimSpace(req.TestPlan),
 		StopOnFailure: req.StopOnFailure == nil || *req.StopOnFailure,
-		Steps:         steps, Draft: draft, CIs: cis, Revisions: revs,
+		Steps:         steps, Draft: draft, CIs: cis, Revisions: revs, Manifests: manifests,
 		WindowID: req.Window, OnWindowEnd: store.WindowCarryOver,
 		RequiredApprovals: req.RequiredApprovals, Concurrency: max(req.Concurrency, 1),
 	}
@@ -350,6 +404,38 @@ type stackFilesParams struct {
 	// host's file is another one by now.
 	BaseSHA256    string `json:"base_sha256"`
 	HealthTimeout int    `json:"health_timeout"`
+}
+
+// manifestParams are the params of a k8s.deploy or k8s.edit request: the
+// step's own (action.K8sManifestParams) are filled in by the server, which
+// keeps the manifest and sends it with the job.
+type manifestParams struct {
+	Cluster       string `json:"cluster"` // the cluster CI
+	Bundle        string `json:"bundle"`
+	Namespace     string `json:"namespace"` // k8s.deploy: where objects that name none go
+	Manifest      string `json:"manifest"`
+	HealthTimeout int    `json:"health_timeout"`
+}
+
+// apiManifest reads a k8s.deploy or k8s.edit request.
+func apiManifest(spec action.Spec, req changeRequest) (manifestInput, error) {
+	var p manifestParams
+	if len(req.Params) > 0 {
+		if err := strictUnmarshal(req.Params, &p); err != nil {
+			return manifestInput{}, bad("%s", err)
+		}
+	}
+	if len(req.Hosts) > 0 || len(req.Stacks) > 0 || len(req.Containers) > 0 {
+		return manifestInput{}, bad("a %s change names its cluster in params.cluster", spec.Name)
+	}
+	if p.Cluster == "" || p.Bundle == "" {
+		return manifestInput{}, bad("params.cluster and params.bundle name the cluster and the bundle")
+	}
+	if spec.Name == action.K8sDeploy && p.Namespace == "" {
+		return manifestInput{}, bad("params.namespace is where objects that name no namespace go")
+	}
+	return manifestInput{Cluster: p.Cluster, Bundle: p.Bundle, Namespace: p.Namespace, Manifest: p.Manifest,
+		HealthTimeout: p.HealthTimeout}, nil
 }
 
 // apiStackFiles reads a compose.deploy or compose.edit request.

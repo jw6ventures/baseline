@@ -16,6 +16,10 @@ import (
 // pollUniFi reads a UniFi console; tests replace it.
 var pollUniFi = unifi.Poll
 
+// PollFunc answers one kind of poll from the server with what it read,
+// which is sent as JSON.
+type PollFunc func(ctx context.Context, config []byte) (any, error)
+
 // maxPollTime bounds an integration poll whatever the server asks.
 const maxPollTime = 5 * time.Minute
 
@@ -33,7 +37,8 @@ func (a *Agent) capabilities() []string {
 // as the poll.
 func (a *Agent) pollIntegration(ctx context.Context, p *agentv1.IntegrationPoll) *agentv1.IntegrationResult {
 	res := &agentv1.IntegrationResult{RequestId: p.GetRequestId()}
-	if !a.Integrations {
+	poll := a.Polls[p.GetKind()]
+	if poll == nil && !a.Integrations {
 		res.Error = "integrations are off in this host's agent.conf (integrations = off)"
 		return res
 	}
@@ -45,8 +50,10 @@ func (a *Agent) pollIntegration(ctx context.Context, p *agentv1.IntegrationPoll)
 	defer cancel()
 	var out any
 	var err error
-	switch p.GetKind() {
-	case "unifi":
+	switch {
+	case poll != nil:
+		out, err = poll(ctx, p.GetConfigJson())
+	case p.GetKind() == "unifi":
 		var cfg unifi.Config
 		if err = json.Unmarshal(p.GetConfigJson(), &cfg); err == nil {
 			out, err = pollUniFi(ctx, cfg, p.GetSecret())

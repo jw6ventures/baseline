@@ -1662,7 +1662,7 @@ type RunJob struct {
 	TimeoutSeconds uint32                 `protobuf:"varint,4,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
 	ChangeId       string                 `protobuf:"bytes,5,opt,name=change_id,json=changeId,proto3" json:"change_id,omitempty"`       // the change record the job belongs to
 	Script         *Script                `protobuf:"bytes,6,opt,name=script,proto3" json:"script,omitempty"`                           // script.run only
-	StackFiles     *StackFiles            `protobuf:"bytes,7,opt,name=stack_files,json=stackFiles,proto3" json:"stack_files,omitempty"` // compose.deploy and compose.edit only
+	StackFiles     *StackFiles            `protobuf:"bytes,7,opt,name=stack_files,json=stackFiles,proto3" json:"stack_files,omitempty"` // compose.deploy, compose.edit, k8s.deploy and k8s.edit only
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1748,7 +1748,8 @@ func (x *RunJob) GetStackFiles() *StackFiles {
 
 // StackFiles are the files of a compose.deploy or compose.edit job, kept out
 // of params_json, which the server stores and audits. The agent checks each
-// against its SHA-256 in the parameters.
+// against its SHA-256 in the parameters. A k8s.deploy or k8s.edit job sends
+// its manifest as compose and an edit's previous manifest as env.
 type StackFiles struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Compose       []byte                 `protobuf:"bytes,1,opt,name=compose,proto3" json:"compose,omitempty"` // the new Compose file; empty when it stays as it is

@@ -1,6 +1,7 @@
 package kube
 
 import (
+	"github.com/jw6ventures/baseline/internal/action"
 	"github.com/jw6ventures/baseline/internal/agent/collect"
 	"github.com/jw6ventures/baseline/internal/model"
 )
@@ -15,6 +16,8 @@ const BootID = "k8s-cluster"
 // machine the pod happens to run on.
 type Self struct {
 	Name string // the cluster's name
+	// Logs: the agent reads pod logs for the server (BASELINE_K8S_LOGS).
+	Logs bool
 }
 
 // Identity names the cluster. Machine-id and DMI UUID stay empty: inside a
@@ -24,4 +27,13 @@ func (s Self) Identity() collect.Identity {
 	return collect.Identity{Hostname: s.Name, BootID: BootID}
 }
 
-func (s Self) Capabilities() []string { return []string{model.CapK8sCluster} }
+// Capabilities say the agent is a cluster agent, runs the Kubernetes
+// actions (if its settings allow them) and lists pods, and reads logs when
+// it may.
+func (s Self) Capabilities() []string {
+	caps := []string{model.CapK8sCluster, action.CapK8sActions, action.CapK8sPods}
+	if s.Logs {
+		caps = append(caps, action.CapK8sLogs)
+	}
+	return caps
+}

@@ -1,0 +1,66 @@
+# Optional: lets the Baseline cluster agent change workloads, not only read
+# them (docs/agent.md §6.1). Without this file Kubernetes refuses its
+# changes, whatever Baseline asks of it.
+#
+# With it, the agent runs the k8s.* actions of approved
+# changes: restart, scale and change the images of Deployments,
+# StatefulSets and DaemonSets, delete a workload's pod, suspend, resume and
+# run CronJobs, and apply the manifests of k8s.deploy and k8s.edit with
+# server-side apply. It never reads or writes Secrets, never execs into
+# pods, and only touches the kinds listed below. BASELINE_ALLOW_ACTIONS=none
+# on the agent's Deployment (baseline-agent.yaml) turns the actions off
+# again on the agent's side.
+#
+# The agent itself refuses namespaces in BASELINE_DENY_NAMESPACES
+# (kube-system by default). To have Kubernetes enforce a limit as well,
+# replace the ClusterRoleBinding below with a RoleBinding to this
+# ClusterRole in each namespace the agent may change.
+#
+# Usage: kubectl apply -f baseline-agent-manage.yaml.
+# kubectl delete -f baseline-agent-manage.yaml takes the permissions away
+# again.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: baseline-agent-manage
+rules:
+  # Workload actions and manifests. Server-side apply creates an object
+  # with a patch, so manifests need create and patch; delete undoes a
+  # failed deploy and removes what an edit drops.
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, daemonsets]
+    verbs: [get, list, create, patch, delete]
+  - apiGroups: [batch]
+    resources: [cronjobs, jobs]
+    verbs: [get, list, create, patch, delete]
+  # k8s.delete_pod.
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, delete]
+  # The other kinds a manifest may hold.
+  - apiGroups: [""]
+    resources: [services, configmaps, persistentvolumeclaims, serviceaccounts]
+    verbs: [get, create, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses, networkpolicies]
+    verbs: [get, create, patch, delete]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, create, patch, delete]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [get, create, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: baseline-agent-manage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: baseline-agent-manage
+subjects:
+  - kind: ServiceAccount
+    name: baseline-agent
+    namespace: baseline

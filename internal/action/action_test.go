@@ -285,7 +285,8 @@ func TestAffecting(t *testing.T) {
 
 func TestSpecs(t *testing.T) {
 	if !slices.Equal(Names, []string{PkgUpgrade, ServiceRestart, ServiceStart, ServiceStop, ContainerRestart, ComposePull,
-		ComposeUpdate, ComposeStart, ComposeArchive, ComposeMove, ComposeDeploy, ComposeEdit, HostReboot, ScriptRun}) {
+		ComposeUpdate, ComposeStart, ComposeArchive, ComposeMove, ComposeDeploy, ComposeEdit, HostReboot, ScriptRun,
+		K8sRestart, K8sScale, K8sSetImage, K8sDeletePod, K8sSuspend, K8sResume, K8sTrigger, K8sDeploy, K8sEdit}) {
 		t.Errorf("Names = %v", Names)
 	}
 	for _, n := range Names {

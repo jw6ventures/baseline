@@ -1,0 +1,25 @@
+{{define "content"}}
+{{$v := .Body}}{{$w := $v.W}}{{$c := $v.Cluster}}
+<div class="titlebar">
+  <div>
+    <h1>{{$v.Pod.Name}}</h1>
+    <p class="muted sub">Logs of a pod of {{$w.Kind}} <a href="{{.Base}}/kubernetes/{{$c.CIID}}/workloads/{{$w.CIID}}">{{$w.Namespace}}/{{$w.Name}}</a> in cluster <a href="{{.Base}}/kubernetes/{{$c.CIID}}">{{$c.Name}}</a></p>
+  </div>
+</div>
+<form class="search inline-form" method="get" action="{{.Base}}/kubernetes/{{$c.CIID}}/workloads/{{$w.CIID}}/logs">
+  <input type="hidden" name="pod" value="{{$v.Pod.Name}}">
+  {{if or $v.Pod.Containers $v.Pod.Init}}<label>Container<select name="container">
+    {{range $v.Pod.Containers}}<option{{if eq . $v.Container}} selected{{end}}>{{.}}</option>{{end}}
+    {{range $v.Pod.Init}}<option value="{{.}}"{{if eq . $v.Container}} selected{{end}}>{{.}} (init)</option>{{end}}
+  </select></label>{{else}}<input type="hidden" name="container" value="{{$v.Container}}">{{end}}
+  <label>Lines<input type="number" name="tail" min="1" max="5000" value="{{$v.Tail}}" class="narrow"></label>
+  <label class="check"><input type="checkbox" name="previous" value="1"{{if $v.Previous}} checked{{end}}> before its last restart</label>
+  <button class="small">Show</button>
+</form>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Logs}}
+{{if .Truncated}}<p class="notice warn">Only the last megabyte is shown.</p>{{end}}
+<pre class="file">{{with .Text}}{{.}}{{else}}(empty){{end}}</pre>
+<p class="muted small">Read from the cluster just now; reading logs is recorded in the audit log.</p>
+{{end}}
+{{end}}

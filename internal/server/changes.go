@@ -14,6 +14,7 @@ import (
 
 	"github.com/jw6ventures/baseline/internal/action"
 	"github.com/jw6ventures/baseline/internal/change"
+	"github.com/jw6ventures/baseline/internal/model"
 	"github.com/jw6ventures/baseline/internal/rbac"
 	"github.com/jw6ventures/baseline/internal/stackname"
 	"github.com/jw6ventures/baseline/internal/store"
@@ -78,6 +79,7 @@ type changeView struct {
 	// Revisions are the files of a Compose deploy or edit; operators of
 	// the hosts may look at the .env values.
 	Revisions  []store.ComposeRevision
+	Manifests  []manifestRevision
 	CanSeeEnv  bool
 	CanApprove bool
 	CanCancel  bool
@@ -142,6 +144,20 @@ func (s *Server) changePage(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	ms, err := s.store.ChangeManifests(ctx, c.ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	for _, m := range ms {
+		mr := manifestRevision{Manifest: m}
+		if m.BaseRevision != "" {
+			if base, err := s.store.GetManifest(ctx, m.BaseRevision); err == nil {
+				mr.Base = &base
+			}
+		}
+		v.Manifests = append(v.Manifests, mr)
+	}
 	p := principal(r)
 	v.CanSeeEnv = canOnAll(p.Grants, rbac.Operator, c.HostIDs, hosts)
 	v.CanApprove = c.State == store.ChangeSubmitted && canOnAll(p.Grants, rbac.Approver, c.HostIDs, hosts)
@@ -149,6 +165,13 @@ func (s *Server) changePage(w http.ResponseWriter, r *http.Request) {
 	v.CanSubmit = c.State == store.ChangeDraft && c.RequestedBy == p.User.ID
 	v.CanClose = c.Closable() && s.mayManage(r, c, hosts)
 	s.pages.render(w, http.StatusOK, "change", s.data(r, c.Ref()+" "+c.Title, v))
+}
+
+// manifestRevision is a k8s.deploy's or k8s.edit's manifest on its change's
+// page, with the one an edit replaces.
+type manifestRevision struct {
+	store.Manifest
+	Base *store.Manifest
 }
 
 func (s *Server) backToChange(w http.ResponseWriter, r *http.Request, id, kind, msg string) {
@@ -298,6 +321,16 @@ type changeFormView struct {
 	Files *stackFileForm
 	// compose.move: the Compose roots of the stacks' hosts.
 	Roots []string
+	// k8s.* workload actions: the workloads to pick from, and the one picked
+	// for an action that changes one (k8s.set_image, k8s.delete_pod), with
+	// its pods for k8s.delete_pod.
+	Workloads []workloadChoice
+	Workload  *store.Workload
+	RollsOut  bool // the action waits for a rollout, for a time the form sets
+	Pods      []model.K8sPod
+	PodsError string
+	// k8s.deploy and k8s.edit: the cluster and its manifest.
+	Manifest *manifestForm
 
 	// Standard changes come from an approved model, which fixes the
 	// action and its parameters.
@@ -555,6 +588,43 @@ func (s *Server) renderChangeForm(w http.ResponseWriter, r *http.Request, status
 		if v.Packages == "" {
 			v.Packages = strings.Join(f["pkg"], "\n")
 		}
+	case action.K8sDeploy, action.K8sEdit:
+		if v.Model != nil {
+			s.errorPage(w, r, http.StatusNotFound, "No such approved change model.")
+			return
+		}
+		if v.Manifest, err = s.manifestFormView(r, spec, mine); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		if v.Manifest.Block == "" {
+			v.Picked = 1
+		}
+	}
+	if action.IsK8sWorkloadAction(spec.Name) {
+		if v.Workloads, err = s.workloadChoices(r, spec, f, mine, mineIDs); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		for i, c := range v.Workloads {
+			if c.Checked && c.Disabled == "" {
+				v.Picked++
+				v.Workload = &v.Workloads[i].Workload
+			}
+		}
+		if !singleWorkload(spec.Name) || v.Picked != 1 {
+			v.Workload = nil
+		}
+		v.RollsOut = spec.Name == action.K8sRestart || spec.Name == action.K8sScale ||
+			(spec.Name == action.K8sSetImage && v.Workload != nil && v.Workload.Kind != action.KindCronJob)
+		if wl := v.Workload; wl != nil && spec.Name == action.K8sDeletePod {
+			if wl.Kind == action.KindPod {
+				v.Pods = []model.K8sPod{{Name: wl.Name}}
+			} else if err := s.pollCluster(ctx, wl.HostID, model.PollK8sPods, action.CapK8sPods,
+				model.K8sPodsRequest{Kind: wl.Kind, Namespace: wl.Namespace, Name: wl.Name}, &v.Pods); err != nil {
+				v.PodsError = err.Error()
+			}
+		}
 	}
 	if v.Model != nil {
 		risk = action.Risk(v.Model.Risk)
@@ -565,8 +635,9 @@ func (s *Server) renderChangeForm(w http.ResponseWriter, r *http.Request, status
 		if h.Revoked || !p.Grants.HasOn(rbac.Operator, h.GroupIDs) {
 			continue
 		}
-		if spec.Name == action.ContainerRestart || spec.Category == action.CategoryCompose {
-			break // they pick containers or stacks, not hosts
+		if spec.Name == action.ContainerRestart || spec.Category == action.CategoryCompose ||
+			spec.Category == action.CategoryKubernetes {
+			break // they pick containers, stacks, workloads or a cluster, not hosts
 		}
 		t := targetHost{Host: h, Checked: slices.Contains(checked, h.ID)}
 		if ok, why := h.Policy.Allows(spec.Name); !ok {
@@ -631,8 +702,46 @@ func (s *Server) changeCreate(w http.ResponseWriter, r *http.Request) {
 	var containers []store.ContainerRow
 	var fileStep *store.PlanStep
 	var revs []store.ComposeRevision
+	var manifests []store.Manifest
 	var fileCI, fileObject string
+	var wsteps []store.PlanStep
+	var wcis, wobjects []string
 	switch {
+	case spec.Name == action.K8sDeploy || spec.Name == action.K8sEdit:
+		if model != nil {
+			fail("Kubernetes manifests don't come from change models.")
+			return
+		}
+		in := formManifest(f)
+		step, rev, ci, err := s.manifestPlan(r, spec, in, hosts)
+		if err != nil {
+			fail(sentence(err))
+			return
+		}
+		fileStep, manifests, fileCI, fileObject = &step, []store.Manifest{rev}, ci, rev.Bundle
+		f["host"] = step.HostIDs
+	case action.IsK8sWorkloadAction(spec.Name):
+		if model != nil {
+			fail("Kubernetes actions don't come from change models.")
+			return
+		}
+		ws, err := s.loadWorkloads(r, spec, f["workload"], hosts)
+		if err != nil {
+			fail(sentence(err))
+			return
+		}
+		var one *store.Workload
+		if singleWorkload(spec.Name) {
+			one = &ws[0]
+		}
+		if wsteps, wcis, wobjects, err = workloadSteps(spec, ws, formK8sInput(f, one)); err != nil {
+			fail(sentence(err))
+			return
+		}
+		f["host"] = nil
+		for _, wl := range ws {
+			f["host"] = append(f["host"], wl.HostID)
+		}
 	case spec.OwnForm:
 		if model != nil {
 			fail("Deploys and edits of Compose stacks don't come from change models.")
@@ -709,6 +818,8 @@ func (s *Server) changeCreate(w http.ResponseWriter, r *http.Request) {
 		if fileCI != "" {
 			cis = []string{fileCI}
 		}
+	case wsteps != nil:
+		steps, cis, objects, risk = wsteps, wcis, wobjects, spec.Risk
 	case stacks != nil:
 		for _, st := range stacks {
 			var step store.PlanStep
@@ -783,7 +894,7 @@ func (s *Server) changeCreate(w http.ResponseWriter, r *http.Request) {
 		Kind: kind, Justification: strings.TrimSpace(f.Get("justification")), Risk: risk,
 		BackoutPlan: strings.TrimSpace(f.Get("backout_plan")), TestPlan: strings.TrimSpace(f.Get("test_plan")),
 		StopOnFailure: f.Get("stop_on_failure") != "" || f.Get("stop_on_failure_set") == "",
-		Steps:         steps, SelfApprove: selfApprove, Draft: draft, CIs: cis, Revisions: revs,
+		Steps:         steps, SelfApprove: selfApprove, Draft: draft, CIs: cis, Revisions: revs, Manifests: manifests,
 		WindowID: f.Get("window"), OnWindowEnd: store.WindowCarryOver,
 	}
 	if model != nil {
@@ -982,6 +1093,20 @@ func stackVerb(act string) string {
 	return "update"
 }
 
+// sentence is an error as a message on the form: capitalized, with a full
+// stop.
+func sentence(err error) string {
+	m := err.Error()
+	if m == "" {
+		return m
+	}
+	m = strings.ToUpper(m[:1]) + m[1:]
+	if !strings.HasSuffix(m, ".") {
+		m += "."
+	}
+	return m
+}
+
 // splitList splits on commas and whitespace.
 func splitList(s string) []string {
 	return strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' || r == '\n' || r == '\t' || r == '\r' })
@@ -1007,6 +1132,16 @@ func changeTitle(spec action.Spec, steps []store.PlanStep, objects, hosts []stri
 		what = "Move " + plural(len(objects), "Compose stack")
 	case action.ContainerRestart:
 		what = "Restart " + what
+	case action.K8sRestart:
+		what = "Restart " + plural(len(objects), "Kubernetes workload")
+	case action.K8sScale:
+		what = "Scale " + plural(len(objects), "Kubernetes workload")
+	case action.K8sSuspend:
+		what = "Suspend " + plural(len(objects), "CronJob")
+	case action.K8sResume:
+		what = "Resume " + plural(len(objects), "CronJob")
+	case action.K8sTrigger:
+		what = "Run " + plural(len(objects), "CronJob")
 	}
 	if len(objects) <= 3 {
 		what += " (" + strings.Join(objects, ", ") + ")"

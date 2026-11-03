@@ -44,11 +44,14 @@ const (
 	CategoryReboot    = "reboot"
 	CategoryCompose   = "compose"
 	CategoryScript    = "script"
+	// CategoryKubernetes is the k8s.* actions, which only cluster agents
+	// run.
+	CategoryKubernetes = "kubernetes"
 )
 
 // Categories are the values allow_actions takes, in the order the UI shows
 // them.
-var Categories = []string{CategoryPatch, CategoryContainer, CategoryService, CategoryReboot, CategoryCompose}
+var Categories = []string{CategoryPatch, CategoryContainer, CategoryService, CategoryReboot, CategoryCompose, CategoryKubernetes}
 
 // Capabilities an agent reports in Hello for what it can do, beside the
 // tools it found (docs/agent.md §5).
@@ -155,6 +158,24 @@ var specs = []Spec{
 		Typical:  10 * time.Minute},
 	{Name: ScriptRun, Label: "Run a script", Category: CategoryScript, Risk: Medium, Timeout: DefaultScriptTimeout,
 		Sections: model.Sections, Typical: DefaultScriptTimeout},
+	{Name: K8sRestart, Label: "Restart a Kubernetes workload", Category: CategoryKubernetes, Risk: Low, Timeout: 5 * time.Minute,
+		Needs: []string{CapK8sActions}, Sections: []string{model.SectionK8s}, Typical: 3 * time.Minute},
+	{Name: K8sScale, Label: "Scale a Kubernetes workload", Category: CategoryKubernetes, Risk: Medium, Timeout: 5 * time.Minute,
+		Needs: []string{CapK8sActions}, Sections: []string{model.SectionK8s}, Typical: 3 * time.Minute},
+	{Name: K8sSetImage, Label: "Change a Kubernetes workload's image", Category: CategoryKubernetes, Risk: Medium,
+		Timeout: 5 * time.Minute, Needs: []string{CapK8sActions}, Sections: []string{model.SectionK8s}, Typical: 3 * time.Minute},
+	{Name: K8sDeletePod, Label: "Delete a Kubernetes pod", Category: CategoryKubernetes, Risk: Low, Timeout: 3 * time.Minute,
+		Needs: []string{CapK8sActions}, Sections: []string{model.SectionK8s}, Typical: time.Minute},
+	{Name: K8sSuspend, Label: "Suspend a CronJob", Category: CategoryKubernetes, Risk: Low, Timeout: 2 * time.Minute,
+		Needs: []string{CapK8sActions}, Sections: []string{model.SectionK8s}, Typical: time.Minute},
+	{Name: K8sResume, Label: "Resume a CronJob", Category: CategoryKubernetes, Risk: Low, Timeout: 2 * time.Minute,
+		Needs: []string{CapK8sActions}, Sections: []string{model.SectionK8s}, Typical: time.Minute},
+	{Name: K8sTrigger, Label: "Run a CronJob now", Category: CategoryKubernetes, Risk: Low, Timeout: 2 * time.Minute,
+		Needs: []string{CapK8sActions}, Sections: []string{model.SectionK8s}, Typical: time.Minute},
+	{Name: K8sDeploy, Label: "Deploy a Kubernetes manifest", Category: CategoryKubernetes, Risk: Medium, Timeout: 10 * time.Minute,
+		Needs: []string{CapK8sActions}, Sections: []string{model.SectionK8s}, Typical: 5 * time.Minute, OwnForm: true},
+	{Name: K8sEdit, Label: "Edit a Kubernetes manifest", Category: CategoryKubernetes, Risk: Medium, Timeout: 10 * time.Minute,
+		Needs: []string{CapK8sActions}, Sections: []string{model.SectionK8s}, Typical: 5 * time.Minute, OwnForm: true},
 }
 
 // Names lists every action in the order the UI offers them.
@@ -189,6 +210,9 @@ func Affecting(section string) []string {
 // Supported reports whether a host with these capabilities can run the
 // action, and if not, why.
 func (s Spec) Supported(caps []string) (bool, string) {
+	if s.Category != CategoryKubernetes && slices.Contains(caps, capK8sCluster) {
+		return false, "is a Kubernetes cluster agent, which runs only Kubernetes actions"
+	}
 	if len(s.Needs) == 0 || slices.ContainsFunc(s.Needs, func(c string) bool { return slices.Contains(caps, c) }) {
 		return true, ""
 	}
@@ -522,6 +546,16 @@ func Validate(name string, raw []byte) ([]byte, error) {
 			return nil, errors.New("the reboot delay must be between 5 seconds and an hour")
 		}
 		v = p
+	case K8sRestart, K8sScale, K8sSetImage, K8sDeletePod, K8sSuspend, K8sResume, K8sTrigger:
+		var err error
+		if v, err = validateK8s(name, raw); err != nil {
+			return nil, err
+		}
+	case K8sDeploy, K8sEdit:
+		var err error
+		if v, err = validateK8sManifest(name, raw); err != nil {
+			return nil, err
+		}
 	case ScriptRun:
 		var p ScriptParams
 		if err := strictJSON(raw, &p); err != nil {
@@ -586,6 +620,18 @@ func Timeout(name string, params []byte) time.Duration {
 		if json.Unmarshal(params, &p) == nil {
 			return s.Timeout + time.Duration(p.HealthTimeout)*time.Second
 		}
+	case K8sRestart, K8sScale, K8sSetImage:
+		var p K8sParams
+		if json.Unmarshal(params, &p) == nil {
+			// A failed image change rolls back, which waits again.
+			n := 1 + boolInt(name == K8sSetImage)
+			return s.Timeout + time.Duration(n*p.HealthTimeout)*time.Second
+		}
+	case K8sDeploy, K8sEdit:
+		var p K8sManifestParams
+		if json.Unmarshal(params, &p) == nil {
+			return s.Timeout + time.Duration(2*p.HealthTimeout)*time.Second
+		}
 	}
 	return s.Timeout
 }
@@ -615,6 +661,16 @@ func Expected(name string, params []byte) time.Duration {
 		if json.Unmarshal(params, &p) == nil {
 			return s.Typical + time.Duration(p.HealthTimeout)*time.Second
 		}
+	case K8sRestart, K8sScale, K8sSetImage:
+		var p K8sParams
+		if json.Unmarshal(params, &p) == nil {
+			return s.Typical + time.Duration(p.HealthTimeout)*time.Second
+		}
+	case K8sDeploy, K8sEdit:
+		var p K8sManifestParams
+		if json.Unmarshal(params, &p) == nil {
+			return s.Typical + time.Duration(p.HealthTimeout)*time.Second
+		}
 	}
 	return s.Typical
 }
@@ -627,6 +683,13 @@ func NeedsPin(name string, params []byte) bool {
 	}
 	var p UpgradeParams
 	return json.Unmarshal(params, &p) == nil && len(p.Versions) > 0
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // MustGet is Get for names known to exist.
@@ -722,6 +785,14 @@ func Describe(name string, params []byte) string {
 			what = "the .env of"
 		}
 		return "Edit " + what + " stack " + p.Project
+	case K8sRestart, K8sScale, K8sSetImage, K8sDeletePod, K8sSuspend, K8sResume, K8sTrigger:
+		var p K8sParams
+		json.Unmarshal(params, &p)
+		return describeK8s(name, p)
+	case K8sDeploy, K8sEdit:
+		var p K8sManifestParams
+		json.Unmarshal(params, &p)
+		return describeK8sManifest(name, p)
 	case HostReboot:
 		return "Reboot"
 	case ScriptRun:
@@ -743,7 +814,7 @@ type Policy struct {
 	Jobs         bool `json:"jobs"`
 	AllowScripts bool `json:"allow_scripts"`
 	// AllowActions lists the categories the host accepts; nil means all.
-	AllowActions []string `json:"allow_actions,omitempty"`
+	AllowActions []string `json:"allow_actions"` // null for all; [] for none, so no omitempty
 	// SelfUpdateOff is agent.conf's self_update = off: the agent ignores
 	// UpdateAgent and is updated only by running install.sh again. Stored
 	// negated so agents that don't report it read as accepting updates.
@@ -765,6 +836,8 @@ func (p Policy) Allows(name string) (bool, string) {
 		if !p.AllowScripts {
 			return false, "scripts are turned off in this host's agent.conf (allow_scripts)"
 		}
+	case s.Category == CategoryKubernetes && p.AllowActions != nil && !slices.Contains(p.AllowActions, s.Category):
+		return false, "Kubernetes actions are turned off on this cluster agent (BASELINE_ALLOW_ACTIONS)"
 	case p.AllowActions != nil && !slices.Contains(p.AllowActions, s.Category):
 		return false, "\"" + s.Category + "\" actions are turned off in this host's agent.conf (allow_actions)"
 	}

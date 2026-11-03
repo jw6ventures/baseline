@@ -145,12 +145,14 @@ type modelFormView struct {
 // for restarting "it" would be one change; stacks run their updates under a
 // compose.update model, and nothing runs under a compose.pull one; deploys
 // and edits carry their own files; a stack is started, archived or moved
-// when someone asks.
+// when someone asks. Kubernetes actions name their workload, like a
+// container restart.
 func modelActions() []action.Spec {
 	var out []action.Spec
 	for _, n := range action.Names {
 		if n != action.ContainerRestart && n != action.ComposePull && n != action.ComposeStart &&
-			n != action.ComposeArchive && n != action.ComposeMove && !action.MustGet(n).OwnForm {
+			n != action.ComposeArchive && n != action.ComposeMove && !action.MustGet(n).OwnForm &&
+			action.MustGet(n).Category != action.CategoryKubernetes {
 			out = append(out, action.MustGet(n))
 		}
 	}

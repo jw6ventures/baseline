@@ -19,6 +19,11 @@
 // BASELINE_LOG_LEVEL. The API server is the pod's own, through its service
 // account; outside a cluster set BASELINE_K8S_API (https://host:port),
 // BASELINE_K8S_CA (PEM file) and BASELINE_K8S_TOKEN_FILE instead.
+// It runs Kubernetes actions unless BASELINE_ALLOW_ACTIONS=none, never in
+// the namespaces of BASELINE_DENY_NAMESPACES (default kube-system; "none" for
+// none), and reads pod logs for the server unless BASELINE_K8S_LOGS=off.
+// Changing workloads needs the ClusterRole in
+// deploy/k8s/baseline-agent-manage.yaml too.
 package main
 
 import (
@@ -216,6 +221,12 @@ type clusterConfig struct {
 	agent.Config
 	Token       string // enrollment token
 	ClusterName string
+	// Actions turns the Kubernetes actions on (BASELINE_ALLOW_ACTIONS).
+	Actions []string
+	// DenyNamespaces are off limits to them (BASELINE_DENY_NAMESPACES).
+	DenyNamespaces []string
+	// Logs lets the server read pod logs (BASELINE_K8S_LOGS).
+	Logs bool
 }
 
 func loadClusterConfig(path string) (clusterConfig, error) {
@@ -241,6 +252,20 @@ func loadClusterConfig(path string) (clusterConfig, error) {
 	}
 	if c.ClusterName == "" {
 		c.ClusterName = "kubernetes"
+	}
+	var err error
+	if c.Actions, err = action.ParseClusterAllowActions(env.Get("BASELINE_ALLOW_ACTIONS")); err != nil {
+		return c, err
+	}
+	if c.DenyNamespaces, err = action.ParseDenyNamespaces(env.Get("BASELINE_DENY_NAMESPACES")); err != nil {
+		return c, fmt.Errorf("BASELINE_DENY_NAMESPACES: %w", err)
+	}
+	switch v := strings.ToLower(strings.TrimSpace(env.Get("BASELINE_K8S_LOGS"))); v {
+	case "off", "false", "no", "0":
+	case "", "on", "true", "yes", "1":
+		c.Logs = true
+	default:
+		return c, fmt.Errorf("BASELINE_K8S_LOGS takes on or off, not %q", v)
 	}
 	if c.Server == "" {
 		return c, errors.New("BASELINE_SERVER (the agent gateway, host:port) is not set")
@@ -272,7 +297,8 @@ func kubeClient() (*kube.Client, error) {
 
 // runCluster runs the cluster agent: it enrolls on first start, with the
 // cluster as its identity, and then sends only the "k8s" section. It runs
-// no jobs and doesn't update itself: it is updated by changing its image.
+// only Kubernetes jobs, and those only unless BASELINE_ALLOW_ACTIONS=none,
+// and doesn't update itself: it is updated by changing its image.
 func runCluster(ctx context.Context, config string) error {
 	cfg, err := loadClusterConfig(config)
 	if err != nil {
@@ -283,7 +309,7 @@ func runCluster(ctx context.Context, config string) error {
 	if err != nil {
 		return err
 	}
-	self := kube.Self{Name: cfg.ClusterName}
+	self := kube.Self{Name: cfg.ClusterName, Logs: cfg.Logs}
 	st, err := agent.LoadState(cfg.StateDir)
 	if errors.Is(err, agent.ErrNotEnrolled) {
 		if cfg.Token == "" {
@@ -301,12 +327,44 @@ func runCluster(ctx context.Context, config string) error {
 	}
 	log.Log("Agent", "run", jw6_utils.Info, fmt.Sprintf("baseline-agent %s in cluster mode, cluster %s (%s), agent %s, server %s",
 		Version, cfg.ClusterName, client.BaseURL, st.AgentID, cfg.Server))
-	col := &kube.Collector{Client: client, ClusterName: cfg.ClusterName}
-	a := &agent.Agent{Server: cfg.Server, State: st, Env: self, Version: Version, Log: log,
+	col := &kube.Collector{Client: client, ClusterName: cfg.ClusterName, DenyNamespaces: cfg.DenyNamespaces}
+	mgr := &kube.Manager{Client: client, DenyNamespaces: cfg.DenyNamespaces}
+	policy := action.Policy{Jobs: true, AllowActions: cfg.Actions, SelfUpdateOff: true}
+	polls := map[string]agent.PollFunc{
+		model.PollK8sPods: func(ctx context.Context, config []byte) (any, error) {
+			var r model.K8sPodsRequest
+			if err := json.Unmarshal(config, &r); err != nil {
+				return nil, err
+			}
+			return mgr.Pods(ctx, r)
+		},
+	}
+	if cfg.Logs {
+		polls[model.PollK8sLogs] = func(ctx context.Context, config []byte) (any, error) {
+			var r model.K8sLogsRequest
+			if err := json.Unmarshal(config, &r); err != nil {
+				return nil, err
+			}
+			return mgr.Logs(ctx, r)
+		}
+	}
+	log.Log("Agent", "run", jw6_utils.Info, fmt.Sprintf("Kubernetes actions %s, off limits: %s, pod logs %s",
+		map[bool]string{true: "on", false: "off"}[len(cfg.Actions) > 0], orNone(cfg.DenyNamespaces),
+		map[bool]string{true: "on", false: "off"}[cfg.Logs]))
+	a := &agent.Agent{Server: cfg.Server, State: st, Env: self, Version: Version, Log: log, Polls: polls,
 		Collectors: map[string]agent.CollectFunc{
 			model.SectionK8s: func(ctx context.Context) (any, error) { return col.Collect(ctx) },
-		}}
+		},
+		Runner: &runner.Runner{Dir: filepath.Join(cfg.StateDir, "jobs"), Policy: policy, Log: log, Kube: mgr,
+			BootID: func() string { return kube.BootID }}}
 	return a.Run(ctx)
+}
+
+func orNone(s []string) string {
+	if len(s) == 0 {
+		return "none"
+	}
+	return strings.Join(s, ", ")
 }
 
 // collectCmd prints what the agent would send, for troubleshooting.

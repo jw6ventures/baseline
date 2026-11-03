@@ -185,3 +185,129 @@
   <label><span>.env <span class="muted small">(<code>KEY=value</code> lines: the stack's secrets. Baseline keeps it encrypted, shows its values only to operators of the host, and the agent writes it root-only beside the Compose file)</span></span><textarea name="env" rows="8" class="mono" spellcheck="false" autocomplete="off">{{$f.Get "env"}}</textarea></label>
   <label>Time to come up healthy (seconds)<input type="number" name="health_timeout" min="10" max="1800" value="{{with $f.Get "health_timeout"}}{{.}}{{else}}120{{end}}" class="narrow"></label>
 {{end}}
+
+{{/* The workloads a k8s.* change picks from: dict "Base" .Base "V"
+     <changeFormView>. Actions that change one workload pick it with
+     "workload-chooser" first. */}}
+{{define "workload-picker"}}{{$v := .V}}
+<fieldset class="picker" data-picker>
+  <legend>Workloads</legend>
+  {{if $v.Workloads}}
+  <div class="inline-form picker-controls" data-picker-controls hidden>
+    <input type="search" data-filter="text" placeholder="Filter by name, namespace, cluster or image" aria-label="Filter">
+    <button type="button" class="small secondary" data-picker-all>Tick all shown</button>
+    <button type="button" class="small secondary" data-picker-none>Untick all</button>
+    <span class="muted small" data-picker-count></span>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>Workload</th><th>Kind</th><th>Cluster</th><th>Ready</th><th>Images</th></tr></thead>
+    <tbody>
+    {{range $v.Workloads}}
+    <tr class="picker-row{{if .Disabled}} dim{{end}}" data-text="{{.Namespace}}/{{.Name}} {{.Kind}} {{.Cluster}} {{join .Workload.Workload.Images " "}}"{{with .Disabled}} title="{{.}}"{{end}}>
+      <td><input type="checkbox" name="workload" value="{{.CIID}}" id="pick-{{.CIID}}" aria-label="{{.Namespace}}/{{.Name}} in {{.Cluster}}"{{if and .Checked (not .Disabled)}} checked{{end}}{{if .Disabled}} disabled{{end}}></td>
+      <td><label for="pick-{{.CIID}}"><span class="muted">{{.Namespace}}/</span><strong>{{.Name}}</strong></label> <a class="small" href="{{$.Base}}/kubernetes/{{.ClusterCI}}/workloads/{{.CIID}}">view</a>{{with .Disabled}}<br><span class="muted small">{{.}}</span>{{end}}</td>
+      <td>{{.Kind}}</td>
+      <td>{{.Cluster}}{{if not .Connected}} <span class="muted small">offline</span>{{end}}</td>
+      <td class="nowrap">{{template "k8s-ready" .Workload}}</td>
+      <td class="mono small">{{range .Workload.Workload.Images}}{{.}}<br>{{end}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  <p class="muted small" data-picker-empty hidden>No workload matches the filter.</p>
+  {{else}}
+  <p class="muted">There are no workloads this applies to in clusters you can change. Changing a cluster needs the operator role on its cluster agent.</p>
+  {{end}}
+</fieldset>
+{{end}}
+
+{{/* Picks the one workload of a k8s.set_image or k8s.delete_pod change,
+     before its parameters: dict "Base" .Base "V" <changeFormView>. */}}
+{{define "workload-chooser"}}{{$v := .V}}
+<form class="panel" method="get" action="{{.Base}}/changes/new" data-picker>
+  <input type="hidden" name="action" value="{{$v.Spec.Name}}">
+  <p>{{if eq $v.Spec.Name "k8s.set_image"}}Pick the workload whose images to change.{{else}}Pick the workload whose pod to delete.{{end}} The easiest way is the workload's own page, under Kubernetes.</p>
+  {{if $v.Workloads}}
+  <div class="inline-form picker-controls" data-picker-controls hidden>
+    <input type="search" data-filter="text" placeholder="Filter by name, namespace, cluster or image" aria-label="Filter">
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>Workload</th><th>Kind</th><th>Cluster</th><th>Images</th></tr></thead>
+    <tbody>
+    {{range $v.Workloads}}
+    <tr class="picker-row{{if .Disabled}} dim{{end}}" data-text="{{.Namespace}}/{{.Name}} {{.Kind}} {{.Cluster}} {{join .Workload.Workload.Images " "}}"{{with .Disabled}} title="{{.}}"{{end}}>
+      <td><input type="radio" name="workload" value="{{.CIID}}" id="pick-{{.CIID}}" required{{if .Disabled}} disabled{{end}}></td>
+      <td><label for="pick-{{.CIID}}"><span class="muted">{{.Namespace}}/</span><strong>{{.Name}}</strong></label>{{with .Disabled}}<br><span class="muted small">{{.}}</span>{{end}}</td>
+      <td>{{.Kind}}</td>
+      <td>{{.Cluster}}</td>
+      <td class="mono small">{{range .Workload.Workload.Images}}{{.}}<br>{{end}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  <p class="muted small" data-picker-empty hidden>No workload matches the filter.</p>
+  <button>Choose</button>
+  {{else}}
+  <p class="muted">There are no workloads this applies to in clusters you can change. Changing a cluster needs the operator role on its cluster agent.</p>
+  {{end}}
+</form>
+{{end}}
+
+{{/* The parameters of a k8s.* workload action: dict "Base" .Base "V"
+     <changeFormView>. */}}
+{{define "k8s-params"}}{{$v := .V}}{{$f := $v.Form}}
+  {{if eq $v.Spec.Name "k8s.scale"}}
+  <label>Replicas<input type="number" name="replicas" min="0" max="1000" value="{{$f.Get "replicas"}}" class="narrow" required></label>
+  {{end}}
+  {{if eq $v.Spec.Name "k8s.set_image"}}{{with $v.Workload}}
+  <fieldset>
+    <legend>Images</legend>
+    <p class="muted small">Change the image of the containers to update; leave the others as they are.</p>
+    {{range .Workload.Containers}}
+    <label><span><span class="mono">{{.Name}}</span>{{if .Init}} <span class="muted small">(init container)</span>{{end}} <span class="muted small">now {{.Image}}</span></span><input name="image.{{.Name}}" value="{{with $f.Get (print "image." .Name)}}{{.}}{{else}}{{.Image}}{{end}}" class="mono" spellcheck="false"></label>
+    {{else}}<p class="notice warn">The cluster agent hasn't reported this workload's containers yet; update the agent's image and wait for its next report.</p>
+    {{end}}
+  </fieldset>
+  {{end}}{{end}}
+  {{if eq $v.Spec.Name "k8s.delete_pod"}}{{with $v.Workload}}
+  {{if $v.Pods}}
+  <label>Pod<select name="pod" required>{{range $v.Pods}}<option value="{{.Name}}"{{if eq .Name ($f.Get "pod")}} selected{{end}}>{{.Name}} · {{.Phase}}{{with .Reason}} ({{.}}){{end}} · {{.Ready}}/{{.Total}} ready{{with .Node}} · on {{.}}{{end}}</option>{{end}}</select></label>
+  {{else}}
+  {{with $v.PodsError}}<p class="notice warn">Couldn't list the pods: {{.}}. Type the pod's name instead.</p>{{end}}
+  <label>Pod<input name="pod" value="{{$f.Get "pod"}}" class="mono" required></label>
+  {{end}}
+  <p class="muted small">{{if eq .Kind "Pod"}}The pod has no controller, so nothing replaces it.{{else}}The {{.Kind}} replaces it with a new pod. The agent checks that the pod belongs to {{.Namespace}}/{{.Name}} before deleting it.{{end}}</p>
+  {{end}}{{end}}
+  {{if $v.RollsOut}}
+  <label>Time to roll out (seconds)<input type="number" name="health_timeout" min="10" max="1800" value="{{with $f.Get "health_timeout"}}{{.}}{{else}}120{{end}}" class="narrow"></label>
+  {{end}}
+  <p class="muted small">
+  {{if eq $v.Spec.Name "k8s.restart"}}Rolls the workload's pods the way <code>kubectl rollout restart</code> does, and waits for the rollout to finish.
+  {{else if eq $v.Spec.Name "k8s.scale"}}Sets the desired number of replicas and waits until that many are ready. A HorizontalPodAutoscaler, if one manages the workload, may change it again.
+  {{else if eq $v.Spec.Name "k8s.set_image"}}Changes the images in the pod template and waits for the rollout. If it doesn't finish in time, the previous images are put back and the job ends rolled back. A CronJob's next run uses the new images.
+  {{else if eq $v.Spec.Name "k8s.suspend"}}Stops the CronJob from starting new runs. Runs in progress continue.
+  {{else if eq $v.Spec.Name "k8s.resume"}}Lets the CronJob start runs on its schedule again.
+  {{else if eq $v.Spec.Name "k8s.trigger"}}Creates a Job from the CronJob's template now, as <code>kubectl create job --from=cronjob/…</code> does.
+  {{end}}</p>
+{{end}}
+
+{{/* The manifest of a k8s.deploy or k8s.edit change: dict "Base" .Base
+     "V" <changeFormView>. */}}
+{{define "k8s-manifest"}}{{$v := .V}}{{$f := $v.Form}}{{$m := $v.Manifest}}{{$c := $m.Cluster}}
+  <input type="hidden" name="posted" value="1">
+  <input type="hidden" name="cluster" value="{{$c.CIID}}">
+  {{if eq $v.Spec.Name "k8s.deploy"}}
+  <p>A new bundle of objects in cluster <a href="{{.Base}}/kubernetes/{{$c.CIID}}"><strong>{{$c.Name}}</strong></a>. The cluster agent checks every object with a server-side dry run, applies them with server-side apply, and waits for the Deployments, StatefulSets and DaemonSets among them to roll out. If they don't, it deletes what it created. Objects that exist already are refused: a bundle only holds objects Baseline deployed.</p>
+  <div class="inline-form">
+    <label><span>Bundle name <span class="muted small">(lowercase letters, digits, <code>-</code>, <code>_</code>, <code>.</code>)</span></span><input name="bundle" value="{{$f.Get "bundle"}}" pattern="[a-z0-9][a-z0-9_.\-]{0,63}" required></label>
+    <label><span>Namespace <span class="muted small">(for objects that name none)</span></span><input name="namespace" value="{{with $f.Get "namespace"}}{{.}}{{else}}default{{end}}" list="k8s-namespaces" pattern="[a-z0-9]([\-a-z0-9]{0,61}[a-z0-9])?" required></label>
+    <datalist id="k8s-namespaces">{{range $m.Namespaces}}{{if not (has $m.Deny .)}}<option>{{.}}</option>{{end}}{{end}}</datalist>
+  </div>
+  {{else}}{{$b := $m.Base}}
+  <input type="hidden" name="bundle" value="{{$b.Bundle}}">
+  <p>Bundle <strong>{{$b.Bundle}}</strong> in cluster <a href="{{.Base}}/kubernetes/{{$c.CIID}}"><strong>{{$c.Name}}</strong></a>, namespace <span class="mono">{{$b.Namespace}}</span>, as applied by <a href="{{.Base}}/changes/{{$b.ChangeID}}">{{$b.ChangeRef}}</a> (sha256 <span class="mono small">{{short $b.ManifestSHA256 12}}</span>). The cluster agent applies the new manifest the same way as a deploy and then deletes the objects it no longer holds. If the workloads don't roll out, it applies the previous manifest again and deletes what the edit added.</p>
+  {{end}}
+  <label><span>Manifest <span class="muted small">(YAML or JSON, documents separated by <code>---</code>; each needs apiVersion, kind and metadata.name. It may hold {{$m.Kinds}}. Secrets aren't applied: create them in the cluster and refer to them.)</span></span><textarea name="manifest" rows="24" class="mono" spellcheck="false">{{$f.Get "manifest"}}</textarea></label>
+  {{with $m.Deny}}<p class="muted small">Off limits to the cluster agent: {{join . ", "}}.</p>{{end}}
+  <label>Time to roll out (seconds)<input type="number" name="health_timeout" min="10" max="1800" value="{{with $f.Get "health_timeout"}}{{.}}{{else}}120{{end}}" class="narrow"></label>
+{{end}}

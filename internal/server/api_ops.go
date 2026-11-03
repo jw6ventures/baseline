@@ -84,6 +84,8 @@ func (s *Server) changeDetail(r *http.Request, c store.Change) (any, error) {
 		Cycle     *patchCycleJSON `json:"patch_cycle,omitempty"`
 		// Revisions are the files a compose.deploy or compose.edit writes.
 		Revisions []stackRevisionJSON `json:"stack_revisions,omitempty"`
+		// Manifests are what a k8s.deploy or k8s.edit applies.
+		Manifests []manifestRevisionJSON `json:"manifests,omitempty"`
 		// WorkItems are the work items linked to it, and how.
 		WorkItems []linkedItemJSON `json:"work_items"`
 	}
@@ -116,6 +118,13 @@ func (s *Server) changeDetail(r *http.Request, c store.Change) (any, error) {
 	}
 	for _, rev := range revs {
 		out.Revisions = append(out.Revisions, stackRevisionToJSON(rev))
+	}
+	ms, err := s.store.ChangeManifests(ctx, c.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range ms {
+		out.Manifests = append(out.Manifests, manifestRevisionToJSON(m))
 	}
 	if out.WorkItems, err = s.changeWorkItems(r, c.ID); err != nil {
 		return nil, err

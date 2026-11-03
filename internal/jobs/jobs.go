@@ -280,6 +280,27 @@ func (d *Dispatcher) runJob(ctx context.Context, j store.Job) (*agentv1.ServerMe
 		}
 		rj.StackFiles = files
 	}
+	if j.Action == action.K8sDeploy || j.Action == action.K8sEdit {
+		// A manifest travels as StackFiles: the manifest as Compose, an
+		// edit's previous one as Env (docs/agent.md §6.1).
+		var p action.K8sManifestParams
+		if err := json.Unmarshal(j.Params, &p); err != nil {
+			return nil, err
+		}
+		m, err := d.st.GetManifest(ctx, p.Revision)
+		if err != nil {
+			return nil, fmt.Errorf("the manifest: %w", err)
+		}
+		files := &agentv1.StackFiles{Compose: []byte(m.Manifest)}
+		if p.BaseRevision != "" {
+			base, err := d.st.GetManifest(ctx, p.BaseRevision)
+			if err != nil {
+				return nil, fmt.Errorf("the previous manifest: %w", err)
+			}
+			files.Env = []byte(base.Manifest)
+		}
+		rj.StackFiles = files
+	}
 	return &agentv1.ServerMessage{Msg: &agentv1.ServerMessage_RunJob{RunJob: rj}}, nil
 }
 

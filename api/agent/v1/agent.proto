@@ -215,12 +215,13 @@ message RunJob {
   uint32 timeout_seconds = 4;
   string change_id = 5;          // the change record the job belongs to
   Script script = 6;             // script.run only
-  StackFiles stack_files = 7;    // compose.deploy and compose.edit only
+  StackFiles stack_files = 7;    // compose.deploy, compose.edit, k8s.deploy and k8s.edit only
 }
 
 // StackFiles are the files of a compose.deploy or compose.edit job, kept out
 // of params_json, which the server stores and audits. The agent checks each
-// against its SHA-256 in the parameters.
+// against its SHA-256 in the parameters. A k8s.deploy or k8s.edit job sends
+// its manifest as compose and an edit's previous manifest as env.
 message StackFiles {
   bytes compose = 1; // the new Compose file; empty when it stays as it is
   bytes env = 2;     // the new .env; empty when it stays as it is

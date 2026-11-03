@@ -69,6 +69,9 @@ type Runner struct {
 	TempDir string
 	// ComposeRoot is where compose.deploy puts new stacks.
 	ComposeRoot string
+	// Kube runs the Kubernetes actions; set on a cluster-mode agent, which
+	// runs no other action.
+	Kube Kube
 	// pollEvery is how often compose.update checks the updated containers;
 	// 0 is every 2 seconds.
 	pollEvery time.Duration
@@ -293,6 +296,15 @@ func failed(format string, args ...any) outcome {
 func (r *Runner) run(ctx context.Context, rj *agentv1.RunJob) {
 	id, name := rj.GetJobId(), rj.GetAction()
 	rec := record{ID: id, Action: name, State: stateRunning, BootID: r.BootID(), Started: time.Now()}
+	// A cluster agent refuses other actions first, so the reason doesn't
+	// point at an agent.conf it doesn't have.
+	if spec, known := action.Get(name); known && r.Kube != nil && spec.Category != action.CategoryKubernetes {
+		why := "a Kubernetes cluster agent runs only Kubernetes actions"
+		r.logf(jw6_utils.Warn, "Refused job %s (%s): %s", id, name, why)
+		rec.State, rec.Error, rec.ExitCode = "rejected", why, -1
+		r.finish(rec)
+		return
+	}
 	if ok, why := r.Policy.Allows(name); !ok {
 		r.logf(jw6_utils.Warn, "Refused job %s (%s): %s", id, name, why)
 		rec.State, rec.Error, rec.ExitCode = "rejected", why, -1
@@ -367,6 +379,15 @@ func (r *Runner) run(ctx context.Context, rj *agentv1.RunJob) {
 		var p action.StackFileParams
 		json.Unmarshal(params, &p)
 		o = r.edit(tctx, p, rj.GetStackFiles(), out)
+	case action.K8sRestart, action.K8sScale, action.K8sSetImage, action.K8sDeletePod, action.K8sSuspend,
+		action.K8sResume, action.K8sTrigger:
+		var p action.K8sParams
+		json.Unmarshal(params, &p)
+		o = r.kubeWorkload(tctx, name, p, out)
+	case action.K8sDeploy, action.K8sEdit:
+		var p action.K8sManifestParams
+		json.Unmarshal(params, &p)
+		o = r.kubeManifest(tctx, name, p, rj.GetStackFiles(), out)
 	default:
 		o = failed("this agent doesn't know the action %q", name)
 	}

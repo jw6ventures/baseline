@@ -446,7 +446,11 @@ func TestSelf(t *testing.T) {
 	if id.Hostname != "homelab" || id.BootID != BootID || id.MachineID != "" || id.DMIUUID != "" || !id.BootTime.IsZero() {
 		t.Errorf("identity = %+v", id)
 	}
-	if !reflect.DeepEqual(s.Capabilities(), []string{model.CapK8sCluster}) {
+	if !reflect.DeepEqual(s.Capabilities(), []string{model.CapK8sCluster, "k8s-actions", "k8s-pods"}) {
 		t.Errorf("capabilities = %q", s.Capabilities())
+	}
+	s.Logs = true
+	if !reflect.DeepEqual(s.Capabilities(), []string{model.CapK8sCluster, "k8s-actions", "k8s-pods", "k8s-logs"}) {
+		t.Errorf("capabilities with logs = %q", s.Capabilities())
 	}
 }

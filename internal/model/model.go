@@ -40,6 +40,13 @@ const (
 // section, runs no jobs and is updated by changing its image.
 const CapK8sCluster = "k8s-cluster"
 
+// Polls a cluster agent answers for the server (IntegrationPoll kinds):
+// a workload's pods, and a pod's logs.
+const (
+	PollK8sPods = "k8s.pods"
+	PollK8sLogs = "k8s.logs"
+)
+
 // Sections lists every section in the order the UI shows them. Slow ones
 // (updates refreshes repository metadata, certs probes listeners) come last.
 var Sections = []string{SectionOS, SectionHardware, SectionPackages, SectionSmart, SectionContainers,
@@ -703,6 +710,9 @@ type K8s struct {
 	// the cluster doesn't serve). The server keeps its earlier copy of
 	// what they hold rather than reading the gap as removals.
 	Errors []K8sError `json:"errors,omitempty"`
+	// DenyNamespaces are the namespaces the cluster agent's actions may not
+	// touch (BASELINE_DENY_NAMESPACES), so the UI doesn't offer them.
+	DenyNamespaces []string `json:"deny_namespaces,omitempty"`
 }
 
 type K8sCluster struct {
@@ -746,11 +756,21 @@ type K8sWorkload struct {
 	// on); Ready how many are ready now.
 	Replicas int      `json:"replicas"`
 	Ready    int      `json:"ready"`
-	Images   []string `json:"images"`             // of every container and init container, sorted
-	Schedule string   `json:"schedule,omitempty"` // CronJob
-	Suspend  bool     `json:"suspend,omitempty"`  // CronJob
-	Node     string   `json:"node,omitempty"`     // a bare Pod's node
-	Created  string   `json:"created,omitempty"`
+	Images   []string `json:"images"` // of every container and init container, sorted
+	// Containers are the pod template's containers and init containers,
+	// in the template's order: what k8s.set_image changes.
+	Containers []K8sContainer `json:"containers,omitempty"`
+	Schedule   string         `json:"schedule,omitempty"` // CronJob
+	Suspend    bool           `json:"suspend,omitempty"`  // CronJob
+	Node       string         `json:"node,omitempty"`     // a bare Pod's node
+	Created    string         `json:"created,omitempty"`
+}
+
+// K8sContainer is a container of a workload's pod template.
+type K8sContainer struct {
+	Name  string `json:"name"`
+	Image string `json:"image"`
+	Init  bool   `json:"init,omitempty"`
 }
 
 // Key identifies a workload in its cluster.
@@ -776,6 +796,59 @@ type K8sIngress struct {
 	TLS       bool     `json:"tls,omitempty"`
 	// Backends read "host/path → service:port".
 	Backends []string `json:"backends,omitempty"`
+}
+
+// K8sPodsRequest is the "k8s.pods" poll's config: the workload whose
+// pods to list.
+type K8sPodsRequest struct {
+	Kind      string `json:"kind"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+}
+
+// K8sPod is a workload's pod as a cluster agent lists it for the server
+// ("k8s.pods"). Pods aren't kept: they are read when a page shows them.
+type K8sPod struct {
+	Name       string   `json:"name"`
+	Node       string   `json:"node,omitempty"`
+	Phase      string   `json:"phase"`
+	Ready      int      `json:"ready"` // containers ready
+	Total      int      `json:"total"` // containers
+	Restarts   int      `json:"restarts"`
+	Reason     string   `json:"reason,omitempty"` // CrashLoopBackOff, ImagePullBackOff, Evicted...
+	Created    string   `json:"created,omitempty"`
+	Containers []string `json:"containers"`       // for logs
+	Init       []string `json:"init,omitempty"`   // init containers
+	Images     []string `json:"images,omitempty"` // sorted
+}
+
+// K8sLogsRequest is the "k8s.logs" poll's config.
+type K8sLogsRequest struct {
+	// The workload, which the pod must belong to.
+	Kind      string `json:"kind"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Pod       string `json:"pod"`
+	Container string `json:"container"`
+	// Tail is how many lines from the end; 0 is DefaultLogLines.
+	Tail int `json:"tail"`
+	// Previous reads the container's previous instance (before a restart).
+	Previous bool `json:"previous"`
+}
+
+const (
+	DefaultLogLines = 200
+	MaxLogLines     = 5000
+)
+
+// K8sLogs is the "k8s.logs" poll's answer: the end of a container's log,
+// with timestamps.
+type K8sLogs struct {
+	Pod       string `json:"pod"`
+	Container string `json:"container"`
+	Text      string `json:"text"`
+	// Truncated: the lines asked for came to more than the agent sends.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 // K8sError is a resource the agent couldn't list.

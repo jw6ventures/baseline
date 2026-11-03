@@ -105,6 +105,9 @@ type Agent struct {
 	// Integrations lets the server have this agent poll systems on its
 	// network for it, such as a UniFi console (agent.conf integrations).
 	Integrations bool
+	// Polls answer the server's IntegrationPolls of other kinds, whatever
+	// Integrations says: a cluster agent's "k8s.pods" and "k8s.logs".
+	Polls map[string]PollFunc
 	// Runner runs jobs; nil: the agent reports no policy and the server
 	// sends it none.
 	Runner  *runner.Runner

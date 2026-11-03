@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jw6ventures/baseline/internal/action"
 	"github.com/jw6ventures/baseline/internal/model"
+	"github.com/jw6ventures/baseline/internal/rbac"
 	"github.com/jw6ventures/baseline/internal/store"
 )
 
@@ -111,7 +113,7 @@ func (s *Server) clusters(w http.ResponseWriter, r *http.Request) {
 	s.pages.render(w, http.StatusOK, "clusters", s.data(r, "Kubernetes", clustersView{Clusters: cs}))
 }
 
-var clusterTabs = []string{"nodes", "workloads", "services", "ingresses"}
+var clusterTabs = []string{"nodes", "workloads", "services", "ingresses", "manifests"}
 
 type clusterView struct {
 	Cluster    store.Cluster
@@ -127,6 +129,12 @@ type clusterView struct {
 	Namespace  string
 	// Gone are nodes and workloads the cluster no longer has.
 	Gone int
+	// Bundles are the manifests Baseline applied (k8s.deploy, k8s.edit).
+	Bundles []store.Bundle
+	// CanDeploy: the user may apply manifests to the cluster; DeployBlock
+	// says why the agent can't, if it can't.
+	CanDeploy   bool
+	DeployBlock string
 }
 
 func (s *Server) clusterPage(w http.ResponseWriter, r *http.Request) {
@@ -191,6 +199,16 @@ func (s *Server) clusterPage(w http.ResponseWriter, r *http.Request) {
 			if match(in.Namespace, append([]string{in.Name, in.Class}, in.Hosts...)...) {
 				v.Ingresses = append(v.Ingresses, in)
 			}
+		}
+	}
+	if v.Tab == "manifests" {
+		if v.Bundles, err = s.store.ClusterBundles(ctx, c.CIID); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		if h, err := s.store.GetHost(ctx, c.HostID); err == nil && principal(r).Grants.HasOn(rbac.Operator, h.GroupIDs) {
+			v.CanDeploy = true
+			v.DeployBlock = manifestClusterBlock(action.MustGet(action.K8sDeploy), h)
 		}
 	}
 	s.pages.render(w, http.StatusOK, "cluster", s.data(r, c.Name, v))
