@@ -84,6 +84,8 @@ func (s *Server) changeDetail(r *http.Request, c store.Change) (any, error) {
 		Cycle     *patchCycleJSON `json:"patch_cycle,omitempty"`
 		// Revisions are the files a compose.deploy or compose.edit writes.
 		Revisions []stackRevisionJSON `json:"stack_revisions,omitempty"`
+		// WorkItems are the work items linked to it, and how.
+		WorkItems []linkedItemJSON `json:"work_items"`
 	}
 	out.changeJSON = changeToJSON(c)
 	approvals, err := s.store.ChangeApprovals(ctx, c.ID)
@@ -114,6 +116,9 @@ func (s *Server) changeDetail(r *http.Request, c store.Change) (any, error) {
 	}
 	for _, rev := range revs {
 		out.Revisions = append(out.Revisions, stackRevisionToJSON(rev))
+	}
+	if out.WorkItems, err = s.changeWorkItems(r, c.ID); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

@@ -173,13 +173,25 @@ func (s *Server) screenSections(r *http.Request, form store.Form, it store.WorkI
 // item's values before the edit: a CI the user can't see may stay as it is
 // but not be newly picked.
 func (s *Server) customInput(r *http.Request, form store.Form, current map[string]any) (map[string]any, error) {
+	return s.customValues(r, form, current, func(key string) ([]string, bool) { return r.Form["cf_"+key], true })
+}
+
+// customValues reads a screen's custom fields from raw, which gives a
+// field's input by key and whether it was given at all; fields not given
+// are left out of the result. The API reads JSON with it, the form
+// customInput.
+func (s *Server) customValues(r *http.Request, form store.Form, current map[string]any,
+	input func(key string) ([]string, bool)) (map[string]any, error) {
 	ctx := r.Context()
 	out := map[string]any{}
 	var hostIDs []string
 	var hostsLoaded bool
 	var users []store.User
 	for _, f := range form.Fields {
-		raw := r.Form["cf_"+f.Key]
+		raw, given := input(f.Key)
+		if !given {
+			continue
+		}
 		if f.Type == store.FieldItem {
 			if ref := strings.TrimSpace(strings.Join(raw, "")); ref != "" {
 				other, err := s.store.GetWorkItemByRef(ctx, ref)

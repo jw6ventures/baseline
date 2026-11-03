@@ -16,7 +16,9 @@ import (
 )
 
 // The JSON API at /api/v1 (docs/api.md). It reads everything the web UI
-// shows, under the same role checks, and creates and submits changes. It
+// shows, under the same role checks; creates, submits, cancels and closes
+// changes; adds and removes manual CI relationships; and files, edits,
+// transitions, comments on and links work items. It
 // is authenticated with an API token in the Authorization header: a token
 // acts as its user with at most the roles it names (docs/architecture.md
 // §5.1). Responses are JSON; errors are {"error": "..."} with the status.
@@ -28,6 +30,12 @@ func (s *Server) apiRoutes(mux *http.ServeMux) {
 	}
 	post := func(pattern string, allow access, h http.HandlerFunc) {
 		mux.Handle("POST "+apiPrefix+pattern, s.api(allow, h))
+	}
+	patch := func(pattern string, allow access, h http.HandlerFunc) {
+		mux.Handle("PATCH "+apiPrefix+pattern, s.api(allow, h))
+	}
+	del := func(pattern string, allow access, h http.HandlerFunc) {
+		mux.Handle("DELETE "+apiPrefix+pattern, s.api(allow, h))
 	}
 	get("/me", anyRole, s.apiMe)
 	get("/dashboard", anyRole, s.apiDashboard)
@@ -66,12 +74,17 @@ func (s *Server) apiRoutes(mux *http.ServeMux) {
 	get("/cis/{id}/relationships", anyRole, s.apiCIRelationships)
 	get("/cis/{id}/history", anyRole, s.apiCIHistory)
 	get("/cis/{id}/certificates", anyRole, s.apiCICerts)
+	get("/cis/{id}/work-items", anyRole, s.apiCIWorkItems)
+	post("/cis/{id}/relationships", globalOperator, s.apiCIRelate)
+	del("/cis/{id}/relationships/{rel}", globalOperator, s.apiCIUnrelate)
 	get("/map", anyRole, s.apiMap)
 
 	get("/changes", anyRole, s.apiChanges)
 	post("/changes", anyOperator, s.apiChangeCreate)
 	get("/changes/{id}", anyRole, s.apiChange)
 	post("/changes/{id}/submit", anyOperator, s.apiChangeSubmit)
+	post("/changes/{id}/cancel", anyRole, s.apiChangeCancel)
+	post("/changes/{id}/close", anyRole, s.apiChangeClose)
 	get("/change-models", anyRole, s.apiChangeModels)
 	get("/change-models/{id}", anyRole, s.apiChangeModel)
 	get("/jobs", anyRole, s.apiJobs)
@@ -92,6 +105,28 @@ func (s *Server) apiRoutes(mux *http.ServeMux) {
 	get("/alerts/{id}", anyRole, s.apiAlert)
 	get("/alert-rules", anyRole, s.apiAlertRules)
 	get("/silences", anyRole, s.apiSilences)
+	// Work tracking: as in the UI, any role reads and writes work items.
+	get("/projects", anyRole, s.apiProjects)
+	get("/projects/{key}", anyRole, s.apiProject)
+	get("/users", anyRole, s.apiUsers)
+	get("/work", anyRole, s.apiWorkItems)
+	post("/work", anyRole, s.apiWorkCreate)
+	get("/work/{ref}", anyRole, s.apiWorkItem)
+	patch("/work/{ref}", anyRole, s.apiWorkUpdate)
+	get("/work/{ref}/history", anyRole, s.apiWorkItemHistory)
+	post("/work/{ref}/transitions", anyRole, s.apiWorkTransition)
+	post("/work/{ref}/comments", anyRole, s.apiWorkComment)
+	post("/work/{ref}/watch", anyRole, s.apiWorkWatch(true))
+	del("/work/{ref}/watch", anyRole, s.apiWorkWatch(false))
+	post("/work/{ref}/cis", anyRole, s.apiWorkCI(true))
+	del("/work/{ref}/cis/{ci}", anyRole, s.apiWorkCI(false))
+	post("/work/{ref}/changes", anyRole, s.apiWorkChange(true))
+	del("/work/{ref}/changes/{change}", anyRole, s.apiWorkChange(false))
+	post("/work/{ref}/links", anyRole, s.apiWorkLink(true))
+	del("/work/{ref}/links/{other}", anyRole, s.apiWorkLink(false))
+	get("/boards", anyRole, s.apiBoards)
+	get("/boards/{id}", anyRole, s.apiBoard)
+
 	// Entries name hosts across every group, so scoped-only users can't read it.
 	get("/audit", globalViewer, s.apiAudit)
 

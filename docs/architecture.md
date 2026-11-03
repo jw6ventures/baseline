@@ -42,7 +42,7 @@ flowchart LR
 ```
 
 ### 2.1 baseline-server (one binary in one Docker image)
-- **HTTP listener (`:8080`).** Serves the web UI as server-rendered `html/template` pages and the JSON REST API at `/api/v1` ([api.md](api.md)): reads of everything the UI shows, under the same role checks, plus creating and submitting changes. It sits behind Traefik, which terminates TLS for it (§7).
+- **HTTP listener (`:8080`).** Serves the web UI as server-rendered `html/template` pages and the JSON REST API at `/api/v1` ([api.md](api.md)): reads of everything the UI shows, under the same role checks, plus creating, submitting, cancelling and closing changes, manual CI relationships, and filing and working on work items. It sits behind Traefik, which terminates TLS for it (§7).
 - **gRPC listener (`:8443`).** Agents connect here. It terminates its own TLS with the Baseline internal CA, so Traefik must **not** terminate it. Traefik routes it with a TCP router in TLS passthrough mode, matched on SNI (§7).
 - **Background workers** run in the same process:
   - scheduler (cron-style, timezone aware)
