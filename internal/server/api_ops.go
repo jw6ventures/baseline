@@ -86,6 +86,8 @@ func (s *Server) changeDetail(r *http.Request, c store.Change) (any, error) {
 		Revisions []stackRevisionJSON `json:"stack_revisions,omitempty"`
 		// Manifests are what a k8s.deploy or k8s.edit applies.
 		Manifests []manifestRevisionJSON `json:"manifests,omitempty"`
+		// WorkItems are the work items linked to it, and how.
+		WorkItems []linkedItemJSON `json:"work_items"`
 	}
 	out.changeJSON = changeToJSON(c)
 	approvals, err := s.store.ChangeApprovals(ctx, c.ID)
@@ -123,6 +125,9 @@ func (s *Server) changeDetail(r *http.Request, c store.Change) (any, error) {
 	}
 	for _, m := range ms {
 		out.Manifests = append(out.Manifests, manifestRevisionToJSON(m))
+	}
+	if out.WorkItems, err = s.changeWorkItems(r, c.ID); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

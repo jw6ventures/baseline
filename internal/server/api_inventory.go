@@ -643,8 +643,13 @@ func (s *Server) apiCI(w http.ResponseWriter, r *http.Request) {
 	var out struct {
 		ciJSON
 		Relationships []relationshipJSON `json:"relationships"`
+		WorkItems     []linkedItemJSON   `json:"work_items"`
 	}
 	out.ciJSON, out.Relationships = ciToJSON(c), relationshipsToJSON(rels)
+	if out.WorkItems, err = s.ciWorkItems(r, c.ID); err != nil {
+		s.apiServerError(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 

@@ -1,10 +1,12 @@
 # JSON API
 
-Baseline has a read API over everything the web UI shows, plus creating and
-submitting changes, at `/api/v1` on the web hostname. It exists for
-scripts and other systems: inventory exports, dashboards, a ticketing
-system that raises a change when someone asks for a restart. Approving
-changes stays in the UI, with approvers.
+Baseline has a read API over everything the web UI shows, plus creating,
+submitting, cancelling and closing changes, adding and removing manual CI
+relationships, and filing and working on work items, at `/api/v1` on the
+web hostname. It exists for scripts and other systems: inventory exports,
+dashboards, a ticketing system that raises a change when someone asks for
+a restart, an assistant that files an incident and links the CIs it
+concerns. Approving changes stays in the UI, with approvers.
 
 ## 1. Authentication
 
@@ -18,12 +20,16 @@ A token is made on **Your access** (the user menu). It belongs to the user
 who made it and acts as them, limited to the **roles** picked at creation,
 which must be roles the user holds (docs/architecture.md §5.1):
 
-- `viewer` reads everything the user may see.
+- `viewer` reads everything the user may see. As in the UI, any role also
+  files, edits, transitions, comments on, watches and links work items
+  (§5): they track work rather than change hosts.
 - `operator` also creates and submits changes on the hosts the user holds
-  operator on.
-- `approver` and `admin` add nothing the API can do today; they only widen
-  what a token may read (the audit log needs a global viewer, which admin
-  implies).
+  operator on. A global operator adds and removes manual CI
+  relationships.
+- `approver` and `admin` don't approve anything through the API; they
+  widen what a token may read (the audit log needs a global viewer, which
+  admin implies), and let it cancel or close changes it didn't request
+  (an approver on every host the change affects, or an admin).
 
 Grants are resolved on every request from the token's roles, the Authentik
 groups of the session that created it, and the current role bindings, so a
@@ -49,6 +55,9 @@ Bearer`; a token whose roles don't allow an endpoint gets `403`.
   groups or globally. What a token can't see doesn't exist to it: `404`,
   not `403`. Changes are visible when every host they affect is. Agentless
   CIs are visible to every viewer. The audit log needs a global viewer.
+- Writes take JSON bodies. `PATCH` changes only the fields it names;
+  `null` (or `""`) clears an optional one. `DELETE` names what to remove in
+  the path and query.
 - Query parameters filter lists; `limit` bounds them (each endpoint has a
   default and a maximum). Boolean parameters take `1`/`true`.
 - Inventory sections (`/hosts/{id}/sections/{section}`) return the JSON
@@ -111,8 +120,11 @@ All paths are under `/api/v1`.
 |---|---|
 | `GET /ci-types` | CI types and their fields. |
 | `GET /cis` | CIs: `type`, `status` (default: everything but retired and missing), `q`, `limit` (500). |
-| `GET /cis/{id}` | A CI with its visible relationships. |
+| `GET /cis/{id}` | A CI with its visible relationships and the work items linked to it (`work_items`, each with its `rel`: the CI's role). |
 | `GET /cis/{id}/relationships` | Its relationships. |
+| `POST /cis/{id}/relationships` | Adds a manual relationship: `{"kind": "depends_on", "other": "<CI ID>", "direction": "out"}` reads "this CI depends on other"; `"in"` turns it round. `kind` is one of `runs_on`, `hosted_by`, `member_of`, `depends_on`, `connected_to`, `contains`, `uses`. Global operator; both CIs must be visible. `201` with the CI's relationships; `409` if it exists. |
+| `DELETE /cis/{id}/relationships/{rel}` | Removes a manual relationship by its ID. Discovered ones follow discovery and are `404`. Global operator. |
+| `GET /cis/{id}/work-items` | Work items the CI is linked to, open ones first. |
 | `GET /cis/{id}/history` | Its change history. |
 | `GET /cis/{id}/certificates` | Certificates on it (hosts and agentless endpoints). |
 | `GET /map` | The CI map: nodes, edges, and the type and group filters, as the map page draws it. |
@@ -123,8 +135,10 @@ All paths are under `/api/v1`.
 |---|---|
 | `GET /changes` | Changes affecting only visible hosts, newest first: `show` (`open`, `approval`, `scheduled`, `review`, `all`), `state` (comma-separated), `host`, `model`, `ci`, `limit` (300). |
 | `POST /changes` | Creates a change (§4). |
-| `GET /changes/{id}` | A change with its approvals, jobs and patch cycle. |
+| `GET /changes/{id}` | A change with its approvals, jobs, patch cycle and linked work items (`work_items`, each with its `rel`: `fixes`, `implements` or `caused`). |
 | `POST /changes/{id}/submit` | Submits a draft for approval. Only its requester may; `409` otherwise. |
+| `POST /changes/{id}/cancel` | Cancels an open change, asking its running jobs to stop; `{"reason": "..."}` is optional. Its requester, an approver on all its hosts or an admin may; `409` once it has ended. |
+| `POST /changes/{id}/close` | Closes a change that has ended (implemented, failed, rolled back or in review). One that didn't end implemented needs `{"review": "..."}`, its post-implementation review (`422` without). Who may: as cancel. |
 | `GET /change-models` | Change models; `action`, `state`. |
 | `GET /change-models/{id}` | One model. |
 | `GET /jobs` | Jobs on visible hosts; `show`, `state`, `change`, `host`, `limit` (500). |
@@ -137,6 +151,34 @@ All paths are under `/api/v1`.
 | `GET /calendar` | Window and freeze openings and planned changes from `from` to `to` (RFC 3339 or `YYYY-MM-DD`; the next 30 days). |
 | `GET /patch-groups` | Patch groups with their latest cycle. |
 | `GET /patch-groups/{id}` | A patch group with its cycles; `limit` (50). |
+
+### Work tracking
+
+| Method, path | Returns |
+|---|---|
+| `GET /projects` | Open projects with their open item counts; `archived=1` includes archived ones. |
+| `GET /projects/{key}` | A project with its ticket types, each with its workflow and the custom fields its create screen asks for (`key`, `label`, `type`, `options`, `required`, `default`). |
+| `GET /users` | Everyone who has signed in, for assignees. |
+| `GET /work` | Work items: `project` (key), `type` (key or ID), `status` (`open`, the default, `all`, `todo`, `in_progress`, `done`), `assignee` (`me`, `none`, a user ID or email), `parent` (a reference), `q` (reference, title and description), `limit` (200, at most 1000). Open first, then by priority. |
+| `POST /work` | Files a work item (§5). |
+| `GET /work/{ref}` | An item, by its reference (`OPS-42`; one from before a move works too), with its visible CIs and changes, links, children, SLA clocks, watchers, comments and work notes, and the transitions out of its status (whether the token's user may run each, and what its screen takes). |
+| `PATCH /work/{ref}` | Edits an item (§5). |
+| `GET /work/{ref}/history` | Its history, newest first, without entries about CIs or changes the token can't see; `limit` (100). |
+| `POST /work/{ref}/transitions` | Runs a transition (§5). |
+| `POST /work/{ref}/comments` | Adds `{"body": "...", "internal": false}`; `internal` makes it a work note. The author then watches the item. |
+| `POST /work/{ref}/watch`, `DELETE /work/{ref}/watch` | Starts or stops the token's user watching it. |
+| `POST /work/{ref}/cis` | Links a visible CI: `{"ci": "<CI ID>", "role": "affected"}`; `role` is `affected` (default), `caused_by` or `target`. |
+| `DELETE /work/{ref}/cis/{ci}?role=` | Unlinks it. |
+| `POST /work/{ref}/changes` | Links a visible change: `{"change": "CHG-000123", "kind": "fixes"}` (its ID or number works too); `kind` is `fixes`, `implements` or `caused`. |
+| `DELETE /work/{ref}/changes/{change}?kind=` | Unlinks it. |
+| `POST /work/{ref}/links` | Links another item: `{"item": "OPS-7", "kind": "blocks", "direction": "out"}` reads "this blocks OPS-7"; `"in"` turns it round. `kind` is `blocks`, `relates`, `duplicates` or `caused_by`. |
+| `DELETE /work/{ref}/links/{other}?kind=&direction=` | Removes the link. |
+| `GET /boards` | Boards, with their columns. |
+| `GET /boards/{id}` | A board filled as its page fills it: its filter in words, then each column's cards (items, with the transitions out of their status); `shown`, `total` and `unplaced` (matching items no column takes). |
+
+Every write to an item answers with the item as `GET /work/{ref}` shows
+it (`201` with `Location` for a new one). A link that exists is `409`;
+unlinking one that doesn't is `404`.
 
 ### Vulnerabilities, alerts, audit
 
@@ -264,3 +306,60 @@ An edit starts from the revision applied last (`GET /kubernetes/{id}/manifests`)
 and is `422` when it changes nothing or another open change already
 deploys or edits the bundle. The change's detail lists its revisions under
 `manifests`.
+
+## 5. Work items
+
+`POST /work` files an item in a project, as the new-item form does. It
+starts at the initial status of its type's workflow, with `source`
+`api`; the token's user is its reporter, and they and the assignee watch
+it.
+
+```json
+{
+  "project": "OPS",
+  "type": "incident",
+  "title": "NAS offline",
+  "description": "No ping since 02:00",
+  "priority": "high",
+  "assignee": "me",
+  "custom": {"site": "home"}
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `project` | The project's key. Required. |
+| `type` | A ticket type the project offers, by key or ID; the project's default when left out. |
+| `title`, `description` | The title is required. |
+| `priority` | `critical`, `high`, `medium` (default) or `low`. |
+| `impact`, `urgency` | `high`, `medium` or `low`, or left out. |
+| `assignee` | A user ID, an email or `me` (`GET /users`). |
+| `parent` | Another item's reference. |
+| `estimate` | A number, 0 or more. |
+| `due` | A date, `YYYY-MM-DD`. |
+| `custom` | Custom field values by key, as `GET /projects/{key}` lists them for the type: a string, number, `true`/`false`, a list of strings for a pick-several, or `null`. Users and CIs are named by ID, work items by reference; a date and time is RFC 3339, or local time in the server's zone. Fields left out take their defaults; a required field must have a value. |
+
+`PATCH /work/{ref}` takes the same fields but `project` and `type`, each
+optional: only those named change, `null` or `""` clears `impact`,
+`urgency`, `assignee`, `parent`, `estimate` or `due`, and in `custom`
+only the keys named change (`null` clears one). Moving an item to
+another project or type is an admin's migration in the UI.
+
+`POST /work/{ref}/transitions` runs one of the transitions out of the
+item's status, as listed under `transitions` in `GET /work/{ref}`:
+
+```json
+{"transition": "Done", "resolution": "Fixed", "comment": "PSU swapped"}
+```
+
+| Field | Meaning |
+|---|---|
+| `transition` | Its ID or name (case doesn't matter). An unknown one is `422` naming the ones there are. |
+| `resolution` | Into a done status whose screen asks for it: `Done` (default), `Fixed`, `Won't do`, `Duplicate` or `Cannot reproduce`. |
+| `assignee` | When the screen asks for it: a user ID, email or `me`; left out, nobody. |
+| `comment` | When the screen asks for it; a `comment_required` validator needs one. |
+
+The workflow's conditions apply to the token's user (with the token's
+roles): failing them is `403`. A validator that fails is `422` with its
+reason, and a transition that no longer applies because the item moved on
+is `409`.
