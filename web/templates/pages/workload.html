@@ -1,0 +1,72 @@
+{{define "content"}}
+{{$v := .Body}}{{$w := $v.W}}{{$c := $v.Cluster}}
+<div class="titlebar">
+  <div>
+    <h1><span class="muted">{{$w.Namespace}}/</span>{{$w.Name}}</h1>
+    <p class="muted sub">{{$w.Kind}} · cluster <a href="{{.Base}}/kubernetes/{{$c.CIID}}?tab=workloads">{{$c.Name}}</a> · agent {{if $c.Connected}}<span class="dot on"></span>online{{else}}<span class="dot off"></span>offline{{end}}{{if not $w.Present}} · <strong>gone from the cluster</strong>{{end}}</p>
+  </div>
+  <div class="actions">
+    {{if $v.CanChange}}{{range $v.Actions}}{{if ne .Spec.Name "k8s.delete_pod"}}
+    {{if .Disabled}}<button type="button" class="secondary" title="{{.Disabled}}" disabled>{{template "k8s-action-label" .Spec.Name}}</button>
+    {{else}}<a class="button" href="{{$.Base}}/changes/new?action={{.Spec.Name}}&amp;workload={{$w.CIID}}">{{template "k8s-action-label" .Spec.Name}}</a>{{end}}
+    {{end}}{{end}}{{end}}
+    <a class="button secondary" href="{{.Base}}/cis/{{$w.CIID}}">CI and relationships</a>
+  </div>
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{if $v.Deny}}<p class="notice warn">Namespace {{$w.Namespace}} is off limits to the cluster agent's actions (<code>BASELINE_DENY_NAMESPACES</code>), so Baseline doesn't change this workload.</p>
+{{else if and $v.CanChange $v.AgentOld}}<p class="notice">This cluster's agent is too old to change workloads; update its image.</p>
+{{else if and $v.CanChange $v.ActionsOff}}<p class="notice">Kubernetes actions are off on this cluster's agent. Set <code>BASELINE_ALLOW_ACTIONS=kubernetes</code> on it and apply <code>deploy/k8s/baseline-agent-manage.yaml</code> to grant what they need.</p>{{end}}
+
+<div class="grid2">
+<section class="panel">
+  <h2>Workload</h2>
+  <dl class="facts">
+    <dt>Kind</dt><dd>{{$w.Kind}}</dd>
+    {{if eq $w.Kind "CronJob"}}
+    <dt>Schedule</dt><dd class="mono">{{$w.Workload.Schedule}}{{if $w.Workload.Suspend}} <span class="tag caution">suspended</span>{{end}}</dd>
+    {{else}}
+    <dt>Ready</dt><dd>{{template "k8s-ready" $w}}</dd>
+    {{end}}
+    {{with $w.Workload.Node}}<dt>Node</dt><dd>{{.}}</dd>{{end}}
+    {{with $w.Workload.Created}}<dt>Created</dt><dd>{{.}}</dd>{{end}}
+  </dl>
+</section>
+<section class="panel">
+  <h2>Containers</h2>
+  {{with $w.Workload.Containers}}
+  <dl class="facts">
+    {{range .}}<dt class="mono">{{.Name}}{{if .Init}} <span class="muted small">init</span>{{end}}</dt><dd class="mono small">{{.Image}}</dd>{{end}}
+  </dl>
+  {{else}}
+  <p class="mono small">{{range $w.Workload.Images}}{{.}}<br>{{end}}</p>
+  {{end}}
+</section>
+</div>
+
+<h2>Pods</h2>
+{{with $v.PodsError}}<p class="muted">{{.}}</p>{{else}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Pod</th><th>Status</th><th>Ready</th><th class="num">Restarts</th><th>Node</th><th>Created</th><th></th></tr></thead>
+  <tbody>
+  {{range $v.Pods}}{{$p := .}}
+  <tr>
+    <td class="mono small">{{.Name}}</td>
+    <td>{{.Phase}}{{with .Reason}} <span class="tag warn">{{.}}</span>{{end}}</td>
+    <td>{{.Ready}} / {{.Total}}</td>
+    <td class="num">{{.Restarts}}</td>
+    <td>{{.Node}}</td>
+    <td class="small">{{.Created}}</td>
+    <td class="nowrap">
+      {{if $v.CanLogs}}{{range .Containers}}<a class="small" href="{{$.Base}}/kubernetes/{{$c.CIID}}/workloads/{{$w.CIID}}/logs?pod={{$p.Name}}&amp;container={{.}}">logs{{if gt (len $p.Containers) 1}} ({{.}}){{end}}</a> {{end}}{{end}}
+      {{if and $v.CanChange (not $v.DeletePod)}}<a class="small" href="{{$.Base}}/changes/new?action=k8s.delete_pod&amp;workload={{$w.CIID}}&amp;pod={{.Name}}">delete…</a>{{end}}
+    </td>
+  </tr>
+  {{else}}<tr><td colspan="7" class="muted">No pods.</td></tr>{{end}}
+  </tbody>
+</table></div>
+<p class="muted small">Read from the cluster just now.{{if and $v.CanChange (not $v.CanLogs)}} Logs need <code>BASELINE_K8S_LOGS=on</code> on the cluster agent and the <code>pods/log</code> permission.{{end}}</p>
+{{end}}
+{{end}}
+
+{{define "k8s-action-label"}}{{if eq . "k8s.restart"}}Restart…{{else if eq . "k8s.scale"}}Scale…{{else if eq . "k8s.set_image"}}Change image…{{else if eq . "k8s.suspend"}}Suspend…{{else if eq . "k8s.resume"}}Resume…{{else if eq . "k8s.trigger"}}Run now…{{else}}{{.}}{{end}}{{end}}

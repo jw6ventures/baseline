@@ -59,6 +59,9 @@ func (s *Server) apiRoutes(mux *http.ServeMux) {
 	get("/vms/{id}", anyRole, s.apiVM)
 	get("/kubernetes", anyRole, s.apiClusters)
 	get("/kubernetes/{id}", anyRole, s.apiCluster)
+	get("/kubernetes/{id}/manifests", anyRole, s.apiClusterManifests)
+	get("/kubernetes/{id}/workloads/{wid}/pods", anyRole, s.apiWorkloadPods)
+	get("/kubernetes/{id}/workloads/{wid}/logs", anyRole, s.apiWorkloadLogs)
 
 	get("/ci-types", anyRole, s.apiCITypes)
 	get("/cis", anyRole, s.apiCIs)

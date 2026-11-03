@@ -101,6 +101,9 @@ All paths are under `/api/v1`.
 | `GET /vms/{id}` | One guest, by its CI ID. |
 | `GET /kubernetes` | Clusters reported by visible cluster agents. |
 | `GET /kubernetes/{id}` | A cluster with its nodes, workloads, services and ingresses; `namespace` filters. |
+| `GET /kubernetes/{id}/manifests` | The bundles Baseline applied to the cluster: `bundle`, `namespace`, the revision applied last (`revision`, `sha256`, `objects`, `manifest`), and `pending` with the open `change` that edits it. |
+| `GET /kubernetes/{id}/workloads/{wid}/pods` | A workload's live pods, read from the cluster agent now. |
+| `GET /kubernetes/{id}/workloads/{wid}/logs` | The end of a pod's log: `pod` (required), `container`, `tail` (default 200, at most 5000), `previous=1`. Needs the operator role on the cluster agent and `BASELINE_K8S_LOGS=on`; each read is audited. |
 
 ### CIs
 
@@ -169,11 +172,12 @@ token holder can't approve their own work.
 
 | Field | Meaning |
 |---|---|
-| `action` | One of `GET /actions`: `pkg.upgrade`, `service.restart`, `service.start`, `service.stop`, `container.restart`, `compose.pull`, `compose.update`, `compose.start`, `compose.archive`, `compose.move`, `compose.deploy`, `compose.edit`, `host.reboot`, `script.run`. |
+| `action` | One of `GET /actions`: `pkg.upgrade`, `service.restart`, `service.start`, `service.stop`, `container.restart`, `compose.pull`, `compose.update`, `compose.start`, `compose.archive`, `compose.move`, `compose.deploy`, `compose.edit`, `host.reboot`, `script.run`, and on cluster agents `k8s.restart`, `k8s.scale`, `k8s.set_image`, `k8s.delete_pod`, `k8s.suspend`, `k8s.resume`, `k8s.trigger`, `k8s.deploy`, `k8s.edit` (§4.2). |
 | `hosts` | Target host IDs. The token's user needs operator on each; a host's agent policy and capabilities must allow the action. |
 | `params` | The action's parameters, as `internal/action` validates them (docs/agent.md §5): `pkg.upgrade` `{"mode": "all"|"security"|"selected", "packages": [...], "exclude": [...], "reboot": "never"|"if_required"|"always"}`; `service.*` `{"unit": "..."}`; `container.restart` `{"engine": "docker", "name": "..."}`; `compose.pull`, `compose.update`, `compose.start`, `compose.archive` `{"services": [...], "health_timeout": 120}`; `compose.move` the same plus `"dest": "<one of the host's Compose roots>"`; `compose.deploy` and `compose.edit` as §4.1; `host.reboot` `{"delay_s": 10}`; `script.run` `{"script_id": "...", "version": 2, "args": {"name": "value"}, "timeout_s": 600}` (`version` defaults to the newest). Unknown fields are rejected. |
 | `containers` | For `container.restart`: container CI IDs, a step on each one's host, instead of `params` and `hosts`. `container` is shorthand for one. |
 | `stacks` | For `compose.*`: Compose stack CI IDs, a step on each one's host; `params.services` applies to all of them. `stack` is shorthand for one. A `compose.edit` names one; a `compose.deploy` none. |
+| `workloads` | For the `k8s.*` workload actions: workload CI IDs (from `GET /kubernetes/{id}`), a step on each one's cluster agent. `workload` is shorthand for one; `k8s.set_image` and `k8s.delete_pod` name one. See §4.2. |
 | `model` | An approved change model's ID: a Standard change, pre-approved, with the model's action and parameters. |
 | `kind` | `normal` (default) or `emergency`; `standard` with `model`. |
 | `title`, `description`, `justification`, `backout_plan`, `test_plan` | The record. The title defaults to the action and hosts. |
@@ -225,3 +229,38 @@ and send them back with `base_sha256`. An edit that changes nothing is
 `422`. The change's detail lists the files it writes under
 `stack_revisions`: the Compose file in full, and the .env's variable names
 and keyed hash only.
+
+### 4.2 Kubernetes workloads and manifests
+
+The `k8s.*` actions run on cluster agents that have them turned on
+(docs/change-management.md §5.2). Workload actions name their workloads
+(`workloads` or `workload`) and no hosts; `params` holds only what the
+action changes, since kind, namespace and name come from the workload:
+
+| Action | `params` |
+|---|---|
+| `k8s.restart` | `{"health_timeout": 120}` (optional) |
+| `k8s.scale` | `{"replicas": 3, "health_timeout": 120}` |
+| `k8s.set_image` | `{"images": {"<container>": "<image>"}, "health_timeout": 120}` |
+| `k8s.delete_pod` | `{"pod": "<pod name>"}` |
+| `k8s.suspend`, `k8s.resume`, `k8s.trigger` | none |
+
+```json
+{"action": "k8s.set_image", "workload": "<workload CI id>", "params": {"images": {"web": "nginx:1.28"}}}
+```
+
+`k8s.deploy` and `k8s.edit` carry the manifest as text, like Compose files
+(§4.1), and name the cluster rather than hosts:
+
+| Param | Meaning |
+|---|---|
+| `cluster` | The cluster's CI ID. |
+| `bundle` | The bundle's name (lowercase letters, digits, `-`, `_`, `.`). A deploy needs a new one; an edit one Baseline deployed. |
+| `namespace` | Deploy: where objects that name no namespace go (default `default`). An edit keeps the bundle's. |
+| `manifest` | Multi-document YAML or JSON, at most 1 MiB and 100 objects (docs/agent.md §6.1). |
+| `health_timeout` | Seconds the workloads get to roll out before the change is undone (default 120, at most 1800). |
+
+An edit starts from the revision applied last (`GET /kubernetes/{id}/manifests`)
+and is `422` when it changes nothing or another open change already
+deploys or edits the bundle. The change's detail lists its revisions under
+`manifests`.

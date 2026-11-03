@@ -62,6 +62,7 @@ type Server struct {
 	checker Checker     // nil: no registry checks (tests)
 	unifi   UniFiPoller // nil: UniFi consoles aren't polled (tests)
 	jobs    Jobs        // nil: jobs aren't dispatched (tests)
+	polls   AgentPoller // nil: cluster agents aren't asked for pods and logs (tests)
 	// changes checks schedules and runs patch groups on demand; the
 	// scheduler itself runs beside the dispatcher.
 	changes  *change.Manager
@@ -148,6 +149,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /vms/{id}", s.page(anyRole, s.vmPage))
 	mux.Handle("GET /kubernetes", s.page(anyRole, s.clusters))
 	mux.Handle("GET /kubernetes/{id}", s.page(anyRole, s.clusterPage))
+	mux.Handle("GET /kubernetes/{id}/workloads/{wid}", s.page(anyRole, s.workloadPage))
+	mux.Handle("GET /kubernetes/{id}/workloads/{wid}/logs", s.page(anyRole, s.workloadLogs))
 	mux.Handle("GET /work", s.page(anyRole, s.workList))
 	mux.Handle("GET /work/new", s.page(anyRole, s.workNew))
 	mux.Handle("POST /work", s.page(anyRole, s.workCreate))

@@ -296,6 +296,15 @@ func failed(format string, args ...any) outcome {
 func (r *Runner) run(ctx context.Context, rj *agentv1.RunJob) {
 	id, name := rj.GetJobId(), rj.GetAction()
 	rec := record{ID: id, Action: name, State: stateRunning, BootID: r.BootID(), Started: time.Now()}
+	// A cluster agent refuses other actions first, so the reason doesn't
+	// point at an agent.conf it doesn't have.
+	if spec, known := action.Get(name); known && r.Kube != nil && spec.Category != action.CategoryKubernetes {
+		why := "a Kubernetes cluster agent runs only Kubernetes actions"
+		r.logf(jw6_utils.Warn, "Refused job %s (%s): %s", id, name, why)
+		rec.State, rec.Error, rec.ExitCode = "rejected", why, -1
+		r.finish(rec)
+		return
+	}
 	if ok, why := r.Policy.Allows(name); !ok {
 		r.logf(jw6_utils.Warn, "Refused job %s (%s): %s", id, name, why)
 		rec.State, rec.Error, rec.ExitCode = "rejected", why, -1
@@ -303,13 +312,6 @@ func (r *Runner) run(ctx context.Context, rj *agentv1.RunJob) {
 		return
 	}
 	spec, _ := action.Get(name)
-	if r.Kube != nil && spec.Category != action.CategoryKubernetes {
-		why := "a Kubernetes cluster agent runs only Kubernetes actions"
-		r.logf(jw6_utils.Warn, "Refused job %s (%s): %s", id, name, why)
-		rec.State, rec.Error, rec.ExitCode = "rejected", why, -1
-		r.finish(rec)
-		return
-	}
 	params, err := action.Validate(name, rj.GetParamsJson())
 	if err != nil {
 		rec.State, rec.Error, rec.ExitCode = "failed", err.Error(), -1

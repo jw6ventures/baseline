@@ -173,6 +173,16 @@ identity on a small volume and is updated by changing its image. Host agents
 on the nodes still report each node's OS and packages, plus its runtime's
 pods (with `crictl`), and nodes are linked to their hosts.
 
+To let Baseline change workloads too (restart, scale and change the images
+of Deployments, StatefulSets and DaemonSets, delete pods, suspend, resume
+and run CronJobs, deploy and edit manifests), apply
+`deploy/k8s/baseline-agent-manage.yaml` and set
+`BASELINE_ALLOW_ACTIONS=kubernetes` on the cluster agent. Each change goes
+through approval like any other; image changes and manifests roll back when
+the rollout fails. `kube-system` is left alone unless
+`BASELINE_DENY_NAMESPACES` says otherwise, and `BASELINE_K8S_LOGS=on` lets
+operators read a pod's recent logs.
+
 ## UniFi
 
 Add a UniFi console (UDM, UCG, Cloud Key or a self-hosted Network

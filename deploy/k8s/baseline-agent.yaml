@@ -5,7 +5,8 @@
 # to get and list on exactly those resources: no Secrets, no ConfigMaps, no
 # pod logs or exec, and it never collects environment variables or
 # annotations. The host agent on each node still reports that node's OS,
-# packages and containers.
+# packages and containers. To let Baseline change workloads as well, apply
+# baseline-agent-manage.yaml and set BASELINE_ALLOW_ACTIONS below.
 #
 # Usage:
 #   1. Set the Deployment's image below to a release,
@@ -53,6 +54,10 @@ rules:
   - apiGroups: [batch]
     resources: [cronjobs]
     verbs: [get, list]
+  # A CronJob's Jobs, to tell which pods are the CronJob's.
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get]
   - apiGroups: [networking.k8s.io]
     resources: [ingresses]
     verbs: [get, list]
@@ -144,6 +149,16 @@ spec:
               value: /var/lib/baseline
             - name: BASELINE_LOG_LEVEL
               value: Info
+            # Changing workloads (docs/agent.md §6.1) needs the ClusterRole
+            # in baseline-agent-manage.yaml too. Off unless set.
+            # - name: BASELINE_ALLOW_ACTIONS
+            #   value: kubernetes
+            # Namespaces the agent never changes; "none" for none.
+            # - name: BASELINE_DENY_NAMESPACES
+            #   value: kube-system
+            # Lets operators read a pod's recent logs (needs pods/log).
+            # - name: BASELINE_K8S_LOGS
+            #   value: "on"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

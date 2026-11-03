@@ -20,6 +20,10 @@
 {{template "script-chooser" (dict "Base" .Base "V" $v "Action" (print .Base "/changes/new"))}}
 {{else if and $v.Files $v.Files.Block}}
 <p class="notice bad">{{$v.Files.Block}}.</p>
+{{else if and $v.Manifest $v.Manifest.Block}}
+<p class="notice bad">{{$v.Manifest.Block}}.</p>
+{{else if and (or (eq $v.Spec.Name "k8s.set_image") (eq $v.Spec.Name "k8s.delete_pod")) (not $v.Workload)}}
+{{template "workload-chooser" (dict "Base" .Base "V" $v)}}
 {{else}}
 <form class="panel stack-form wide" method="post" action="{{.Base}}/changes">
   <input type="hidden" name="action" value="{{$v.Spec.Name}}">
@@ -27,6 +31,13 @@
 
   {{if $v.Files}}
     {{template "stack-files" (dict "Base" .Base "V" $v)}}
+  {{else if $v.Manifest}}
+    {{template "k8s-manifest" (dict "Base" .Base "V" $v)}}
+  {{else if $v.Workload}}{{$w := $v.Workload}}
+    <input type="hidden" name="workload" value="{{$w.CIID}}">
+    <p>{{$w.Kind}} <a href="{{.Base}}/kubernetes/{{$w.ClusterCI}}/workloads/{{$w.CIID}}"><strong>{{$w.Namespace}}/{{$w.Name}}</strong></a> in cluster <a href="{{.Base}}/kubernetes/{{$w.ClusterCI}}">{{$w.Cluster}}</a>.</p>
+  {{else if hasPrefix $v.Spec.Name "k8s."}}
+    {{template "workload-picker" (dict "Base" .Base "V" $v)}}
   {{else if eq $v.Spec.Name "container.restart"}}
     {{template "container-picker" (dict "Base" .Base "V" $v)}}
   {{else if hasPrefix $v.Spec.Name "compose."}}
@@ -43,8 +54,10 @@
   </fieldset>
   {{end}}
 
-  {{with $v.Model}}
+  {{if $v.Model}}{{with $v.Model}}
   <p>From change model <a href="{{$.Base}}/change-models/{{.ID}}"><strong>{{.Name}}</strong></a>: {{.Summary}} · {{.Risk}} risk. It was approved by {{.ApprovedByName}}, so this change is approved as soon as it's created.</p>
+  {{end}}{{else if hasPrefix $v.Spec.Name "k8s."}}
+  {{if not $v.Manifest}}{{template "k8s-params" (dict "Base" .Base "V" $v)}}{{end}}
   {{else}}
   {{template "action-params" (dict "Base" .Base "V" $v)}}
   {{end}}
@@ -87,7 +100,7 @@
   </fieldset>
 
   <div class="inline-form">
-    <label>{{if hasPrefix $v.Spec.Name "compose."}}Stacks{{else if eq $v.Spec.Name "container.restart"}}Containers{{else}}Hosts{{end}} at a time<input type="number" name="concurrency" min="1" max="100" value="{{with $f.Get "concurrency"}}{{.}}{{else}}1{{end}}" class="narrow"></label>
+    <label>{{if hasPrefix $v.Spec.Name "compose."}}Stacks{{else if eq $v.Spec.Name "container.restart"}}Containers{{else if hasPrefix $v.Spec.Name "k8s."}}Workloads{{else}}Hosts{{end}} at a time<input type="number" name="concurrency" min="1" max="100" value="{{with $f.Get "concurrency"}}{{.}}{{else}}1{{end}}" class="narrow"></label>
     <input type="hidden" name="stop_on_failure_set" value="1">
     <label class="check"><input type="checkbox" name="stop_on_failure" value="1"{{if or (not ($f.Get "stop_on_failure_set")) ($f.Get "stop_on_failure")}} checked{{end}}> stop at the first failure</label>
   </div>

@@ -814,7 +814,7 @@ type Policy struct {
 	Jobs         bool `json:"jobs"`
 	AllowScripts bool `json:"allow_scripts"`
 	// AllowActions lists the categories the host accepts; nil means all.
-	AllowActions []string `json:"allow_actions,omitempty"`
+	AllowActions []string `json:"allow_actions"` // null for all; [] for none, so no omitempty
 	// SelfUpdateOff is agent.conf's self_update = off: the agent ignores
 	// UpdateAgent and is updated only by running install.sh again. Stored
 	// negated so agents that don't report it read as accepting updates.

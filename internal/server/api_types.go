@@ -1085,6 +1085,29 @@ type stackRevisionJSON struct {
 	EnvHash       string   `json:"env_hash,omitempty"`
 }
 
+// manifestRevisionJSON is a revision of a Kubernetes manifest bundle.
+type manifestRevisionJSON struct {
+	ID             string   `json:"id"`
+	ClusterCI      string   `json:"cluster_ci"`
+	Bundle         string   `json:"bundle"`
+	Namespace      string   `json:"namespace"`
+	Action         string   `json:"action"`
+	Manifest       string   `json:"manifest"`
+	ManifestSHA256 string   `json:"manifest_sha256"`
+	Objects        []string `json:"objects"`
+	BaseRevision   string   `json:"base_revision,omitempty"`
+	Applied        bool     `json:"applied"`
+}
+
+func manifestRevisionToJSON(m store.Manifest) manifestRevisionJSON {
+	if m.Objects == nil {
+		m.Objects = []string{}
+	}
+	return manifestRevisionJSON{ID: m.ID, ClusterCI: m.ClusterCI, Bundle: m.Bundle, Namespace: m.Namespace, Action: m.Action,
+		Manifest: m.Manifest, ManifestSHA256: m.ManifestSHA256, Objects: m.Objects, BaseRevision: m.BaseRevision,
+		Applied: m.Applied()}
+}
+
 func stackRevisionToJSON(rev store.ComposeRevision) stackRevisionJSON {
 	out := stackRevisionJSON{ID: rev.ID, HostID: rev.HostID, Engine: rev.Engine, Project: rev.Project, Action: rev.Action,
 		ComposeSHA256: rev.ComposeSHA256, BaseSHA256: rev.BaseSHA256, Env: rev.HasEnv, EnvKeys: strs(rev.EnvKeys), EnvHash: rev.EnvHash}

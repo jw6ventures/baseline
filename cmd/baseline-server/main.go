@@ -186,6 +186,7 @@ func serve(ctx context.Context, cfg config.Config, log *jw6_utils.Utils) error {
 	// UniFi consoles: polled every 5 minutes, from here or through an agent.
 	unifiPoller := &unifipoll.Poller{Store: st, Open: secrets.Open, Agents: gw, Log: log}
 	srv.SetUniFi(unifiPoller)
+	srv.SetAgentPolls(gw)
 	go unifiPoller.Run(ctx)
 
 	dispatcher := jobs.New(st, gw, log)
