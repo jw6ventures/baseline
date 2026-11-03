@@ -231,3 +231,55 @@ func TestK8sNodeCRIO(t *testing.T) {
 		t.Errorf("got  %+v\nwant %+v", got, want)
 	}
 }
+
+// k3s installed without its /usr/local/bin symlinks: no crictl on PATH,
+// but k3s's bundled one answers as `k3s crictl`, on PATH or at the path
+// the installer used.
+func TestK8sNodeK3sBundledCrictl(t *testing.T) {
+	for _, bin := range []string{"k3s", "/usr/local/bin/k3s", "/opt/bin/k3s"} {
+		t.Run(bin, func(t *testing.T) {
+			f := newFixture(t)
+			f.file(k3sSock, "")
+			stubCrictl(t, f, k3sSock, "k3s")
+			for k, v := range f.cmds {
+				delete(f.cmds, k)
+				f.cmds[bin+" "+k] = v
+			}
+			if bin != "k3s" {
+				f.file(bin, "")
+				has := f.env.Has
+				f.env.Has = func(name string) bool { return name != bin && has(name) }
+			}
+			got, err := f.env.K8sNode(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Endpoint != "unix://"+k3sSock || len(got.Containers) != 5 {
+				t.Errorf("endpoint %q, %d containers", got.Endpoint, len(got.Containers))
+			}
+			if !contains(f.env.Capabilities(), "crictl") {
+				t.Error("no crictl capability")
+			}
+		})
+	}
+}
+
+// RKE2 keeps crictl in its own bin directory, off PATH.
+func TestK8sNodeRKE2BundledCrictl(t *testing.T) {
+	const bin = "/var/lib/rancher/rke2/bin/crictl"
+	f := newFixture(t)
+	f.file(bin, "")
+	f.file(containerdSock, "")
+	stubCrictl(t, f, containerdSock, "k3s")
+	for k, v := range f.cmds {
+		delete(f.cmds, k)
+		f.cmds["/var/lib/rancher/rke2/bin/"+k] = v
+	}
+	got, err := f.env.K8sNode(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Endpoint != "unix://"+containerdSock || len(got.Containers) != 5 {
+		t.Errorf("endpoint %q, %d containers", got.Endpoint, len(got.Containers))
+	}
+}

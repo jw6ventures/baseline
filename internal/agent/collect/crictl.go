@@ -23,10 +23,47 @@ var criSockets = []string{
 	"/run/crio/crio.sock",
 }
 
+// bundledCrictl are crictl binaries that Kubernetes distributions ship
+// outside PATH: RKE2's, and k3s's own when its install skipped the
+// /usr/local/bin symlinks (INSTALL_K3S_SYMLINK=skip, or a read-only
+// /usr/local/bin where it installs to /opt/bin).
+var bundledCrictl = []string{
+	"/var/lib/rancher/rke2/bin/crictl",
+	"/var/lib/rancher/k3s/data/current/bin/crictl",
+}
+
+// k3sBinaries are where the k3s installer puts k3s when it isn't on PATH.
+// k3s is a multi-call binary: `k3s crictl` is its bundled crictl.
+var k3sBinaries = []string{"/usr/local/bin/k3s", "/opt/bin/k3s"}
+
+// crictlCommand finds crictl: on PATH, else the copy a distribution ships
+// (`k3s crictl`, RKE2's), returned as the command and the arguments that
+// come before crictl's own. ok is false when there is none.
+func (e *Env) crictlCommand() (name string, pre []string, ok bool) {
+	if e.Has("crictl") {
+		return "crictl", nil, true
+	}
+	if e.Has("k3s") {
+		return "k3s", []string{"crictl"}, true
+	}
+	for _, p := range k3sBinaries {
+		if e.Exists(p) {
+			return p, []string{"crictl"}, true
+		}
+	}
+	for _, p := range bundledCrictl {
+		if e.Exists(p) {
+			return p, nil, true
+		}
+	}
+	return "", nil, false
+}
+
 // K8sNode collects the "k8s_node" section with crictl (docs/agent.md §3.4).
 // ErrAbsent when there's no crictl or no CRI runtime.
 func (e *Env) K8sNode(ctx context.Context) (model.K8sNode, error) {
-	if !e.Has("crictl") {
+	bin, pre, ok := e.crictlCommand()
+	if !ok {
 		return model.K8sNode{}, ErrAbsent
 	}
 	var (
@@ -39,7 +76,8 @@ func (e *Env) K8sNode(ctx context.Context) (model.K8sNode, error) {
 		}
 		endpoint := "unix://" + sock
 		run := func(args ...string) ([]byte, error) {
-			return e.Run(ctx, "crictl", append([]string{"--runtime-endpoint", endpoint, "--timeout", "20s"}, args...)...)
+			a := append(append([]string{}, pre...), "--runtime-endpoint", endpoint, "--timeout", "20s")
+			return e.Run(ctx, bin, append(a, args...)...)
 		}
 		b, err := run("version")
 		if err != nil {
