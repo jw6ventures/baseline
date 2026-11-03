@@ -20,6 +20,8 @@ import (
 type Collector struct {
 	Client      *Client
 	ClusterName string
+	// DenyNamespaces are reported for the UI (Manager.DenyNamespaces).
+	DenyNamespaces []string
 }
 
 // Collect produces the "k8s" section. Failing to read the kube-system
@@ -34,6 +36,9 @@ func (c *Collector) Collect(ctx context.Context) (model.K8s, error) {
 		Workloads:  []model.K8sWorkload{},
 		Services:   []model.K8sService{},
 		Ingresses:  []model.K8sIngress{},
+	}
+	if len(c.DenyNamespaces) > 0 {
+		out.DenyNamespaces = slicesSorted(c.DenyNamespaces)
 	}
 	var ks struct {
 		Metadata struct {
@@ -197,7 +202,20 @@ type podSpec struct {
 }
 
 type container struct {
+	Name  string `json:"name"`
 	Image string `json:"image"`
+}
+
+// containers are the pod's containers, then its init containers.
+func (s podSpec) containers() []model.K8sContainer {
+	var out []model.K8sContainer
+	for _, c := range s.Containers {
+		out = append(out, model.K8sContainer{Name: c.Name, Image: c.Image})
+	}
+	for _, c := range s.InitContainers {
+		out = append(out, model.K8sContainer{Name: c.Name, Image: c.Image, Init: true})
+	}
+	return out
 }
 
 type podTemplate struct {
@@ -328,7 +346,7 @@ func (d deployment) workload(kind string) model.K8sWorkload {
 	}
 	return model.K8sWorkload{Kind: kind, Namespace: d.Metadata.Namespace, Name: d.Metadata.Name,
 		Replicas: replicas, Ready: d.Status.ReadyReplicas, Images: d.Spec.Template.Spec.images(),
-		Created: timestamp(d.Metadata.CreationTimestamp)}
+		Containers: d.Spec.Template.Spec.containers(), Created: timestamp(d.Metadata.CreationTimestamp)}
 }
 
 type daemonSet struct {
@@ -345,7 +363,7 @@ type daemonSet struct {
 func (d daemonSet) workload() model.K8sWorkload {
 	return model.K8sWorkload{Kind: "DaemonSet", Namespace: d.Metadata.Namespace, Name: d.Metadata.Name,
 		Replicas: d.Status.DesiredNumberScheduled, Ready: d.Status.NumberReady, Images: d.Spec.Template.Spec.images(),
-		Created: timestamp(d.Metadata.CreationTimestamp)}
+		Containers: d.Spec.Template.Spec.containers(), Created: timestamp(d.Metadata.CreationTimestamp)}
 }
 
 type cronJob struct {
@@ -363,8 +381,8 @@ type cronJob struct {
 
 func (c cronJob) workload() model.K8sWorkload {
 	return model.K8sWorkload{Kind: "CronJob", Namespace: c.Metadata.Namespace, Name: c.Metadata.Name,
-		Images: c.Spec.JobTemplate.Spec.Template.Spec.images(), Schedule: c.Spec.Schedule, Suspend: c.Spec.Suspend,
-		Created: timestamp(c.Metadata.CreationTimestamp)}
+		Images: c.Spec.JobTemplate.Spec.Template.Spec.images(), Containers: c.Spec.JobTemplate.Spec.Template.Spec.containers(),
+		Schedule: c.Spec.Schedule, Suspend: c.Spec.Suspend, Created: timestamp(c.Metadata.CreationTimestamp)}
 }
 
 type pod struct {
@@ -382,7 +400,8 @@ type pod struct {
 
 func (p pod) workload() model.K8sWorkload {
 	w := model.K8sWorkload{Kind: "Pod", Namespace: p.Metadata.Namespace, Name: p.Metadata.Name,
-		Replicas: 1, Images: p.Spec.images(), Node: p.Spec.NodeName, Created: timestamp(p.Metadata.CreationTimestamp)}
+		Replicas: 1, Images: p.Spec.images(), Containers: p.Spec.containers(), Node: p.Spec.NodeName,
+		Created: timestamp(p.Metadata.CreationTimestamp)}
 	if conditionTrue(p.Status.Conditions, "Ready") {
 		w.Ready = 1
 	}
@@ -556,6 +575,10 @@ func timestamp(s string) string {
 		return s
 	}
 	return t.UTC().Format(time.RFC3339)
+}
+
+func slicesSorted(s []string) []string {
+	return sortedUnique(append([]string(nil), s...))
 }
 
 func sortedUnique(s []string) []string {

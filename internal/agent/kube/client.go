@@ -1,11 +1,14 @@
-// Package kube is a small read-only client for the Kubernetes API and the
-// cluster-mode collector built on it (docs/architecture.md §2.2). It only
-// gets and lists, authenticated with a service-account token, and decodes
-// only the fields the agent reports: client-go would pull in a large,
-// fast-moving dependency tree for a handful of GETs (§9).
+// Package kube is a small client for the Kubernetes API, the cluster-mode
+// collector built on it (docs/architecture.md §2.2), and the Kubernetes
+// actions (docs/agent.md §6.1). It authenticates with a service-account
+// token and decodes only the fields the agent uses: client-go would pull in
+// a large, fast-moving dependency tree for a handful of requests (§9).
+// Collecting only gets and lists; only the actions write, and only when
+// the cluster agent's settings and its ClusterRole let them.
 package kube
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -166,18 +169,39 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &e) && e.Code == http.StatusNotFound
 }
 
+// IsConflict reports a 409: the object exists already, or changed since it
+// was read.
+func IsConflict(err error) bool {
+	var e *Error
+	return errors.As(err, &e) && e.Code == http.StatusConflict
+}
+
 // Get decodes GET path (with any query) into v.
 func (c *Client) Get(ctx context.Context, path string, v any) error {
-	err := c.get(ctx, path, v, false)
+	return c.Do(ctx, http.MethodGet, path, "", nil, v)
+}
+
+// Content types of PATCH bodies.
+const (
+	MergePatch     = "application/merge-patch+json"
+	StrategicPatch = "application/strategic-merge-patch+json"
+	JSONPatch      = "application/json-patch+json"
+	ApplyPatch     = "application/apply-patch+yaml"
+)
+
+// Do sends a request with body (of contentType) and decodes the answer
+// into v: a *[]byte takes it raw (pod logs), nil drops it.
+func (c *Client) Do(ctx context.Context, method, path, contentType string, body []byte, v any) error {
+	err := c.do(ctx, method, path, contentType, body, v, false)
 	var e *Error
 	if errors.As(err, &e) && e.Code == http.StatusUnauthorized && c.TokenFile != "" {
 		// The token may have been rotated since it was read.
-		err = c.get(ctx, path, v, true)
+		err = c.do(ctx, method, path, contentType, body, v, true)
 	}
 	return err
 }
 
-func (c *Client) get(ctx context.Context, path string, v any, reread bool) error {
+func (c *Client) do(ctx context.Context, method, path, contentType string, body []byte, v any, reread bool) error {
 	shown, _, _ := strings.Cut(path, "?")
 	token, err := c.bearer(reread)
 	if err != nil {
@@ -192,9 +216,16 @@ func (c *Client) get(ctx context.Context, path string, v any, reread bool) error
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
+	var rd io.Reader
+	if body != nil {
+		rd = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, rd)
 	if err != nil {
 		return fmt.Errorf("%s: %w", shown, err)
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "baseline-agent")
@@ -210,7 +241,7 @@ func (c *Client) get(ctx context.Context, path string, v any, reread bool) error
 		return fmt.Errorf("%s: %w", shown, err)
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+	body, err = io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
 	if err != nil {
 		return fmt.Errorf("%s: %w", shown, err)
 	}
@@ -232,6 +263,13 @@ func (c *Client) get(ctx context.Context, path string, v any, reread bool) error
 	if len(body) > maxBody {
 		return fmt.Errorf("%s: response larger than %d MB", shown, maxBody>>20)
 	}
+	switch v := v.(type) {
+	case nil:
+		return nil
+	case *[]byte:
+		*v = body
+		return nil
+	}
 	if err := json.Unmarshal(body, v); err != nil {
 		return fmt.Errorf("%s: %w", shown, err)
 	}
@@ -241,11 +279,19 @@ func (c *Client) get(ctx context.Context, path string, v any, reread bool) error
 // List gets every item of a list endpoint, a page at a time, decoding each
 // into T (which should name only the fields wanted).
 func List[T any](ctx context.Context, c *Client, path string) ([]T, error) {
+	return listWith[T](ctx, c, path, nil)
+}
+
+// listWith is List with more query parameters (labelSelector).
+func listWith[T any](ctx context.Context, c *Client, path string, extra url.Values) ([]T, error) {
 	var out []T
 	cont := ""
 	restarted := false
 	for {
 		q := url.Values{"limit": {strconv.Itoa(pageSize)}}
+		for k, v := range extra {
+			q[k] = v
+		}
 		if cont != "" {
 			q.Set("continue", cont)
 		}
