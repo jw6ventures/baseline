@@ -203,11 +203,14 @@ func (e *Env) Capabilities() []string {
 		{"flatpak", "flatpak"}, {"snap", "snap"}, {"dmidecode", "dmidecode"}, {"lsblk", "lsblk"},
 		{"lspci", "lspci"}, {"smartctl", "smartctl"}, {"systemd", "systemctl"},
 		{"needs-restarting", "needs-restarting"}, {"zpool", "zpool"}, {"pvesh", "pvesh"},
-		{"virsh", "virsh"}, {"crictl", "crictl"}, {"docker", "docker"}, {"podman", "podman"},
+		{"virsh", "virsh"}, {"docker", "docker"}, {"podman", "podman"},
 	} {
 		if e.Has(c.bin) {
 			caps = append(caps, c.name)
 		}
+	}
+	if _, _, ok := e.crictlCommand(); ok {
+		caps = append(caps, "crictl")
 	}
 	if e.Exists("/run/ostree-booted") {
 		caps = append(caps, "image-based")
