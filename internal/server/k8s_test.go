@@ -244,7 +244,7 @@ func TestKubernetesActions(t *testing.T) {
 	// An agent that has them off isn't offered them.
 	h.connect(agent, []string{model.CapK8sCluster, action.CapK8sActions, action.CapK8sPods},
 		&action.Policy{Jobs: true, AllowActions: []string{}})
-	if _, body := h.do(ops, "GET", wpath+ids["web"], nil); !strings.Contains(body, "Kubernetes actions are off") ||
+	if _, body := h.do(ops, "GET", wpath+ids["web"], nil); !strings.Contains(body, "Kubernetes actions are turned off") ||
 		strings.Contains(body, "logs?pod") {
 		t.Fatalf("workload page with actions off:\n%s", body)
 	}
