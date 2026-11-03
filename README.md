@@ -279,9 +279,11 @@ turn syncing off, or point it at a mirror.
 
 ## API
 
-Everything the UI shows is readable as JSON at `/api/v1`, and scripts can
-create and submit changes (never approve them). Make a token on **Your
-access**, pick the roles it may use, and send it as a bearer token:
+Everything the UI shows is readable as JSON at `/api/v1`. Scripts can
+also create, submit, cancel and close changes (never approve them), add
+and remove manual CI relationships, and file, edit, transition, comment
+on and link work items. Make a token on **Your access**, pick the roles
+it may use, and send it as a bearer token:
 
 ```sh
 curl -H "Authorization: Bearer baseline_api_..." https://baseline.example.com/api/v1/hosts

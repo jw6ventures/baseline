@@ -222,14 +222,31 @@ func (s *Server) boardPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ctx := r.Context()
 	q := r.URL.Query()
-	v := boardView{Board: b, CanEdit: canEditBoard(principal(r), b), Resolutions: store.Resolutions,
-		Notice: q.Get("notice"), Error: q.Get("error")}
-	t, _, err := s.listTable(ctx, "work")
+	v, asksAssignee, err := s.boardData(r, b)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
+	}
+	v.Resolutions, v.Notice, v.Error = store.Resolutions, q.Get("notice"), q.Get("error")
+	if asksAssignee {
+		if v.Users, err = s.store.ListUsers(r.Context()); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+	}
+	s.pages.render(w, http.StatusOK, "board", s.data(r, b.Name, v))
+}
+
+// boardData fills a board's columns with the cards its filter matches, for
+// the page and the API, and reports whether a transition the user may run
+// asks for an assignee.
+func (s *Server) boardData(r *http.Request, b store.Board) (boardView, bool, error) {
+	ctx := r.Context()
+	v := boardView{Board: b, CanEdit: canEditBoard(principal(r), b)}
+	t, _, err := s.listTable(ctx, "work")
+	if err != nil {
+		return v, false, err
 	}
 	query, problems := list.Parse(t, boardQuery(b).Values())
 	v.Problems = problems
@@ -244,18 +261,15 @@ func (s *Server) boardPage(w http.ResponseWriter, r *http.Request) {
 	}
 	viewer, err := s.listViewer(r)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return v, false, err
 	}
 	st, err := list.Build(t, query, list.Options{Viewer: viewer, Now: time.Now(), Loc: s.cfg.Location, Limit: boardLimit})
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return v, false, err
 	}
 	res, err := s.store.ListRows(ctx, st)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return v, false, err
 	}
 	v.Total = res.Total
 	ids := make([]string, len(res.Rows))
@@ -264,8 +278,7 @@ func (s *Server) boardPage(w http.ResponseWriter, r *http.Request) {
 	}
 	cards, err := s.store.BoardCards(ctx, ids)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return v, false, err
 	}
 	v.Shown = len(cards)
 
@@ -274,8 +287,7 @@ func (s *Server) boardPage(w http.ResponseWriter, r *http.Request) {
 	}
 	targets, asksAssignee, err := s.boardTargets(r, b, cards)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return v, false, err
 	}
 	for i, c := range cards {
 		col := b.Column(c.StatusKey, c.Status)
@@ -285,13 +297,7 @@ func (s *Server) boardPage(w http.ResponseWriter, r *http.Request) {
 		}
 		v.Columns[col].Cards = append(v.Columns[col].Cards, boardCard{BoardCard: c, Targets: targets[i]})
 	}
-	if asksAssignee {
-		if v.Users, err = s.store.ListUsers(ctx); err != nil {
-			s.serverError(w, r, err)
-			return
-		}
-	}
-	s.pages.render(w, http.StatusOK, "board", s.data(r, b.Name, v))
+	return v, asksAssignee, nil
 }
 
 // boardTargets works out each card's transitions, the column each leads
