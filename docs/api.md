@@ -103,7 +103,7 @@ All paths are under `/api/v1`.
 | `GET /kubernetes/{id}` | A cluster with its nodes, workloads, services and ingresses; `namespace` filters. |
 | `GET /kubernetes/{id}/manifests` | The bundles Baseline applied to the cluster: `bundle`, `namespace`, the revision applied last (`revision`, `sha256`, `objects`, `manifest`), and `pending` with the open `change` that edits it. |
 | `GET /kubernetes/{id}/workloads/{wid}/pods` | A workload's live pods, read from the cluster agent now. |
-| `GET /kubernetes/{id}/workloads/{wid}/logs` | The end of a pod's log: `pod` (required), `container`, `tail` (default 200, at most 5000), `previous=1`. Needs the operator role on the cluster agent and `BASELINE_K8S_LOGS=on`; each read is audited. |
+| `GET /kubernetes/{id}/workloads/{wid}/logs` | The end of a pod's log: `pod` (required), `container`, `tail` (default 200, at most 5000), `previous=1`. Needs the operator role on the cluster agent and logs left on on the agent (`BASELINE_K8S_LOGS`); each read is audited. |
 
 ### CIs
 

@@ -19,11 +19,11 @@
 // BASELINE_LOG_LEVEL. The API server is the pod's own, through its service
 // account; outside a cluster set BASELINE_K8S_API (https://host:port),
 // BASELINE_K8S_CA (PEM file) and BASELINE_K8S_TOKEN_FILE instead.
-// BASELINE_ALLOW_ACTIONS=kubernetes lets it run Kubernetes actions (off by
-// default), never in the namespaces of BASELINE_DENY_NAMESPACES (default
-// kube-system; "none" for none), and BASELINE_K8S_LOGS=on lets it read pod
-// logs for the server. Its ClusterRole must allow them too
-// (deploy/k8s/baseline-agent-manage.yaml).
+// It runs Kubernetes actions unless BASELINE_ALLOW_ACTIONS=none, never in
+// the namespaces of BASELINE_DENY_NAMESPACES (default kube-system; "none" for
+// none), and reads pod logs for the server unless BASELINE_K8S_LOGS=off.
+// Changing workloads needs the ClusterRole in
+// deploy/k8s/baseline-agent-manage.yaml too.
 package main
 
 import (
@@ -261,8 +261,8 @@ func loadClusterConfig(path string) (clusterConfig, error) {
 		return c, fmt.Errorf("BASELINE_DENY_NAMESPACES: %w", err)
 	}
 	switch v := strings.ToLower(strings.TrimSpace(env.Get("BASELINE_K8S_LOGS"))); v {
-	case "", "off", "false", "no", "0":
-	case "on", "true", "yes", "1":
+	case "off", "false", "no", "0":
+	case "", "on", "true", "yes", "1":
 		c.Logs = true
 	default:
 		return c, fmt.Errorf("BASELINE_K8S_LOGS takes on or off, not %q", v)
@@ -297,7 +297,7 @@ func kubeClient() (*kube.Client, error) {
 
 // runCluster runs the cluster agent: it enrolls on first start, with the
 // cluster as its identity, and then sends only the "k8s" section. It runs
-// only Kubernetes jobs, and those only when BASELINE_ALLOW_ACTIONS says so,
+// only Kubernetes jobs, and those only unless BASELINE_ALLOW_ACTIONS=none,
 // and doesn't update itself: it is updated by changing its image.
 func runCluster(ctx context.Context, config string) error {
 	cfg, err := loadClusterConfig(config)

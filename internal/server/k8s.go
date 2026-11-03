@@ -580,7 +580,7 @@ func (s *Server) readLogs(r *http.Request, wl store.Workload, h store.Host, req 
 	case !h.Connected:
 		return out, errors.New("the cluster agent is offline")
 	case !slices.Contains(h.Capabilities, action.CapK8sLogs):
-		return out, errors.New("the cluster agent doesn't read logs: set BASELINE_K8S_LOGS=on on it, and grant it pods/log")
+		return out, errors.New("the cluster agent doesn't read logs: its BASELINE_K8S_LOGS is off, or it is too old")
 	case !action.ValidK8sName(req.Pod):
 		return out, errors.New("pick a pod")
 	}

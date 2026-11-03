@@ -16,7 +16,7 @@
 {{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
 {{if $v.Deny}}<p class="notice warn">Namespace {{$w.Namespace}} is off limits to the cluster agent's actions (<code>BASELINE_DENY_NAMESPACES</code>), so Baseline doesn't change this workload.</p>
 {{else if and $v.CanChange $v.AgentOld}}<p class="notice">This cluster's agent is too old to change workloads; update its image.</p>
-{{else if and $v.CanChange $v.ActionsOff}}<p class="notice">Kubernetes actions are off on this cluster's agent. Set <code>BASELINE_ALLOW_ACTIONS=kubernetes</code> on it and apply <code>deploy/k8s/baseline-agent-manage.yaml</code> to grant what they need.</p>{{end}}
+{{else if and $v.CanChange $v.ActionsOff}}<p class="notice">Kubernetes actions are turned off on this cluster's agent (<code>BASELINE_ALLOW_ACTIONS=none</code>). Remove that setting to turn them on, with <code>deploy/k8s/baseline-agent-manage.yaml</code> applied to grant what they need.</p>{{end}}
 
 <div class="grid2">
 <section class="panel">
@@ -65,7 +65,7 @@
   {{else}}<tr><td colspan="7" class="muted">No pods.</td></tr>{{end}}
   </tbody>
 </table></div>
-<p class="muted small">Read from the cluster just now.{{if and $v.CanChange (not $v.CanLogs)}} Logs need <code>BASELINE_K8S_LOGS=on</code> on the cluster agent and the <code>pods/log</code> permission.{{end}}</p>
+<p class="muted small">Read from the cluster just now.{{if and $v.CanChange (not $v.CanLogs)}} Logs are turned off on the cluster agent (<code>BASELINE_K8S_LOGS=off</code>), or it is too old to read them.{{end}}</p>
 {{end}}
 {{end}}
 

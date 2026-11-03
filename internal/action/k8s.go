@@ -313,13 +313,13 @@ func ParseDenyNamespaces(v string) ([]string, error) {
 }
 
 // ParseClusterAllowActions reads the cluster agent's BASELINE_ALLOW_ACTIONS:
-// "kubernetes" (or "all") turns its actions on, "none" or empty (the
-// default) leaves it read-only. A cluster agent runs no other category.
+// "kubernetes" (or "all", or empty: the default) turns its actions on,
+// "none" leaves it read-only. A cluster agent runs no other category.
 func ParseClusterAllowActions(v string) ([]string, error) {
 	switch strings.TrimSpace(v) {
-	case "", "none":
+	case "none":
 		return []string{}, nil
-	case "kubernetes", "all", "*":
+	case "", "kubernetes", "all", "*":
 		return []string{CategoryKubernetes}, nil
 	}
 	return nil, fmt.Errorf("BASELINE_ALLOW_ACTIONS takes kubernetes or none, not %s", strconv.Quote(v))

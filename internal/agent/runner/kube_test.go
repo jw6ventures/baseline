@@ -80,7 +80,7 @@ func TestKubeRefusals(t *testing.T) {
 	_, res := untilResult(t, r, id)
 	checkResult(t, res, "rejected", -1, "runs only Kubernetes actions")
 
-	// Off by default: BASELINE_ALLOW_ACTIONS unset.
+	// Turned off: BASELINE_ALLOW_ACTIONS=none.
 	r = kubeRunner(t, k)
 	r.Policy.AllowActions = []string{}
 	id = jobID(6)

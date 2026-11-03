@@ -130,7 +130,7 @@ func TestParseClusterSettings(t *testing.T) {
 	if _, err := ParseDenyNamespaces("kube-system,Bad_NS"); err == nil {
 		t.Error("bad namespace accepted")
 	}
-	for in, want := range map[string][]string{"": {}, "none": {}, "kubernetes": {CategoryKubernetes}, "all": {CategoryKubernetes}} {
+	for in, want := range map[string][]string{"": {CategoryKubernetes}, "none": {}, "kubernetes": {CategoryKubernetes}, "all": {CategoryKubernetes}} {
 		if got, err := ParseClusterAllowActions(in); err != nil || !slices.Equal(got, want) {
 			t.Errorf("ParseClusterAllowActions(%q) = %v, %v", in, got, err)
 		}
