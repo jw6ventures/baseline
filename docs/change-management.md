@@ -51,7 +51,8 @@ A patch group is a host group plus a schedule plus a policy. It's backed by a **
 | Field | Meaning |
 |---|---|
 | `host_group` | Which hosts (static or rule-based) |
-| `schedule` | Cron in a timezone. It must fall inside `window`, if one is set. |
+| `schedule` | Cron in a timezone: when a run is *planned* (the block check, what each host or stack gets, and the change are all done then). The UI labels it "Plan a run at". |
+| `window` | Optional maintenance window: when the run's change may *run jobs* (it waits for an opening, starts no job that won't finish before it closes, and carries leftover hosts over). The UI labels it "Only run jobs during". Without one, the change starts as soon as it's planned. |
 | `action_template` | e.g. `pkg.upgrade mode=security reboot=if_required exclude=[docker-ce, kernel*]` |
 | `blocked_by` | Other patch groups that must have succeeded first |
 | `soak` | How long after the blocking group's success this group must wait (e.g. 48h) |
@@ -65,6 +66,8 @@ A patch group is a host group plus a schedule plus a policy. It's backed by a **
 3. **Promotion:** with `promote_validated`, the blocking group's cycle stores a `validated_set` of the package@version pairs it installed successfully. The dependent group upgrades **only those exact versions**, to the extent the hosts share a distro. Packages that weren't validated are deferred to the next cycle. This stops prod from picking up a package version that was published after canary tested.
 4. Every host in the group gets `pkg.refresh` then `pkg.upgrade`, with its reboot policy. If it reboots, the job completes once the agent reconnects with a new boot ID and the post-patch inventory shows the new versions.
 5. The cycle result is stored and the change closes; a failed cycle fires the `patch_cycle` alert.
+
+**Schedule and window.** Put the schedule inside the window, so a run is planned as the window opens and the window only adds a stop time. A schedule outside its window still works, but each run is planned at the scheduled time and then waits for the window, so its block check and update list are as old as that gap. Saving such a group shows a warning, and its page marks the runs that fall outside.
 
 Groups can be chained (`canary → staging → prod`) or fanned out. Cycles in the dependency graph are rejected when the group is saved.
 
