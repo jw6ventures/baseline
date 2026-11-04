@@ -254,7 +254,7 @@ Test or Staging, then Prod: a stack takes only the images its copy at the
 stage before (the same app, named by the stack-name prefix) has run for the
 soak time. A Compose stack can run its updates under a model and **update
 itself** when its images drift (off by default). The
-**Calendar** shows windows, freezes, scheduled changes and patch-group runs.
+**Calendar** shows windows, freezes, scheduled and past changes, and patch-group runs.
 
 ## Alerts and vulnerabilities
 

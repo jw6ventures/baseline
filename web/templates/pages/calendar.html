@@ -8,11 +8,13 @@
     <a href="{{.Base}}/calendar?month={{$v.Next}}" rel="next">Next →</a>
   </nav>
 </div>
-<p class="muted">Maintenance windows and freezes, changes planned to start, and patch group runs, by day in {{$v.DisplayTZ}}. Changes show once they're approved; patch group runs are the ones still to come.</p>
+<p class="muted">Maintenance windows and freezes, changes planned to start, and patch group runs, by day in {{$v.DisplayTZ}}. Changes show once they're approved, and stay once they've run, on the day they started, with how they ended; patch group runs are the ones still to come.</p>
 <ul class="cal-legend" aria-label="Key">
   <li><span class="cal-item window">window</span></li>
   <li><span class="cal-item freeze">freeze</span></li>
   <li><span class="cal-item change">change</span></li>
+  <li><span class="cal-item change ok">change, done</span></li>
+  <li><span class="cal-item change bad">change, failed or rolled back</span></li>
   <li><span class="cal-item patch">patch group run</span></li>
 </ul>
 <h2 class="cal-month">{{$v.Month}}</h2>
@@ -21,7 +23,7 @@
   <tbody>{{range $v.Weeks}}<tr>{{range .}}
     <td id="{{.ID}}" class="{{if not .InMonth}}out{{end}}{{if .Today}} today{{end}}{{if .Past}} past{{end}}"{{if .Today}} aria-current="date"{{end}}>
       <div class="cal-day">{{.Day}}{{if .Today}} <span class="small">today</span>{{end}}</div>
-      {{range .Entries}}<a class="cal-item {{.Kind}}" href="{{$.Base}}{{.Href}}" title="{{.Name}} — {{.Detail}}"><span class="cal-time">{{.Time}}</span> {{.Name}}</a>{{end}}
+      {{range .Entries}}<a class="cal-item {{.Kind}}{{with .Outcome}} {{.}}{{end}}" href="{{$.Base}}{{.Href}}" title="{{.Name}} — {{.Detail}}"><span class="cal-time">{{.Time}}</span> {{.Name}}{{if .Outcome}} <span class="cal-state">({{.Detail}})</span>{{end}}</a>{{end}}
       {{with .More}}<span class="cal-more">+{{.}} more</span>{{end}}
     </td>{{end}}
   </tr>{{end}}</tbody>

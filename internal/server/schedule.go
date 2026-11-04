@@ -550,6 +550,9 @@ type calItem struct {
 	Name   string
 	Href   string // under Base
 	Detail string
+	// Outcome marks a change that has finished: "ok" (implemented, in
+	// review or closed) or "bad" (failed or rolled back). Empty otherwise.
+	Outcome string
 }
 
 // calEntry is an item as one day of the grid shows it.
@@ -589,8 +592,9 @@ type calendarView struct {
 const perDay = 6
 
 // calendarItems collects what's on the calendar in [from, to): window and
-// freeze openings that overlap it, changes the user can see planned to
-// start in it, and the enabled patch groups' runs after now.
+// freeze openings that overlap it, changes the user can see that started
+// or are planned to start in it (finished ones with their final state),
+// and the enabled patch groups' runs after now.
 func (s *Server) calendarItems(ctx context.Context, g rbac.Grants, from, to, now time.Time) ([]calItem, error) {
 	var items []calItem
 	ws, err := s.store.ListWindows(ctx)
@@ -619,7 +623,8 @@ func (s *Server) calendarItems(ctx context.Context, g rbac.Grants, from, to, now
 	}
 
 	changes, err := s.store.ListChanges(ctx, store.ChangeFilter{
-		States:      []string{store.ChangeApproved, store.ChangeScheduled, store.ChangeInProgress},
+		States: []string{store.ChangeApproved, store.ChangeScheduled, store.ChangeInProgress,
+			store.ChangeImplemented, store.ChangeFailed, store.ChangeRolledBack, store.ChangeReview, store.ChangeClosed},
 		PlannedFrom: from, PlannedTo: to, Limit: 1000,
 	})
 	if err != nil {
@@ -638,8 +643,12 @@ func (s *Server) calendarItems(ctx context.Context, g rbac.Grants, from, to, now
 			if !canOnAll(g, rbac.Viewer, c.HostIDs, index) {
 				continue
 			}
-			items = append(items, calItem{Kind: calChange, Start: c.PlannedStart, Name: c.Ref() + " " + c.Title,
-				Href: "/changes/" + c.ID, Detail: humanState(c.State)})
+			start := c.PlannedStart
+			if !c.ActualStart.IsZero() {
+				start = c.ActualStart
+			}
+			items = append(items, calItem{Kind: calChange, Start: start, Name: c.Ref() + " " + c.Title,
+				Href: "/changes/" + c.ID, Detail: humanState(c.State), Outcome: changeOutcome(c.State)})
 		}
 	}
 
@@ -738,9 +747,24 @@ func (s *Server) calendar(w http.ResponseWriter, r *http.Request) {
 		if !it.End.IsZero() && !it.End.After(now) {
 			continue // an opening that ended earlier today
 		}
+		if it.Outcome != "" {
+			continue // a change that has finished
+		}
 		v.Upcoming = append(v.Upcoming, upcomingItem{calItem: it, When: s.itemWhen(it, now)})
 	}
 	s.pages.render(w, http.StatusOK, "calendar", s.data(r, "Calendar", v))
+}
+
+// changeOutcome sorts a finished change's state for the calendar: "ok",
+// "bad", or "" while it hasn't finished.
+func changeOutcome(state string) string {
+	switch state {
+	case store.ChangeImplemented, store.ChangeReview, store.ChangeClosed:
+		return "ok"
+	case store.ChangeFailed, store.ChangeRolledBack:
+		return "bad"
+	}
+	return ""
 }
 
 // dayLabel places an item on the day [d, next): the time it shows there,

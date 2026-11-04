@@ -378,6 +378,9 @@ a.cal-item:hover { text-decoration: underline; }
 .cal-item.freeze { background: var(--warn-bg); border-left-color: var(--warn); color: var(--warn); font-weight: 600; }
 .cal-item.change { background: var(--ok-bg); border-left-color: var(--ok); }
 .cal-item.patch { background: var(--patch-bg); border-left-color: var(--patch); }
+.cal-item.change.ok { background: transparent; border-left-style: dashed; }
+.cal-item.change.bad { background: var(--bad-bg); border-left-color: var(--bad); }
+.cal-state { color: var(--muted); }
 .cal-time { font-variant-numeric: tabular-nums; color: var(--muted); }
 .cal-item.freeze .cal-time { color: inherit; }
 .cal-more { font-size: 0.75rem; color: var(--muted); }

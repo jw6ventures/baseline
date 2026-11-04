@@ -202,6 +202,43 @@ func TestCalendarUI(t *testing.T) {
 		t.Fatalf("bad month: %d", resp.StatusCode)
 	}
 
+	// Changes that have run stay on the calendar, on the day they
+	// started, with how they ended; they're not in the next 14 days.
+	lastMonth := time.Date(now.Year(), now.Month()-1, 1, 0, 0, 0, 0, time.UTC)
+	past := map[string]string{store.ChangeImplemented: "ok", store.ChangeFailed: "bad"}
+	refs := map[string]string{}
+	for i, state := range []string{store.ChangeImplemented, store.ChangeFailed} {
+		pc, err := h.st.CreateChange(ctx, store.System, store.NewChange{Kind: store.KindStandard, ModelID: mid, Title: "Past " + state,
+			Risk: action.Medium, PlannedStart: lastMonth.Add(4 * 24 * time.Hour), Steps: []store.PlanStep{{Action: action.PkgUpgrade,
+				Params: m.Params, Summary: "upgrade", HostIDs: []string{web.HostID}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Started a day late, at 11:15 (or 12:15).
+		started := lastMonth.Add(5*24*time.Hour + time.Duration(11+i)*time.Hour + 15*time.Minute)
+		if _, err := h.st.DB().Exec(`UPDATE change SET state = $2, actual_start = $3, actual_end = $3::timestamptz + interval '1 hour' WHERE id = $1`,
+			pc.ID, state, started); err != nil {
+			t.Fatal(err)
+		}
+		refs[state] = pc.Ref()
+	}
+	_, body = h.do(admin, "GET", "/calendar?month="+lastMonth.Format("2006-01"), nil)
+	day6 := regexp.MustCompile(`(?s)id="d-` + lastMonth.AddDate(0, 0, 5).Format("2006-01-02") + `".*?</td>`).FindString(body)
+	for state, outcome := range past {
+		for _, want := range []string{`class="cal-item change ` + outcome + `"`, refs[state] + " Past " + state,
+			"(" + humanState(state) + ")"} {
+			if !strings.Contains(day6, want) {
+				t.Fatalf("day 6 of last month lacks %q:\n%s", want, day6)
+			}
+		}
+	}
+	if !strings.Contains(day6, "11:15</span> "+refs[store.ChangeImplemented]) {
+		t.Fatalf("past change not at its actual start:\n%s", day6)
+	}
+	if day5 := regexp.MustCompile(`(?s)id="d-` + lastMonth.AddDate(0, 0, 4).Format("2006-01-02") + `".*?</td>`).FindString(body); strings.Contains(day5, "Past ") {
+		t.Fatalf("past change on its planned day:\n%s", day5)
+	}
+
 	// Someone who can't see web1 doesn't see its change.
 	mv := h.signIn("mo", "media-viewers")
 	_, body = h.do(mv, "GET", "/calendar?month="+nextMonth.Format("2006-01"), nil)

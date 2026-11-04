@@ -340,7 +340,7 @@ func (s *Server) apiWindows(w http.ResponseWriter, r *http.Request) {
 	s.respond(w, r, out, err)
 }
 
-// apiCalendar lists window and freeze openings and planned changes
+// apiCalendar lists window and freeze openings and planned and past changes
 // between from and to (RFC 3339 or YYYY-MM-DD; the next 30 days by default).
 func (s *Server) apiCalendar(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
