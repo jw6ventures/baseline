@@ -235,8 +235,9 @@ type ChangeFilter struct {
 	HostID  string   // only changes affecting this host
 	CIID    string   // only changes affecting this CI (a stack)
 	ModelID string   // only changes made from this model
-	// PlannedFrom and PlannedTo keep changes planned to start in
-	// [PlannedFrom, PlannedTo), for the calendar.
+	// PlannedFrom and PlannedTo keep changes that started, or are
+	// planned to start, in [PlannedFrom, PlannedTo), for the calendar.
+	// A change that has started counts from its actual start.
 	PlannedFrom, PlannedTo time.Time
 	Limit                  int
 }
@@ -255,7 +256,7 @@ func (s *Store) ListChanges(ctx context.Context, f ChangeFilter) ([]Change, erro
 		WHERE (cardinality($1::text[]) = 0 OR c.state = ANY($1))
 		  AND ($2 = '' OR EXISTS (SELECT 1 FROM change_ci cc WHERE cc.change_id = c.id AND cc.ci_id::text = $2))
 		  AND ($4 = '' OR EXISTS (SELECT 1 FROM change_ci cc WHERE cc.change_id = c.id AND cc.ci_id::text = $4))
-		  AND ($5::timestamptz IS NULL OR (c.planned_start >= $5 AND c.planned_start < $6))
+		  AND ($5::timestamptz IS NULL OR (COALESCE(c.actual_start, c.planned_start) >= $5 AND COALESCE(c.actual_start, c.planned_start) < $6))
 		  AND ($7 = '' OR c.model_id::text = $7)
 		ORDER BY c.number DESC LIMIT $3`, pq.Array(nonNil(f.States)), f.HostID, f.Limit, f.CIID, from, to, f.ModelID)
 	if err != nil {

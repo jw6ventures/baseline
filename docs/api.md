@@ -148,7 +148,7 @@ All paths are under `/api/v1`.
 | `GET /scripts/{id}` | A script with its versions (without bodies). |
 | `GET /scripts/{id}/versions/{n}` | One version with its body and SHA-256. |
 | `GET /windows` | Maintenance windows and freezes; `kind`. |
-| `GET /calendar` | Window and freeze openings and planned changes from `from` to `to` (RFC 3339 or `YYYY-MM-DD`; the next 30 days). |
+| `GET /calendar` | Window and freeze openings, and changes planned to start or already run (by actual start, with their final state in `detail`), from `from` to `to` (RFC 3339 or `YYYY-MM-DD`; the next 30 days). |
 | `GET /patch-groups` | Patch groups with their latest cycle. |
 | `GET /patch-groups/{id}` | A patch group with its cycles; `limit` (50). |
 

@@ -42,7 +42,7 @@ Draft ─▶ Submitted ─▶ Approved ─▶ Scheduled ─▶ In progress ─�
 - A window is `cron start + duration + timezone + scope` (global or host groups). For example: `0 2 * * SUN`, 3h, America/Chicago, groups [prod].
 - A **freeze** is the same shape with `kind = freeze`. It blocks all non-Emergency changes in its scope.
 - A job that would run past the end of its window isn't started. Jobs that have already started finish. Remaining hosts carry over to the next opening, or the change goes to Failed, depending on a per-change setting.
-- A calendar view shows windows, freezes and scheduled changes.
+- A calendar view shows windows, freezes, scheduled changes and past changes with how they ended.
 
 ## 4. Patch groups
 
