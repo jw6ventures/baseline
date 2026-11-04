@@ -113,7 +113,7 @@ func (r *Runner) compose(ctx context.Context, name string, p action.ComposeParam
 	var why string
 	if code, err := r.exec(ctx, composeCmd(st, up...), out); err != nil || code != 0 {
 		why = composeExit("up", code, err)
-	} else {
+	} else if why = r.recreateStale(ctx, st, res.Services, false, out); why == "" {
 		why = r.waitHealthy(ctx, p, watch, out, false)
 	}
 	if why != "" {
@@ -304,16 +304,8 @@ func (r *Runner) rollback(ctx context.Context, st collect.Stack, res *action.Com
 	}
 	if len(errs) == 0 {
 		// The containers should run the old images again.
-		now, err := r.Containers.Stack(rctx, st.Engine, st.Project)
-		if err != nil {
-			errs = append(errs, err.Error())
-		}
-		for _, s := range res.Services {
-			for _, c := range now.Containers {
-				if s.Changed && c.ComposeService == s.Service && c.ImageID != s.From {
-					errs = append(errs, fmt.Sprintf("%s still runs %s", c.Name, shortID(c.ImageID)))
-				}
-			}
+		if why := r.recreateStale(rctx, st, res.Services, true, out); why != "" {
+			errs = append(errs, why)
 		}
 	}
 	if len(errs) > 0 {
@@ -323,6 +315,59 @@ func (r *Runner) rollback(ctx context.Context, st collect.Stack, res *action.Com
 	res.RolledBack = true
 	out.info("Rolled back: %s run their previous images again. The new images are kept.\n", strings.Join(changed, ", "))
 	return outcome{failed: true, exitCode: -1, state: stateRolledBack, result: res, err: "rolled back: " + why}
+}
+
+// recreateStale checks that every container of a changed service runs the
+// image the update moved it to (back to its old one when rollingBack), and
+// recreates those that don't with --force-recreate. Podman's Compose CLIs
+// often report a successful `up -d` without replacing containers whose
+// image changed behind the same reference; without this check the update
+// would pass its health wait on the old, still healthy containers. It
+// returns which containers still run the wrong image, or "".
+func (r *Runner) recreateStale(ctx context.Context, st collect.Stack, services []action.ComposeService,
+	rollingBack bool, out *output) string {
+	stale := func() ([]string, []string, error) {
+		now, err := r.Containers.Stack(ctx, st.Engine, st.Project)
+		if err != nil {
+			return nil, nil, err
+		}
+		var svcs, wrong []string
+		for _, s := range services {
+			want := s.To
+			if rollingBack {
+				want = s.From
+			}
+			if !s.Changed {
+				continue
+			}
+			for _, c := range now.Containers {
+				if c.ComposeService == s.Service && c.ImageID != want {
+					wrong = append(wrong, fmt.Sprintf("%s still runs %s", c.Name, shortID(c.ImageID)))
+					if !slices.Contains(svcs, s.Service) {
+						svcs = append(svcs, s.Service)
+					}
+				}
+			}
+		}
+		return svcs, wrong, nil
+	}
+	svcs, _, err := stale()
+	if err != nil {
+		return err.Error()
+	}
+	if len(svcs) == 0 {
+		return ""
+	}
+	out.info("Compose up left %s on the old image; recreating with --force-recreate.\n", strings.Join(svcs, ", "))
+	up := append([]string{"up", "-d", "--no-deps", "--force-recreate"}, svcs...)
+	if code, err := r.exec(ctx, composeCmd(st, up...), out); err != nil || code != 0 {
+		return composeExit("up --force-recreate", code, err)
+	}
+	_, wrong, err := stale()
+	if err != nil {
+		return err.Error()
+	}
+	return strings.Join(wrong, "; ")
 }
 
 // shortID is an image ID as the engines show it: 12 hex digits.
