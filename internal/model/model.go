@@ -786,6 +786,9 @@ type K8sService struct {
 	Ports        []string          `json:"ports,omitempty"`
 	Selector     map[string]string `json:"selector,omitempty"`
 	ExternalName string            `json:"external_name,omitempty"`
+	// Workloads are the workloads (K8sWorkload.Key) whose pods the
+	// selector matches, worked out by the agent from their pod labels.
+	Workloads []string `json:"workloads,omitempty"`
 }
 
 type K8sIngress struct {

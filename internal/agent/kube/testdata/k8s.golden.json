@@ -249,7 +249,10 @@
       ],
       "selector": {
         "app": "db"
-      }
+      },
+      "workloads": [
+        "StatefulSet/demo/db"
+      ]
     },
     {
       "namespace": "demo",
@@ -286,7 +289,10 @@
       ],
       "selector": {
         "app": "web"
-      }
+      },
+      "workloads": [
+        "Deployment/demo/web"
+      ]
     },
     {
       "namespace": "demo",
@@ -301,7 +307,10 @@
       ],
       "selector": {
         "app": "web"
-      }
+      },
+      "workloads": [
+        "Deployment/demo/web"
+      ]
     },
     {
       "namespace": "kube-system",
@@ -315,7 +324,10 @@
       ],
       "selector": {
         "k8s-app": "kube-dns"
-      }
+      },
+      "workloads": [
+        "Deployment/kube-system/coredns"
+      ]
     },
     {
       "namespace": "kube-system",
@@ -332,7 +344,10 @@
       "selector": {
         "app.kubernetes.io/instance": "traefik-kube-system",
         "app.kubernetes.io/name": "traefik"
-      }
+      },
+      "workloads": [
+        "Deployment/kube-system/traefik"
+      ]
     }
   ],
   "ingresses": [

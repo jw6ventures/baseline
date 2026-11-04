@@ -96,35 +96,50 @@ func (s *Server) vmPage(w http.ResponseWriter, r *http.Request) {
 
 type clustersView struct {
 	Clusters []store.Cluster
+	// Waiting are cluster agents that haven't reported a cluster yet. The
+	// Hosts list leaves cluster agents out, so this is where they show.
+	Waiting []store.Host
 }
 
 // clusters lists the Kubernetes clusters whose agents the user can see.
 func (s *Server) clusters(w http.ResponseWriter, r *http.Request) {
-	ids, err := s.visibleHostIDs(r)
+	hosts, err := s.visibleHosts(r)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
+	}
+	ids := make([]string, len(hosts))
+	for i, h := range hosts {
+		ids[i] = h.ID
 	}
 	cs, err := s.store.ListClusters(r.Context(), ids)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	s.pages.render(w, http.StatusOK, "clusters", s.data(r, "Kubernetes", clustersView{Clusters: cs}))
+	v := clustersView{Clusters: cs}
+	for _, h := range hosts {
+		if h.ClusterAgent() && !h.Revoked && !slices.ContainsFunc(cs, func(c store.Cluster) bool { return c.HostID == h.ID }) {
+			v.Waiting = append(v.Waiting, h)
+		}
+	}
+	s.pages.render(w, http.StatusOK, "clusters", s.data(r, "Kubernetes", v))
 }
 
 var clusterTabs = []string{"nodes", "workloads", "services", "ingresses", "manifests"}
 
 type clusterView struct {
-	Cluster    store.Cluster
-	Tab        string
-	Query      string
-	Section    *model.K8s
-	SectionAt  time.Time
-	Nodes      []store.K8sObject
-	Workloads  []store.K8sObject
-	Services   []model.K8sService
-	Ingresses  []model.K8sIngress
+	Cluster   store.Cluster
+	Tab       string
+	Query     string
+	Section   *model.K8s
+	SectionAt time.Time
+	Nodes     []store.K8sObject
+	Workloads []store.K8sObject
+	Services  []model.K8sService
+	Ingresses []model.K8sIngress
+	// Endpoints map ingress hostnames to their service_endpoint CIs.
+	Endpoints  map[string]string
 	Namespaces []string
 	Namespace  string
 	// Gone are nodes and workloads the cluster no longer has.
@@ -199,6 +214,12 @@ func (s *Server) clusterPage(w http.ResponseWriter, r *http.Request) {
 			if match(in.Namespace, append([]string{in.Name, in.Class}, in.Hosts...)...) {
 				v.Ingresses = append(v.Ingresses, in)
 			}
+		}
+	}
+	if v.Tab == "ingresses" {
+		if v.Endpoints, err = s.store.ClusterEndpoints(ctx, c.CIID); err != nil {
+			s.serverError(w, r, err)
+			return
 		}
 	}
 	if v.Tab == "manifests" {

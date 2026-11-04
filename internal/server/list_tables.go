@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/jw6ventures/baseline/internal/list"
+	"github.com/jw6ventures/baseline/internal/model"
 	"github.com/jw6ventures/baseline/internal/store"
 )
 
@@ -57,7 +58,11 @@ var hostTable = &list.Table{
 	ID:       `h.ci_id::text`,
 	LinkExpr: `'/hosts/' || h.ci_id`,
 	DimExpr:  `h.revoked`,
-	Scope:    func(a *list.Args, v list.Viewer) string { return visibleHostsSQL("h.ci_id", a, v) },
+	// Cluster agents aren't machines: they are listed on the Kubernetes
+	// page, and a node's host links to its cluster (the cluster field).
+	Scope: func(a *list.Args, v list.Viewer) string {
+		return visibleHostsSQL("h.ci_id", a, v) + " AND NOT " + a.Add(model.CapK8sCluster) + "::text = ANY(h.capabilities)"
+	},
 	Fields: []list.Field{
 		{Key: "name", Label: "Host", Type: list.Text, Expr: `COALESCE(NULLIF(h.hostname, ''), ci.name)`,
 			LinkExpr: `'/hosts/' || h.ci_id`, Search: true, Class: "strong"},
@@ -82,6 +87,8 @@ var hostTable = &list.Table{
 			LinkExpr: `'/hosts/' || h.ci_id || '/containers'`},
 		{Key: "containers_running", Label: "Containers running", Type: list.Number, Class: "num",
 			Expr: `(SELECT count(*) FROM container c WHERE c.host = h.ci_id AND c.state = 'running')`},
+		{Key: "cluster", Label: "Cluster", Type: list.Text, Search: true,
+			Expr: `(SELECT k.name` + hostClusterFrom + `)`, LinkExpr: `(SELECT '/kubernetes/' || k.ci_id` + hostClusterFrom + `)`},
 		{Key: "vulns", Label: "Fixable vulnerabilities", Type: list.Number, Class: "num",
 			Expr: `(SELECT count(DISTINCT v.vuln_id) FROM host_vuln v WHERE v.host = h.ci_id AND v.fix_available)`},
 		{Key: "open_jobs", Label: "Open jobs", Type: list.Number, Class: "num",
@@ -103,10 +110,17 @@ var hostTable = &list.Table{
 		{Key: "enrolled_at", Label: "Enrolled", Type: list.Time, Expr: `h.enrolled_at`},
 	},
 	Default: list.Query{
-		Cols: []string{"name", "status", "os", "kernel", "packages", "updates", "containers", "groups", "flags", "agent_version"},
+		Cols: []string{"name", "status", "os", "kernel", "packages", "updates", "containers", "cluster", "groups", "flags", "agent_version"},
 		Sort: list.Sort{Field: "name"},
 	},
 }
+
+// hostClusterFrom finds the Kubernetes cluster a host is a node of, by the
+// runs_on link discovery keeps from the node to the host's agent.
+const hostClusterFrom = ` FROM ci_relationship r JOIN k8s_object o ON o.ci_id = r.from_ci
+	JOIN k8s_cluster k ON k.ci_id = o.cluster_ci
+	WHERE r.to_ci = h.ci_id AND r.kind = 'runs_on' AND r.source = 'discovered' AND o.kind = 'Node'
+	ORDER BY o.present DESC, lower(k.name), k.ci_id LIMIT 1`
 
 func init() {
 	q := hostTable.Default

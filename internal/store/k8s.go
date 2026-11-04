@@ -128,6 +128,7 @@ func projectK8s(ctx context.Context, tx *sql.Tx, hostID string, payload []byte) 
 			"cluster": name, "kind": w.Kind, "namespace": w.Namespace, "images": strings.Join(w.Images, ", ")}, w})
 	}
 	present := make([]string, 0, len(objs))
+	workloadCI := map[string]string{} // K8sWorkload.Key → CI
 	for _, o := range objs {
 		ciName := o.name
 		if o.namespace != "" {
@@ -163,6 +164,9 @@ func projectK8s(ctx context.Context, tx *sql.Tx, hostID string, payload []byte) 
 			return err
 		}
 		present = append(present, id)
+		if o.ciType == "k8s_workload" {
+			workloadCI[o.kind+"/"+o.namespace+"/"+o.name] = id
+		}
 	}
 	if _, err := tx.ExecContext(ctx, `
 		WITH gone AS (
@@ -170,6 +174,9 @@ func projectK8s(ctx context.Context, tx *sql.Tx, hostID string, payload []byte) 
 		    WHERE cluster_ci = $1 AND present AND NOT ci_id::text = ANY($2) RETURNING ci_id)
 		UPDATE ci SET last_seen = now() FROM gone WHERE ci.id = gone.ci_id`,
 		clusterCI, pq.Array(present)); err != nil {
+		return err
+	}
+	if err := projectK8sIngresses(ctx, tx, clusterCI, cl.UID, name, k.Ingresses, k.Services, workloadCI); err != nil {
 		return err
 	}
 	return linkDiscovered(ctx, tx)

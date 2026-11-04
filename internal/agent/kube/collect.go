@@ -16,7 +16,8 @@ import (
 // Collector produces the "k8s" section from the API server. It reads
 // configuration only: never environment variables, annotations,
 // ConfigMaps or Secrets, and no labels except node roles and service
-// selectors.
+// selectors. Pod template labels are read only to tell which workloads a
+// Service selects (K8sService.Workloads); they aren't reported.
 type Collector struct {
 	Client      *Client
 	ClusterName string
@@ -64,6 +65,12 @@ func (c *Collector) Collect(ctx context.Context) (model.K8s, error) {
 	fail := func(resource string, err error) {
 		out.Errors = append(out.Errors, model.K8sError{Resource: resource, Error: errText(err)})
 	}
+	// The pod labels of each workload, for matching Service selectors.
+	var selectable []labeled
+	add := func(w model.K8sWorkload, labels map[string]string) {
+		out.Workloads = append(out.Workloads, w)
+		selectable = append(selectable, labeled{w, labels})
+	}
 
 	if nodes, err := List[node](ctx, c.Client, "/api/v1/nodes"); err != nil {
 		fail("nodes", err)
@@ -83,28 +90,28 @@ func (c *Collector) Collect(ctx context.Context) (model.K8s, error) {
 		fail("deployments", err)
 	} else {
 		for _, d := range ds {
-			out.Workloads = append(out.Workloads, d.workload("Deployment"))
+			add(d.workload("Deployment"), d.Spec.Template.Metadata.Labels)
 		}
 	}
 	if ss, err := List[deployment](ctx, c.Client, "/apis/apps/v1/statefulsets"); err != nil {
 		fail("statefulsets", err)
 	} else {
 		for _, s := range ss {
-			out.Workloads = append(out.Workloads, s.workload("StatefulSet"))
+			add(s.workload("StatefulSet"), s.Spec.Template.Metadata.Labels)
 		}
 	}
 	if ds, err := List[daemonSet](ctx, c.Client, "/apis/apps/v1/daemonsets"); err != nil {
 		fail("daemonsets", err)
 	} else {
 		for _, d := range ds {
-			out.Workloads = append(out.Workloads, d.workload())
+			add(d.workload(), d.Spec.Template.Metadata.Labels)
 		}
 	}
 	if cjs, err := List[cronJob](ctx, c.Client, "/apis/batch/v1/cronjobs"); err != nil {
 		fail("cronjobs", err)
 	} else {
 		for _, cj := range cjs {
-			out.Workloads = append(out.Workloads, cj.workload())
+			add(cj.workload(), cj.Spec.JobTemplate.Spec.Template.Metadata.Labels)
 		}
 	}
 	if pods, err := List[pod](ctx, c.Client, "/api/v1/pods"); err != nil {
@@ -113,7 +120,7 @@ func (c *Collector) Collect(ctx context.Context) (model.K8s, error) {
 		for _, p := range pods {
 			// A controller's pods come and go; it is reported instead.
 			if len(p.Metadata.OwnerReferences) == 0 {
-				out.Workloads = append(out.Workloads, p.workload())
+				add(p.workload(), p.Metadata.Labels)
 			}
 		}
 	}
@@ -121,7 +128,9 @@ func (c *Collector) Collect(ctx context.Context) (model.K8s, error) {
 		fail("services", err)
 	} else {
 		for _, s := range svcs {
-			out.Services = append(out.Services, s.service())
+			sv := s.service()
+			sv.Workloads = selected(sv, selectable)
+			out.Services = append(out.Services, sv)
 		}
 	}
 	if ings, err := List[ingress](ctx, c.Client, "/apis/networking.k8s.io/v1/ingresses"); err != nil {
@@ -219,7 +228,42 @@ func (s podSpec) containers() []model.K8sContainer {
 }
 
 type podTemplate struct {
+	Metadata struct {
+		Labels map[string]string `json:"labels"` // matched, never reported
+	} `json:"metadata"`
 	Spec podSpec `json:"spec"`
+}
+
+// labeled is a workload with its pods' labels.
+type labeled struct {
+	w      model.K8sWorkload
+	labels map[string]string
+}
+
+// selected lists the workloads (K8sWorkload.Key) whose pods a Service's
+// selector matches: in its namespace, with every selector label. A Service
+// without a selector selects nothing.
+func selected(sv model.K8sService, ws []labeled) []string {
+	if len(sv.Selector) == 0 {
+		return nil
+	}
+	var out []string
+	for _, l := range ws {
+		if l.w.Namespace != sv.Namespace {
+			continue
+		}
+		match := true
+		for k, v := range sv.Selector {
+			if got, ok := l.labels[k]; !ok || got != v {
+				match = false
+				break
+			}
+		}
+		if match {
+			out = append(out, l.w.Key())
+		}
+	}
+	return sortedUnique(out)
 }
 
 // images are the sorted, unique images of a pod's containers and init
@@ -388,6 +432,7 @@ func (c cronJob) workload() model.K8sWorkload {
 type pod struct {
 	Metadata struct {
 		meta
+		Labels          map[string]string `json:"labels"` // matched, never reported
 		OwnerReferences []struct {
 			Kind string `json:"kind"`
 		} `json:"ownerReferences"`
