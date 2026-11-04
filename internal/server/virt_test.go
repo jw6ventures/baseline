@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -194,7 +195,8 @@ func k8sFixture() model.K8s {
 			{Kind: "DaemonSet", Namespace: "kube-system", Name: "svclb", Replicas: 2, Ready: 2, Images: []string{"rancher/klipper-lb:v0.4"}},
 		},
 		Services: []model.K8sService{{Namespace: "default", Name: "web", Type: "LoadBalancer", ClusterIP: "10.43.0.10",
-			ExternalIPs: []string{"10.0.0.50"}, Ports: []string{"80:30080/TCP→8080"}, Selector: map[string]string{"app": "web"}}},
+			ExternalIPs: []string{"10.0.0.50"}, Ports: []string{"80:30080/TCP→8080"}, Selector: map[string]string{"app": "web"},
+			Workloads: []string{"Deployment/default/web"}}},
 		Ingresses: []model.K8sIngress{{Namespace: "default", Name: "web", Class: "traefik", Hosts: []string{"web.lab"}, TLS: true,
 			Backends: []string{"web.lab/ → web:80"}}},
 	}
@@ -246,8 +248,22 @@ func TestKubernetes(t *testing.T) {
 	}
 	epath := m[1]
 	if _, body = h.do(admin, "GET", epath, nil); !strings.Contains(body, "https://web.lab") ||
-		!strings.Contains(body, "Kubernetes cluster") || !strings.Contains(body, "default/web") {
+		!strings.Contains(body, "Kubernetes cluster") || !strings.Contains(body, "Deployment/default/web") {
 		t.Fatalf("ingress endpoint CI:\n%s", body)
+	}
+	// It is hosted_by the Deployment its Service selects.
+	rels, err := h.st.CIRelationships(ctx, strings.TrimPrefix(epath, "/cis/"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hostedBy []string
+	for _, r := range rels {
+		if r.Kind == "hosted_by" && r.Outgoing {
+			hostedBy = append(hostedBy, r.Other.Name)
+		}
+	}
+	if !slices.Equal(hostedBy, []string{"default/web"}) {
+		t.Fatalf("ingress endpoint hosted_by: %v", hostedBy)
 	}
 
 	// The Hosts list leaves the cluster agent out and links the node's

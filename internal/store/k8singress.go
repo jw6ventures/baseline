@@ -19,7 +19,24 @@ type ingressHost struct {
 	ingresses map[string]bool // namespace/name
 	classes   map[string]bool
 	backends  map[string]bool // "host/path → service:port", this host's only
+	services  map[string]bool // namespace/name of the Services it routes to
+	workloads map[string]bool // K8sWorkload.Key, through those Services
 	tls       bool
+}
+
+// backendService is the Service a backend ("host/path → service:port", or
+// "* → service:port" for a default backend) routes to, or "" for a
+// resource backend ("→ Kind/name").
+func backendService(b string) string {
+	_, target, ok := strings.Cut(b, " → ")
+	if !ok {
+		return ""
+	}
+	svc, _, ok := strings.Cut(target, ":")
+	if !ok || strings.Contains(svc, "/") {
+		return ""
+	}
+	return svc
 }
 
 // attrs is what the CI page shows. A hostname gets a URL unless it is a
@@ -43,6 +60,9 @@ func (h *ingressHost) attrs(cluster string) map[string]string {
 	if v := list(h.backends); v != "" {
 		a["backends"] = v
 	}
+	if v := list(h.workloads); v != "" {
+		a["workloads"] = v
+	}
 	if !strings.Contains(h.name, "*") {
 		scheme := "http"
 		if h.tls {
@@ -53,8 +73,15 @@ func (h *ingressHost) attrs(cluster string) map[string]string {
 	return a
 }
 
-// ingressHosts groups the hostnames of a cluster's Ingresses, in order.
-func ingressHosts(ings []model.K8sIngress) []*ingressHost {
+// ingressHosts groups the hostnames of a cluster's Ingresses, in order,
+// with the workloads behind them: each backend's Service, and the
+// workloads that Service selects. An Ingress's default backend serves
+// every one of its hostnames.
+func ingressHosts(ings []model.K8sIngress, svcs []model.K8sService) []*ingressHost {
+	selects := map[string][]string{}
+	for _, sv := range svcs {
+		selects[sv.Namespace+"/"+sv.Name] = sv.Workloads
+	}
 	byName := map[string]*ingressHost{}
 	var out []*ingressHost
 	for _, ing := range ings {
@@ -65,7 +92,8 @@ func ingressHosts(ings []model.K8sIngress) []*ingressHost {
 			}
 			h := byName[name]
 			if h == nil {
-				h = &ingressHost{name: name, ingresses: map[string]bool{}, classes: map[string]bool{}, backends: map[string]bool{}}
+				h = &ingressHost{name: name, ingresses: map[string]bool{}, classes: map[string]bool{}, backends: map[string]bool{},
+					services: map[string]bool{}, workloads: map[string]bool{}}
 				byName[name] = h
 				out = append(out, h)
 			}
@@ -75,8 +103,16 @@ func ingressHosts(ings []model.K8sIngress) []*ingressHost {
 			}
 			h.tls = h.tls || ing.TLS
 			for _, b := range ing.Backends {
-				if strings.HasPrefix(strings.ToLower(b), name+"/") {
+				mine := strings.HasPrefix(strings.ToLower(b), name+"/")
+				if mine {
 					h.backends[b] = true
+				}
+				if svc := backendService(b); svc != "" && (mine || strings.HasPrefix(b, "* → ")) {
+					key := ing.Namespace + "/" + svc
+					h.services[key] = true
+					for _, w := range selects[key] {
+						h.workloads[w] = true
+					}
 				}
 			}
 		}
@@ -86,11 +122,13 @@ func ingressHosts(ings []model.K8sIngress) []*ingressHost {
 }
 
 // projectK8sIngresses keeps a service_endpoint CI for every hostname the
-// cluster's Ingresses route, member_of the cluster, as projectTraefik does
-// for Traefik's router labels.
-func projectK8sIngresses(ctx context.Context, tx *sql.Tx, clusterCI, clusterUID, clusterName string, ings []model.K8sIngress) error {
+// cluster's Ingresses route, member_of the cluster and hosted_by the
+// workloads serving it, as projectTraefik does for Traefik's router
+// labels. workloadCI maps K8sWorkload.Key to the cluster's workload CIs.
+func projectK8sIngresses(ctx context.Context, tx *sql.Tx, clusterCI, clusterUID, clusterName string,
+	ings []model.K8sIngress, svcs []model.K8sService, workloadCI map[string]string) error {
 	var present []string
-	for _, h := range ingressHosts(ings) {
+	for _, h := range ingressHosts(ings, svcs) {
 		attrs, err := json.Marshal(h.attrs(clusterName))
 		if err != nil {
 			return err
@@ -113,6 +151,19 @@ func projectK8sIngresses(ctx context.Context, tx *sql.Tx, clusterCI, clusterUID,
 		}
 		if err := relate(ctx, tx, id, clusterCI, "member_of"); err != nil {
 			return err
+		}
+		// Who serves it is rebuilt every time; one that went away keeps
+		// its last relationships, like a workload does.
+		if _, err := tx.ExecContext(ctx, `
+			DELETE FROM ci_relationship WHERE from_ci = $1 AND source = 'discovered' AND kind = 'hosted_by'`, id); err != nil {
+			return err
+		}
+		for w := range h.workloads {
+			if wid := workloadCI[w]; wid != "" {
+				if err := relate(ctx, tx, id, wid, "hosted_by"); err != nil {
+					return err
+				}
+			}
 		}
 		present = append(present, id)
 	}
