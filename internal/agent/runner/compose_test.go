@@ -45,6 +45,9 @@ type composeHost struct {
 	tagNoop  bool // Tag succeeds without moving the reference
 	stackErr error
 	upCodes  []int // exit status of each up, in turn; 0 after
+	// stickyUp is Podman's Compose CLIs: up leaves containers whose image
+	// changed behind the same reference alone unless --force-recreate.
+	stickyUp bool
 	pullCode int
 	nextID   int
 	fe       *fakeExec
@@ -113,9 +116,10 @@ func (h *composeHost) exec(_ context.Context, c Cmd, stdout, _ io.Writer) (int, 
 		fmt.Fprintln(stdout, "web-app-1  | panic: config")
 		return 0, nil
 	}
+	force := slices.Contains(c.Args, "--force-recreate")
 	for j := range h.st.Containers {
 		ctr := &h.st.Containers[j]
-		if !selected(ctr.ComposeService) || ctr.ImageID == h.images[ctr.Image] {
+		if !selected(ctr.ComposeService) || (h.stickyUp && !force) || (!force && ctr.ImageID == h.images[ctr.Image]) {
 			continue
 		}
 		h.nextID++
@@ -363,6 +367,58 @@ func TestComposeUpdateRollsBack(t *testing.T) {
 	}
 }
 
+// Podman's Compose CLIs can exit 0 from up without replacing containers
+// whose image changed behind the same reference: the update notices and
+// recreates them.
+func TestComposeUpdateForceRecreates(t *testing.T) {
+	h := newComposeHost()
+	h.registry["ghcr.io/acme/app:2"] = appNew
+	h.stickyUp = true
+	r := h.runner(t)
+	id := jobID(64)
+	start(r, id, action.ComposeUpdate, `{"engine":"docker","project":"web","services":["app"]}`)
+	evs, res := untilResult(t, r, id)
+	checkResult(t, res, "succeeded", 0, "")
+	if got := h.fe.lines(); !slices.Equal(got, []string{composeBase + "pull app", composeBase + "up -d --no-deps app",
+		composeBase + "up -d --no-deps --force-recreate app"}) {
+		t.Errorf("commands = %q", got)
+	}
+	for _, c := range h.st.Containers {
+		if c.ComposeService == "app" && c.ImageID != appNew {
+			t.Errorf("%s runs %s", c.Name, c.ImageID)
+		}
+	}
+	info := outputOf(evs, "info")
+	for _, s := range []string{"Compose up left app on the old image; recreating with --force-recreate.\n", "Updated app.\n"} {
+		if !strings.Contains(info, s) {
+			t.Errorf("info lacks %q:\n%s", s, info)
+		}
+	}
+}
+
+// When even --force-recreate fails, the update rolls back, and the rollback
+// forces the old containers back the same way.
+func TestComposeUpdateForceRecreateFailsRollsBack(t *testing.T) {
+	h := newComposeHost()
+	h.registry["ghcr.io/acme/app:2"] = appNew
+	h.stickyUp, h.upCodes = true, []int{0, 1}
+	r := h.runner(t)
+	id := jobID(65)
+	start(r, id, action.ComposeUpdate, `{"engine":"docker","project":"web","services":["app"]}`)
+	_, res := untilResult(t, r, id)
+	checkResult(t, res, "rolled_back", -1, "rolled back: compose up --force-recreate exited with status 1")
+	if got := h.fe.lines(); !slices.Equal(got, []string{composeBase + "pull app", composeBase + "up -d --no-deps app",
+		composeBase + "up -d --no-deps --force-recreate app", composeBase + "logs --tail 50 app",
+		composeBase + "up -d --no-deps app", composeBase + "up -d --no-deps --force-recreate app"}) {
+		t.Errorf("commands = %q", got)
+	}
+	for _, c := range h.st.Containers {
+		if c.ComposeService == "app" && c.ImageID != appOld {
+			t.Errorf("%s runs %s", c.Name, c.ImageID)
+		}
+	}
+}
+
 func TestComposeRollbackFails(t *testing.T) {
 	unhealthy := func(_, _ string, _ int) (string, string) { return "running", "unhealthy" }
 	for _, tc := range []struct {
@@ -378,7 +434,7 @@ func TestComposeRollbackFails(t *testing.T) {
 		{"up", nil, false, []int{0, 1}, "web-app-1 is unhealthy; rolling back failed too: compose up exited with status 1", 4},
 		// Everything succeeds, but the new image still runs.
 		{"check", nil, true, nil, "web-app-1 is unhealthy; rolling back failed too: web-app-1 still runs bbbbbbbbbbbb; " +
-			"web-app-2 still runs bbbbbbbbbbbb", 4},
+			"web-app-2 still runs bbbbbbbbbbbb", 5},
 	} {
 		h := newComposeHost()
 		h.registry["ghcr.io/acme/app:2"] = appNew
