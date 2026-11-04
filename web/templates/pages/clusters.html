@@ -17,5 +17,9 @@
   {{end}}
   </tbody>
 </table></div>
-<p class="muted small">A cluster agent runs in the cluster with a read-only service account. The host agent on each node still reports that node's OS, packages and containers, and its runtime's pods under the host's Kubernetes tab; nodes are joined to their hosts by machine-id or DMI product UUID.</p>
+{{with $v.Waiting}}
+<h2>Agents waiting for a first report</h2>
+<ul>{{range .}}<li><a href="{{$.Base}}/hosts/{{.ID}}">{{.Hostname}}</a> {{if .Connected}}<span class="dot on"></span>online{{else}}<span class="dot off"></span>offline{{end}}</li>{{end}}</ul>
+{{end}}
+<p class="muted small">Cluster agents are listed here rather than under Hosts; a node's host shows the cluster it belongs to. A cluster agent runs in the cluster with a read-only service account. The host agent on each node still reports that node's OS, packages and containers, and its runtime's pods under the host's Kubernetes tab; nodes are joined to their hosts by machine-id or DMI product UUID.</p>
 {{end}}
