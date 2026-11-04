@@ -257,8 +257,9 @@ func TestPatchGroupsUI(t *testing.T) {
 	h.connect(h.addHost("prod1", prodHG.ID), []string{"dnf", "systemd"}, policy)
 	h.st.CreateRoleBinding(ctx, store.System, store.RoleBinding{IdPGroup: "canary-ops", Role: rbac.Operator, ScopeGroupID: canaryHG.ID})
 	mid := h.approvedModel("all updates")
-	if _, err := h.st.SaveWindow(ctx, store.System, store.MaintenanceWindow{Name: "weekend", Kind: store.WindowKindWindow,
-		Cron: "0 0 * * SAT", Duration: 48 * time.Hour, TZ: "UTC", Active: true}); err != nil {
+	weekend, err := h.st.SaveWindow(ctx, store.System, store.MaintenanceWindow{Name: "weekend", Kind: store.WindowKindWindow,
+		Cron: "0 0 * * SAT", Duration: 48 * time.Hour, TZ: "UTC", Active: true})
+	if err != nil {
 		t.Fatal(err)
 	}
 	admin := h.signIn("ann", "lab-admins")
@@ -294,6 +295,23 @@ func TestPatchGroupsUI(t *testing.T) {
 		t.Fatalf("create prod: %d", resp.StatusCode)
 	}
 	prod := m[1]
+
+	// A schedule inside its window saves quietly; one outside it warns.
+	inside := url.Values{"name": {"weekend-in"}, "host_group": {prodHG.ID}, "cron": {"0 2 * * SAT"}, "tz": {"UTC"}, "model": {mid},
+		"window": {weekend}, "soak": {"0"}, "threshold": {"100"}, "concurrency": {"1"}}
+	resp, _ = h.do(admin, "POST", "/patch-groups", inside)
+	loc, _ := url.Parse(resp.Header.Get("Location"))
+	if resp.StatusCode != http.StatusSeeOther || loc.Query().Get("notice") != "Patch group saved." {
+		t.Fatalf("inside window: %d %s", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	outside := url.Values{"name": {"weekend-out"}, "host_group": {prodHG.ID}, "cron": {"0 2 * * MON"}, "tz": {"UTC"}, "model": {mid},
+		"window": {weekend}, "soak": {"0"}, "threshold": {"100"}, "concurrency": {"1"}}
+	resp, _ = h.do(admin, "POST", "/patch-groups", outside)
+	loc, _ = url.Parse(resp.Header.Get("Location"))
+	if resp.StatusCode != http.StatusSeeOther || !strings.Contains(loc.Query().Get("warn"), "falls outside the window weekend") {
+		t.Fatalf("outside window: %d %s", resp.StatusCode, resp.Header.Get("Location"))
+	}
+
 	pg, _ := h.st.GetPatchGroup(ctx, prod)
 	if pg.Soak != 48*time.Hour || pg.SuccessThreshold != 90 || pg.Concurrency != 2 || pg.StopOnFailure || len(pg.BlockedBy) != 1 {
 		t.Fatalf("prod: %+v", pg)
@@ -319,7 +337,7 @@ func TestPatchGroupsUI(t *testing.T) {
 
 	// prod is blocked: canary never ran.
 	resp, _ = h.do(admin, "POST", "/patch-groups/"+prod+"/run", url.Values{})
-	loc, _ := url.Parse(resp.Header.Get("Location"))
+	loc, _ = url.Parse(resp.Header.Get("Location"))
 	if resp.StatusCode != http.StatusSeeOther || !strings.Contains(loc.Query().Get("warn"), "blocked: canary hasn't run yet") {
 		t.Fatalf("run prod: %d %s", resp.StatusCode, resp.Header.Get("Location"))
 	}

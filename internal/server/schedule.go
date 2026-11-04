@@ -1241,7 +1241,31 @@ func (s *Server) patchGroupSave(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	if i := slices.IndexFunc(v.Windows, func(w store.MaintenanceWindow) bool { return w.ID == v.WindowID }); i >= 0 &&
+		runsOutsideWindow(pg, v.Windows[i], time.Now()) {
+		msg := "Patch group saved, but its schedule falls outside the window " + v.Windows[i].Name + ". " +
+			"Each run is planned at the scheduled time and then waits for the window to open, so the waits-for check " +
+			"and the list of updates are as of the planned time. Move the schedule inside the window to avoid the gap."
+		http.Redirect(w, r, s.url("/patch-groups/"+saved+"?warn="+urlQueryEscape(msg)), http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, s.url("/patch-groups/"+saved+"?notice="+urlQueryEscape("Patch group saved.")), http.StatusSeeOther)
+}
+
+// runsOutsideWindow reports whether any of the group's next three runs
+// after t falls outside the window mw, so its changes would wait for the
+// next opening.
+func runsOutsideWindow(pg store.PatchGroup, mw store.MaintenanceWindow, t time.Time) bool {
+	win, err := change.Compile(mw)
+	if err != nil {
+		return false
+	}
+	for r, i := change.NextRun(pg, t), 0; !r.IsZero() && i < 3; r, i = change.NextRun(pg, r), i+1 {
+		if _, open := win.Sched.At(r); !open {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) patchGroupDelete(w http.ResponseWriter, r *http.Request) {

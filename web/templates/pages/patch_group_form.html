@@ -25,13 +25,14 @@
   </div>
 
   <div class="inline-form">
-    <label>Runs at (cron)<input name="cron" value="{{$v.Cron}}" class="mono" required placeholder="0 3 * * SAT"></label>
+    <label>Plan a run at (cron)<input name="cron" value="{{$v.Cron}}" class="mono" required placeholder="0 3 * * SAT"></label>
     <label>Time zone<input name="tz" value="{{$v.TZ}}" list="zones" required></label>
   </div>
   <datalist id="zones">{{range $v.ExampleZones}}<option value="{{.}}">{{end}}</datalist>
   {{if $v.Preview}}<div class="preview"><span class="muted small">Next runs, in {{$v.DisplayTZ}}:</span><ul>{{range $v.Preview}}<li>{{.}}</li>{{end}}</ul></div>{{end}}
+  <p class="muted small hint">At this time the group checks the groups it waits for, works out what each host or stack gets, and creates the change. Without a window, the change starts right away and runs until it's done.</p>
   {{with $v.PreviewNote}}<p class="notice warn">{{.}}</p>{{end}}
-  <label><span>Maintenance window <span class="muted small">(optional: the change waits for it to open, and starts no jobs once it closes)</span></span><select name="window">
+  <label><span>Only run jobs during <span class="muted small">(optional maintenance window: the change waits for it to open, starts no job that won't finish before it closes, and carries leftover hosts over to the next opening)</span></span><select name="window">
     <option value="">none</option>
     {{range $v.Windows}}<option value="{{.ID}}"{{if eq .ID $v.WindowID}} selected{{end}}>{{.Name}}{{if not .Active}} (inactive){{end}}</option>{{end}}
   </select></label>

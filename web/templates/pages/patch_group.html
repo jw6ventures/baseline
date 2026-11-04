@@ -24,8 +24,8 @@
     {{else}}
     <dt>Hosts</dt><dd>{{$g.HostGroupName}} <span class="muted">({{plural $g.Hosts "host"}})</span></dd>
     {{end}}
-    <dt>Schedule</dt><dd>{{with $v.Words}}{{.}}, {{end}}<span class="mono">{{$g.Cron}}</span> <span class="muted">{{$g.TZ}}</span></dd>
-    <dt>Window</dt><dd>{{with $g.WindowName}}<a href="{{$.Base}}/windows#w-{{$g.WindowID}}">{{.}}</a>{{else}}<span class="muted">none: runs start at the scheduled time</span>{{end}}</dd>
+    <dt>Plans a run at</dt><dd>{{with $v.Words}}{{.}}, {{end}}<span class="mono">{{$g.Cron}}</span> <span class="muted">{{$g.TZ}}</span></dd>
+    <dt>Runs jobs during</dt><dd>{{with $g.WindowName}}<a href="{{$.Base}}/windows#w-{{$g.WindowID}}">{{.}}</a>{{else}}<span class="muted">any time: runs start when they are planned</span>{{end}}</dd>
     <dt>Change model</dt><dd><a href="{{.Base}}/change-models/{{$g.ModelID}}">{{$g.ModelName}}</a> {{if eq $g.ModelState "approved"}}<span class="tag ok">approved</span>{{else}}<span class="tag warn">{{$g.ModelState}}</span>{{end}} <span class="mono small">{{$v.Action}}</span></dd>
     <dt>Waits for</dt><dd>{{range $i, $id := $g.BlockedBy}}{{if $i}}, {{end}}<a href="{{$.Base}}/patch-groups/{{$id}}">{{index $g.BlockedByNames $i}}</a>{{else}}<span class="muted">nothing</span>{{end}}
       {{if $g.BlockedBy}}<br><span class="muted small">Their last run must have succeeded on at least {{$g.SuccessThreshold}}% of hosts{{if ne $v.Soak "0"}}, at least {{$v.Soak}} before this one{{end}}, and since this group last ran.</span>{{end}}</dd>
