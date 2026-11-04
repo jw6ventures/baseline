@@ -239,6 +239,24 @@ func TestKubernetes(t *testing.T) {
 	if !strings.Contains(body, "web.lab/ → web:80") {
 		t.Fatalf("cluster ingresses:\n%s", body)
 	}
+	// Each ingress hostname is a service endpoint CI, linked from the tab.
+	m := regexp.MustCompile(`href="(/cis/[0-9a-f-]{36})">web\.lab<`).FindStringSubmatch(body)
+	if m == nil {
+		t.Fatalf("no endpoint link on the ingresses tab:\n%s", body)
+	}
+	epath := m[1]
+	if _, body = h.do(admin, "GET", epath, nil); !strings.Contains(body, "https://web.lab") ||
+		!strings.Contains(body, "Kubernetes cluster") || !strings.Contains(body, "default/web") {
+		t.Fatalf("ingress endpoint CI:\n%s", body)
+	}
+
+	// The Hosts list leaves the cluster agent out and links the node's
+	// host to its cluster.
+	_, body = h.list(admin, "/hosts")
+	if strings.Contains(body, "/hosts/"+agent.HostID) || !strings.Contains(body, "/hosts/"+node1.HostID) ||
+		!strings.Contains(body, cpath) {
+		t.Fatalf("hosts list:\n%s", body)
+	}
 
 	// The node's host links to its node and shows its runtime's pods.
 	_, body = h.do(admin, "GET", "/hosts/"+node1.HostID+"?tab=kubernetes", nil)
@@ -280,11 +298,12 @@ func TestKubernetes(t *testing.T) {
 		t.Fatalf("ingresses after a failed list:\n%s", body)
 	}
 
-	// A workload that goes away turns missing; the agent's revocation
-	// retires the cluster.
+	// A workload and an ingress hostname that go away turn missing; the
+	// agent's revocation retires the cluster.
 	k.Workloads = k.Workloads[1:]
+	k.Errors = nil
 	h.ingest(agent, model.SectionK8s, k)
-	if n, err := h.st.MarkMissing(ctx, time.Now().Add(2*time.Hour)); err != nil || n != 1 {
+	if n, err := h.st.MarkMissing(ctx, time.Now().Add(2*time.Hour)); err != nil || n != 2 {
 		t.Fatalf("mark missing: %d %v", n, err)
 	}
 	if err := h.st.RevokeHost(ctx, store.System, agent.HostID); err != nil {
@@ -292,5 +311,8 @@ func TestKubernetes(t *testing.T) {
 	}
 	if c, _ := h.st.GetCluster(ctx, strings.TrimPrefix(cpath, "/kubernetes/")); c.Status != "retired" {
 		t.Fatalf("cluster of a revoked agent: %s", c.Status)
+	}
+	if c, _ := h.st.GetCI(ctx, strings.TrimPrefix(epath, "/cis/")); c.Status != "retired" {
+		t.Fatalf("ingress endpoint of a revoked agent: %s", c.Status)
 	}
 }

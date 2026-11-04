@@ -102,7 +102,7 @@
   <tr>
     <td><span class="muted">{{.Namespace}}/</span><strong>{{.Name}}</strong>{{if .TLS}} <span class="tag ok">TLS</span>{{end}}</td>
     <td>{{.Class}}</td>
-    <td class="mono small">{{range .Hosts}}{{.}}<br>{{end}}</td>
+    <td class="mono small">{{range .Hosts}}{{with index $v.Endpoints (lower .)}}<a href="{{$.Base}}/cis/{{.}}">{{end}}{{.}}{{if index $v.Endpoints (lower .)}}</a>{{end}}<br>{{end}}</td>
     <td class="mono small">{{range .Backends}}{{.}}<br>{{end}}</td>
   </tr>
   {{else}}<tr><td colspan="4" class="muted">{{if or $v.Query $v.Namespace}}Nothing matches.{{else}}No ingresses reported.{{end}}</td></tr>{{end}}

@@ -258,7 +258,7 @@ func nonNilMap(m map[string]string) map[string]string {
 	return m
 }
 
-// MarkMissing turns containers, stacks, Traefik hostnames, hypervisor
+// MarkMissing turns containers, stacks, Traefik and Ingress hostnames, hypervisor
 // guests, Kubernetes objects and what UniFi consoles reported that have been gone for MissingAfter into
 // missing CIs. They're never deleted automatically, so their history and
 // relationships survive.
@@ -269,6 +269,7 @@ func (s *Store) MarkMissing(ctx context.Context, now time.Time) (int64, error) {
 		  AND ((type = 'container' AND NOT EXISTS (SELECT 1 FROM container c WHERE c.ci_id = ci.id))
 		    OR (type = 'compose_stack' AND NOT EXISTS (SELECT 1 FROM compose_stack s WHERE s.ci_id = ci.id AND s.present))
 		    OR (type = 'service_endpoint' AND EXISTS (SELECT 1 FROM traefik_hostname th WHERE th.ci_id = ci.id AND NOT th.present))
+		    OR (type = 'service_endpoint' AND EXISTS (SELECT 1 FROM k8s_ingress_host ih WHERE ih.ci_id = ci.id AND NOT ih.present))
 		    OR (type IN ('vm', 'lxc') AND source IN ('proxmox', 'libvirt')
 		        AND NOT EXISTS (SELECT 1 FROM vm_guest g WHERE g.ci_id = ci.id AND g.present))
 		    OR (type IN ('k8s_node', 'k8s_workload')

@@ -115,6 +115,7 @@ const CIHostRef = `COALESCE((SELECT h.ci_id::text FROM host h WHERE h.ci_id = ci
 	         (SELECT g.host::text FROM vm_guest g WHERE g.ci_id = ci.id),
 	         (SELECT k.host::text FROM k8s_cluster k WHERE k.ci_id = ci.id),
 	         (SELECT o.host::text FROM k8s_object o WHERE o.ci_id = ci.id),
+	         (SELECT k.host::text FROM k8s_ingress_host ih JOIN k8s_cluster k ON k.ci_id = ih.cluster_ci WHERE ih.ci_id = ci.id),
 	         CASE WHEN ci.type IN ('container', 'compose_stack') THEN split_part(ci.source_key, '/', 1) END, '')`
 
 const ciCols = `ci.id, ci.type, t.label, ci.name, ci.status, ci.source, ci.owner, ci.description, ci.tags, ci.attrs::text,

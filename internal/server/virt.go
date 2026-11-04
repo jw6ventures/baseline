@@ -129,15 +129,17 @@ func (s *Server) clusters(w http.ResponseWriter, r *http.Request) {
 var clusterTabs = []string{"nodes", "workloads", "services", "ingresses", "manifests"}
 
 type clusterView struct {
-	Cluster    store.Cluster
-	Tab        string
-	Query      string
-	Section    *model.K8s
-	SectionAt  time.Time
-	Nodes      []store.K8sObject
-	Workloads  []store.K8sObject
-	Services   []model.K8sService
-	Ingresses  []model.K8sIngress
+	Cluster   store.Cluster
+	Tab       string
+	Query     string
+	Section   *model.K8s
+	SectionAt time.Time
+	Nodes     []store.K8sObject
+	Workloads []store.K8sObject
+	Services  []model.K8sService
+	Ingresses []model.K8sIngress
+	// Endpoints map ingress hostnames to their service_endpoint CIs.
+	Endpoints  map[string]string
 	Namespaces []string
 	Namespace  string
 	// Gone are nodes and workloads the cluster no longer has.
@@ -212,6 +214,12 @@ func (s *Server) clusterPage(w http.ResponseWriter, r *http.Request) {
 			if match(in.Namespace, append([]string{in.Name, in.Class}, in.Hosts...)...) {
 				v.Ingresses = append(v.Ingresses, in)
 			}
+		}
+	}
+	if v.Tab == "ingresses" {
+		if v.Endpoints, err = s.store.ClusterEndpoints(ctx, c.CIID); err != nil {
+			s.serverError(w, r, err)
+			return
 		}
 	}
 	if v.Tab == "manifests" {

@@ -267,7 +267,8 @@ func (s *Store) RevokeHost(ctx context.Context, actor Actor, hostID string) erro
 			WHERE id = $1 OR id IN (SELECT ci_id FROM container WHERE host = $1 UNION SELECT ci_id FROM compose_stack WHERE host = $1
 			    UNION SELECT ci_id FROM traefik_hostname WHERE host = $1
 			    UNION SELECT ci_id FROM vm_guest WHERE host = $1 AND present
-			    UNION SELECT ci_id FROM k8s_cluster WHERE host = $1 UNION SELECT ci_id FROM k8s_object WHERE host = $1)`,
+			    UNION SELECT ci_id FROM k8s_cluster WHERE host = $1 UNION SELECT ci_id FROM k8s_object WHERE host = $1
+			    UNION SELECT ih.ci_id FROM k8s_ingress_host ih JOIN k8s_cluster k ON k.ci_id = ih.cluster_ci WHERE k.host = $1)`,
 			hostID); err != nil {
 			return err
 		}

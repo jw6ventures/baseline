@@ -172,6 +172,9 @@ func projectK8s(ctx context.Context, tx *sql.Tx, hostID string, payload []byte) 
 		clusterCI, pq.Array(present)); err != nil {
 		return err
 	}
+	if err := projectK8sIngresses(ctx, tx, clusterCI, cl.UID, name, k.Ingresses); err != nil {
+		return err
+	}
 	return linkDiscovered(ctx, tx)
 }
 
