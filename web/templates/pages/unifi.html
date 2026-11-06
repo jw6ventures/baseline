@@ -7,7 +7,7 @@
 
 <section class="panel">
   <h2>UniFi consoles</h2>
-  <p class="muted">Baseline reads a UniFi console (UDM, UCG, Cloud Key or a self-hosted Network application, 9.0 or newer) through its local Integration API every 5 minutes, and never changes it. Its adopted devices become network device CIs, Protect cameras camera CIs, and each wired client is linked to the switch port it is on: to the host, guest or CI with its MAC, or else to a network client CI of its own. A console the server can't reach is polled by the agent of a host that can. API keys are encrypted with <code>BASELINE_SECRET_KEY</code> and never shown again.</p>
+  <p class="muted">Baseline reads a UniFi console (UDM, UCG, Cloud Key or a self-hosted Network application, 9.0 or newer) through its local Integration API every 5 minutes, and never changes it. Its adopted devices become network device CIs, Protect cameras camera CIs, and each wired client is linked to the switch port it is on: to the host, guest or CI with its MAC, or else to a network client CI of its own. A wireless client a camera, host or CI has the MAC of is linked to its access point. A console the server can't reach is polled by the agent of a host that can. API keys are encrypted with <code>BASELINE_SECRET_KEY</code> and never shown again.</p>
   <div class="table-wrap"><table>
     <thead><tr><th>Console</th><th>Polled from</th><th>Found</th><th>Last poll</th><th></th></tr></thead>
     <tbody>{{range $v.Consoles}}<tr>

@@ -1,6 +1,6 @@
 // Package unifi reads a UniFi console (a UDM, UCG or Cloud Key, or a
 // self-hosted Network application) through its local Integration API: the
-// Network application's sites, adopted devices and wired clients, and UniFi
+// Network application's sites, adopted devices and clients, and UniFi
 // Protect's cameras and other devices. It only reads.
 //
 // The server polls a console it can reach itself; for one only a host's
@@ -298,12 +298,13 @@ type apiClient struct {
 }
 
 // classicClient is a client as the classic API's stat/sta lists it, which
-// is where the switch port is.
+// is where the switch port, and a wireless client's access point, is.
 type classicClient struct {
 	MAC     string `json:"mac"`
 	IsWired bool   `json:"is_wired"`
 	SwMAC   string `json:"sw_mac"`
 	SwPort  int    `json:"sw_port"`
+	APMAC   string `json:"ap_mac"`
 }
 
 type protectDevice struct {
@@ -396,13 +397,16 @@ func (c *Client) site(ctx context.Context, s apiSite) (model.UniFiSite, error) {
 	}
 	for _, cl := range clients {
 		mac := NormalizeMAC(cl.MACAddress)
-		if !strings.EqualFold(cl.Type, "WIRED") || mac == "" {
-			continue
+		wireless := strings.EqualFold(cl.Type, "WIRELESS")
+		if !wireless && !strings.EqualFold(cl.Type, "WIRED") || mac == "" {
+			continue // VPN and Teleport clients hang off no device
 		}
-		site.Clients = append(site.Clients, model.UniFiClient{ID: cl.ID, Name: cl.Name, MAC: mac, IP: cl.IPAddress, UplinkID: cl.UplinkDeviceID})
+		site.Clients = append(site.Clients, model.UniFiClient{ID: cl.ID, Name: cl.Name, MAC: mac, IP: cl.IPAddress,
+			UplinkID: cl.UplinkDeviceID, Wireless: wireless})
 	}
 	// The Integration API doesn't say which port a client is on; the
-	// classic API does, and takes the same key on current consoles.
+	// classic API does, and which access point a wireless client is
+	// associated with, and takes the same key on current consoles.
 	if s.InternalReference != "" && len(site.Clients) > 0 {
 		var sta struct {
 			Data []classicClient `json:"data"`
@@ -414,14 +418,19 @@ func (c *Client) site(ctx context.Context, s apiSite) (model.UniFiSite, error) {
 			for id, mac := range macByID {
 				idByMAC[mac] = id
 			}
-			ports := map[string]classicClient{}
+			byMAC := map[string]classicClient{}
 			for _, x := range sta.Data {
-				if x.IsWired {
-					ports[NormalizeMAC(x.MAC)] = x
-				}
+				byMAC[NormalizeMAC(x.MAC)] = x
 			}
 			for i, cl := range site.Clients {
-				if p, ok := ports[cl.MAC]; ok {
+				p, ok := byMAC[cl.MAC]
+				switch {
+				case !ok:
+				case cl.Wireless && !p.IsWired:
+					if id := idByMAC[NormalizeMAC(p.APMAC)]; id != "" {
+						site.Clients[i].UplinkID = id
+					}
+				case !cl.Wireless && p.IsWired:
 					site.Clients[i].Port = p.SwPort
 					if id := idByMAC[NormalizeMAC(p.SwMAC)]; id != "" {
 						site.Clients[i].UplinkID = id

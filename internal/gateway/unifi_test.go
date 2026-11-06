@@ -55,7 +55,7 @@ func TestAgentPollsUniFi(t *testing.T) {
 		t.Fatal(err)
 	}
 	var snap model.UniFi
-	if err := json.Unmarshal(out, &snap); err != nil || len(snap.Sites) != 1 || len(snap.Sites[0].Devices) != 2 || len(snap.Protect) != 1 {
+	if err := json.Unmarshal(out, &snap); err != nil || len(snap.Sites) != 1 || len(snap.Sites[0].Devices) != 3 || len(snap.Protect) != 2 {
 		t.Fatalf("snapshot: %s %v", out, err)
 	}
 	// The agent's error comes back as the poll's.

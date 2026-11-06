@@ -38,31 +38,41 @@ func (c *Console) Lock()   { c.mu.Lock() }
 func (c *Console) Unlock() { c.mu.Unlock() }
 
 // New starts a console with one site ("Default"), a gateway, a switch
-// uplinked to it, three wired clients and a wireless one, and a camera.
+// uplinked to it and an access point uplinked to the switch, three wired
+// clients and two wireless ones, and two cameras: one wired, one on the
+// access point.
 func New(t *testing.T) *Console {
 	c := &Console{Protect: true,
 		Devices: []map[string]any{
 			{"id": "dev-gw", "name": "UDM Pro", "model": "UDM Pro", "macAddress": "F4:E2:C6:00:00:01", "ipAddress": "192.168.1.1", "state": "ONLINE", "features": []string{"switching", "gateway"}},
 			{"id": "dev-sw", "name": "Rack switch", "model": "USW Pro 24", "macAddress": "f4e2c6000002", "ipAddress": "192.168.1.2", "state": "ONLINE", "features": []string{"switching"}},
+			{"id": "dev-ap", "name": "Garage AP", "model": "U6 Pro", "macAddress": "f4:e2:c6:00:00:03", "ipAddress": "192.168.1.3", "state": "ONLINE", "features": []string{"accessPoint"}},
 		},
 		Details: map[string]map[string]any{
 			"dev-gw": {"firmwareVersion": "4.3.6", "firmwareUpdatable": false},
 			"dev-sw": {"firmwareVersion": "7.1.26", "firmwareUpdatable": true, "uplink": map[string]any{"deviceId": "dev-gw"},
 				"features": map[string]any{"switching": map[string]any{}}},
+			"dev-ap": {"firmwareVersion": "6.6.77", "firmwareUpdatable": false, "uplink": map[string]any{"deviceId": "dev-sw"}},
 		},
 		Clients: []map[string]any{
 			{"type": "WIRED", "id": "cl-1", "name": "web1", "macAddress": "02:00:00:00:00:a1", "ipAddress": "192.168.1.10", "uplinkDeviceId": "dev-gw"},
 			{"type": "WIRED", "id": "cl-2", "name": "printer", "macAddress": "02:00:00:00:00:a2", "ipAddress": "192.168.1.11", "uplinkDeviceId": "dev-sw"},
 			{"type": "WIRED", "id": "cl-3", "name": "Front door", "macAddress": "02:00:00:00:00:c1", "ipAddress": "192.168.1.30", "uplinkDeviceId": "dev-sw"},
 			{"type": "WIRELESS", "id": "cl-4", "name": "phone", "macAddress": "02:00:00:00:00:b1", "ipAddress": "192.168.1.50", "uplinkDeviceId": "dev-gw"},
+			{"type": "WIRELESS", "id": "cl-6", "name": "Backyard", "macAddress": "02:00:00:00:00:c2", "ipAddress": "192.168.1.31", "uplinkDeviceId": "dev-ap"},
+			{"type": "VPN", "id": "cl-7", "name": "laptop", "macAddress": "02:00:00:00:00:d1", "ipAddress": "10.8.0.2"},
 		},
 		Classic: []map[string]any{
 			// The classic API knows web1 is really on the switch, port 7.
 			{"mac": "02:00:00:00:00:a1", "is_wired": true, "sw_mac": "f4:e2:c6:00:00:02", "sw_port": 7},
 			{"mac": "02:00:00:00:00:a2", "is_wired": true, "sw_mac": "f4:e2:c6:00:00:02", "sw_port": 12},
+			// And that the phone is on the access point.
+			{"mac": "02:00:00:00:00:b1", "is_wired": false, "ap_mac": "f4:e2:c6:00:00:03"},
+			{"mac": "02:00:00:00:00:c2", "is_wired": false, "ap_mac": "f4:e2:c6:00:00:03"},
 		},
 		Cameras: []map[string]any{
 			{"id": "cam-1", "modelKey": "camera", "name": "Front door", "mac": "0200000000C1", "state": "CONNECTED", "marketName": "G4 Doorbell Pro"},
+			{"id": "cam-2", "modelKey": "camera", "name": "Backyard", "mac": "0200000000C2", "state": "CONNECTED", "marketName": "G5 Instant"},
 		},
 	}
 	c.Server = httptest.NewTLSServer(http.HandlerFunc(c.serve))

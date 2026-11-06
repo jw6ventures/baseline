@@ -41,7 +41,7 @@ type unifiConsoleView struct {
 }
 
 // unifiSettings is Settings → UniFi: the consoles Baseline reads devices,
-// wired clients and Protect cameras from, and where each is polled from.
+// clients and Protect cameras from, and where each is polled from.
 func (s *Server) unifiSettings(w http.ResponseWriter, r *http.Request) {
 	cs, err := s.store.ListUniFiControllers(r.Context())
 	if err != nil {

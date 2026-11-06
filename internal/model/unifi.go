@@ -5,7 +5,7 @@ package model
 const CapUniFi = "unifi"
 
 // UniFi is what one poll of a UniFi console found: the Network
-// application's sites with their adopted devices and wired clients, and
+// application's sites with their adopted devices and clients, and
 // UniFi Protect's devices. It is read by the server or, for a console only
 // a host's network reaches, by that host's agent, and is the same either
 // way. Like a section it holds state, not readings: no uptimes or traffic.
@@ -25,10 +25,12 @@ type UniFiSite struct {
 	Name string `json:"name"`
 	// Devices are the adopted UniFi devices: gateways, switches, APs.
 	Devices []UniFiDevice `json:"devices"`
-	// Clients are the wired clients only.
+	// Clients are the wired and wireless clients; VPN and Teleport
+	// clients are left out.
 	Clients []UniFiClient `json:"clients"`
-	// PortsError says why the switch ports of wired clients couldn't be
-	// read (they come from the classic API); the clients still count.
+	// PortsError says why the switch ports of wired clients and the access
+	// points of wireless ones couldn't be read from the classic API; the
+	// clients still count, with the Integration API's uplink.
 	PortsError string `json:"ports_error,omitempty"`
 }
 
@@ -50,10 +52,12 @@ type UniFiClient struct {
 	Name string `json:"name,omitempty"`
 	MAC  string `json:"mac"`
 	IP   string `json:"ip,omitempty"`
-	// UplinkID is the device the client is plugged into, Port its port
-	// number there (0: unknown).
+	// UplinkID is the device the client is plugged into, or for a
+	// wireless client the access point it is associated with; Port its
+	// switch port number there (0: unknown or wireless).
 	UplinkID string `json:"uplink_id,omitempty"`
 	Port     int    `json:"port,omitempty"`
+	Wireless bool   `json:"wireless,omitempty"`
 }
 
 // UniFiCamera is a UniFi Protect device: a camera or doorbell, or a light,
