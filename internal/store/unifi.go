@@ -156,11 +156,13 @@ var unifiOffline = []string{"OFFLINE", "CONNECTION_INTERRUPTED", "ISOLATED", "DI
 // IngestUniFi stores what a poll of a console found: a site CI per site, a
 // network_device CI per adopted device (member_of its site, connected_to
 // its uplink), a camera or protect_device CI per Protect device, and a
-// connected_to relationship from each wired client to the device it is
-// plugged into. A client is the CI that already has its MAC (a host's NIC,
-// a guest, an agentless CI's MAC field) or else a network_client CI of its
-// own; a network_client whose MAC has since turned up on another CI is
-// merged into it.
+// connected_to relationship from each client to the device it is plugged
+// into or, wireless, the access point it is associated with. A client is
+// the CI that already has its MAC (a Protect device, a host's NIC, a guest,
+// an agentless CI's MAC field) or else, wired only, a network_client CI of
+// its own; a network_client whose MAC has since turned up on another CI is
+// merged into it. A wireless client no CI has the MAC of is left out:
+// phones and laptops come and go, often under random MACs.
 func (s *Store) IngestUniFi(ctx context.Context, id string, at time.Time, snap model.UniFi) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		var name string
@@ -347,7 +349,8 @@ func (in *unifiIngest) protect(p model.UniFiCamera) error {
 	return nil
 }
 
-// clients relates every wired client to the device it is plugged into.
+// clients relates every client to the device it is plugged into, or the
+// access point it is associated with.
 func (in *unifiIngest) clients(sites []model.UniFiSite) error {
 	var macs []string
 	for _, site := range sites {
@@ -370,6 +373,9 @@ func (in *unifiIngest) clients(sites []model.UniFiSite) error {
 			if ciID == "" {
 				ciID = known[macHex(c.MAC)]
 			}
+			if ciID == "" && c.Wireless {
+				continue
+			}
 			if ciID == "" {
 				ciID, err = in.upsert("network_client", "client", "mac:"+c.MAC, first(c.Name, c.MAC), "", false,
 					map[string]string{"mac": c.MAC, "address": c.IP, "unifi_site": site.Name})
@@ -383,7 +389,10 @@ func (in *unifiIngest) clients(sites []model.UniFiSite) error {
 				continue
 			}
 			attrs := map[string]any{"via": "wired"}
-			if c.Port > 0 {
+			if c.Wireless {
+				attrs["via"] = "wireless"
+			}
+			if c.Port > 0 && !c.Wireless {
 				attrs["port"] = c.Port
 			}
 			if c.IP != "" {
@@ -598,8 +607,12 @@ func (s *Store) UniFiFirmware(ctx context.Context) ([]Condition, error) {
 	return out, rows.Err()
 }
 
-// unifiPortLabel is how a client's relationship names its switch port.
+// unifiPortLabel is how a client's relationship names its switch port, or
+// says it is wireless.
 func unifiPortLabel(attrs map[string]any) string {
+	if attrs["via"] == "wireless" {
+		return "wireless"
+	}
 	switch p := attrs["port"].(type) {
 	case float64:
 		return "port " + strconv.Itoa(int(p))

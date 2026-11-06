@@ -82,20 +82,31 @@ func TestUniFiConsole(t *testing.T) {
 	site, typ, _ := h.unifiCI("site:site-1")
 	gw, _, _ := h.unifiCI("mac:f4:e2:c6:00:00:01")
 	sw, _, _ := h.unifiCI("mac:f4:e2:c6:00:00:02")
+	ap, _, _ := h.unifiCI("mac:f4:e2:c6:00:00:03")
 	cam, camType, _ := h.unifiCI("mac:02:00:00:00:00:c1")
+	wcam, _, _ := h.unifiCI("mac:02:00:00:00:00:c2")
 	nas, nasType, _ := h.unifiCI("mac:02:00:00:00:00:a3")
 	if typ != "site" || camType != "camera" || nasType != "network_client" {
 		t.Fatalf("types: %s %s %s", typ, camType, nasType)
 	}
 	var unifiCIs int
 	h.st.DB().QueryRow(`SELECT count(*) FROM ci WHERE source = 'unifi'`).Scan(&unifiCIs)
-	if unifiCIs != 5 { // site, 2 devices, camera, nas: web1 and the printer are matched
+	// site, 3 devices, 2 cameras, nas: web1 and the printer are matched,
+	// and the phone, wireless and unknown, gets none.
+	if unifiCIs != 7 {
 		t.Fatalf("%d unifi CIs", unifiCIs)
 	}
-	if got := h.rels(sw); got != "connected_to>UDM Pro member_of>Default Front door>connected_to nas>connected_to Office printer>connected_to(port 12) web1>connected_to(port 7)" {
+	if got := h.rels(sw); got != "connected_to>UDM Pro member_of>Default Front door>connected_to Garage AP>connected_to nas>connected_to Office printer>connected_to(port 12) web1>connected_to(port 7)" {
 		t.Fatalf("switch relationships: %s", got)
 	}
-	if got := h.rels(site); got != "Rack switch>member_of UDM Pro>member_of" {
+	// The wireless camera is linked to the access point it is on.
+	if got := h.rels(ap); got != "connected_to>Rack switch member_of>Default Backyard>connected_to(wireless)" {
+		t.Fatalf("access point relationships: %s", got)
+	}
+	if got := h.rels(wcam); got != "connected_to>Garage AP(wireless)" {
+		t.Fatalf("wireless camera relationships: %s", got)
+	}
+	if got := h.rels(site); got != "Garage AP>member_of Rack switch>member_of UDM Pro>member_of" {
 		t.Fatalf("site relationships: %s", got)
 	}
 	if h.rels(printer) != "connected_to>Rack switch(port 12)" || h.rels(cam) != "connected_to>Rack switch" || h.rels(gw) != "member_of>Default Rack switch>connected_to" {
@@ -103,7 +114,7 @@ func TestUniFiConsole(t *testing.T) {
 	}
 
 	_, body = h.do(admin, "GET", "/settings/unifi", nil)
-	for _, want := range []string{"UDM Pro", "Network 9.4.19", "Protect 6.1.79", "1 sites, 2 devices, 1 clients of their own, 1 Protect devices", "TLS pinned"} {
+	for _, want := range []string{"UDM Pro", "Network 9.4.19", "Protect 6.1.79", "1 sites, 3 devices, 1 clients of their own, 2 Protect devices", "TLS pinned"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("settings page lacks %q", want)
 		}
@@ -161,7 +172,7 @@ func TestUniFiConsole(t *testing.T) {
 		t.Fatalf("bad key poll: %s", loc)
 	}
 	c, _ := h.st.GetUniFiController(ctx, id)
-	if c.LastError == "" || c.Devices != 2 {
+	if c.LastError == "" || c.Devices != 3 {
 		t.Fatalf("after a failed poll: %+v", c)
 	}
 	if conds, _ := h.st.UniFiDevicesOffline(ctx, 0); len(conds) != 2 || conds[1].Key != "console:"+id {

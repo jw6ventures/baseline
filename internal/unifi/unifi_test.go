@@ -30,17 +30,27 @@ func TestPoll(t *testing.T) {
 			Features: []string{"gateway", "switching"}},
 		{ID: "dev-sw", Name: "Rack switch", Model: "USW Pro 24", MAC: "f4:e2:c6:00:00:02", IP: "192.168.1.2", State: "ONLINE", Firmware: "7.1.26",
 			FirmwareUpdatable: true, Features: []string{"switching"}, UplinkID: "dev-gw"},
+		{ID: "dev-ap", Name: "Garage AP", Model: "U6 Pro", MAC: "f4:e2:c6:00:00:03", IP: "192.168.1.3", State: "ONLINE", Firmware: "6.6.77",
+			Features: []string{"accessPoint"}, UplinkID: "dev-sw"},
 	}
-	if len(site.Devices) != 2 || !devEqual(site.Devices[0], want[0]) || !devEqual(site.Devices[1], want[1]) {
+	if len(site.Devices) != len(want) {
 		t.Fatalf("devices: %+v", site.Devices)
 	}
-	// Wired only; web1's port and switch come from the classic API.
+	for i, d := range want {
+		if !devEqual(site.Devices[i], d) {
+			t.Errorf("device %d: %+v, want %+v", i, site.Devices[i], d)
+		}
+	}
+	// Wired and wireless, not VPN; web1's port and switch, and the phone's
+	// access point, come from the classic API.
 	wantClients := []model.UniFiClient{
 		{ID: "cl-1", Name: "web1", MAC: "02:00:00:00:00:a1", IP: "192.168.1.10", UplinkID: "dev-sw", Port: 7},
 		{ID: "cl-2", Name: "printer", MAC: "02:00:00:00:00:a2", IP: "192.168.1.11", UplinkID: "dev-sw", Port: 12},
+		{ID: "cl-4", Name: "phone", MAC: "02:00:00:00:00:b1", IP: "192.168.1.50", UplinkID: "dev-ap", Wireless: true},
 		{ID: "cl-3", Name: "Front door", MAC: "02:00:00:00:00:c1", IP: "192.168.1.30", UplinkID: "dev-sw"},
+		{ID: "cl-6", Name: "Backyard", MAC: "02:00:00:00:00:c2", IP: "192.168.1.31", UplinkID: "dev-ap", Wireless: true},
 	}
-	if len(site.Clients) != 3 {
+	if len(site.Clients) != len(wantClients) {
 		t.Fatalf("clients: %+v", site.Clients)
 	}
 	for i, c := range wantClients {
@@ -48,7 +58,7 @@ func TestPoll(t *testing.T) {
 			t.Errorf("client %d: %+v, want %+v", i, site.Clients[i], c)
 		}
 	}
-	if len(got.Protect) != 1 || got.Protect[0] != (model.UniFiCamera{Kind: "camera", ID: "cam-1", Name: "Front door", Model: "G4 Doorbell Pro",
+	if len(got.Protect) != 2 || got.Protect[0] != (model.UniFiCamera{Kind: "camera", ID: "cam-1", Name: "Front door", Model: "G4 Doorbell Pro",
 		MAC: "02:00:00:00:00:c1", State: "CONNECTED"}) {
 		t.Fatalf("protect: %+v", got.Protect)
 	}
@@ -73,8 +83,13 @@ func TestPollWithoutProtectOrPorts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.ProtectError == "" || got.Protect != nil || len(got.Sites[0].Clients) != 3 || got.Sites[0].Clients[0].Port != 0 {
+	if got.ProtectError == "" || got.Protect != nil || len(got.Sites[0].Clients) != 5 || got.Sites[0].Clients[0].Port != 0 {
 		t.Fatalf("poll: %+v", got)
+	}
+	// Without the classic API, a wireless client keeps the Integration
+	// API's uplink.
+	if c := got.Sites[0].Clients[2]; c.ID != "cl-4" || c.UplinkID != "dev-gw" || !c.Wireless {
+		t.Fatalf("phone: %+v", c)
 	}
 	// Protect isn't asked for unless wanted.
 	cfg.Protect = false
