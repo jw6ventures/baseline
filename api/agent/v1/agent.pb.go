@@ -78,7 +78,7 @@ func (x JobEvent_Type) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use JobEvent_Type.Descriptor instead.
 func (JobEvent_Type) EnumDescriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{25, 0}
+	return file_agent_v1_agent_proto_rawDescGZIP(), []int{29, 0}
 }
 
 // HostIdentity is how the server recognizes a machine, and how it spots
@@ -293,6 +293,7 @@ type AgentMessage struct {
 	//	*AgentMessage_JobEvent
 	//	*AgentMessage_UpdateResult
 	//	*AgentMessage_IntegrationResult
+	//	*AgentMessage_LogChunk
 	Msg           isAgentMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -407,6 +408,15 @@ func (x *AgentMessage) GetIntegrationResult() *IntegrationResult {
 	return nil
 }
 
+func (x *AgentMessage) GetLogChunk() *LogChunk {
+	if x != nil {
+		if x, ok := x.Msg.(*AgentMessage_LogChunk); ok {
+			return x.LogChunk
+		}
+	}
+	return nil
+}
+
 type isAgentMessage_Msg interface {
 	isAgentMessage_Msg()
 }
@@ -443,6 +453,10 @@ type AgentMessage_IntegrationResult struct {
 	IntegrationResult *IntegrationResult `protobuf:"bytes,8,opt,name=integration_result,json=integrationResult,proto3,oneof"`
 }
 
+type AgentMessage_LogChunk struct {
+	LogChunk *LogChunk `protobuf:"bytes,9,opt,name=log_chunk,json=logChunk,proto3,oneof"`
+}
+
 func (*AgentMessage_Hello) isAgentMessage_Msg() {}
 
 func (*AgentMessage_Inventory) isAgentMessage_Msg() {}
@@ -458,6 +472,8 @@ func (*AgentMessage_JobEvent) isAgentMessage_Msg() {}
 func (*AgentMessage_UpdateResult) isAgentMessage_Msg() {}
 
 func (*AgentMessage_IntegrationResult) isAgentMessage_Msg() {}
+
+func (*AgentMessage_LogChunk) isAgentMessage_Msg() {}
 
 // Hello is the first message on every stream.
 type Hello struct {
@@ -990,6 +1006,8 @@ type ServerMessage struct {
 	//	*ServerMessage_CancelJob
 	//	*ServerMessage_UpdateAgent
 	//	*ServerMessage_IntegrationPoll
+	//	*ServerMessage_StartLogs
+	//	*ServerMessage_StopLogs
 	Msg           isServerMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1095,6 +1113,24 @@ func (x *ServerMessage) GetIntegrationPoll() *IntegrationPoll {
 	return nil
 }
 
+func (x *ServerMessage) GetStartLogs() *StartLogs {
+	if x != nil {
+		if x, ok := x.Msg.(*ServerMessage_StartLogs); ok {
+			return x.StartLogs
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetStopLogs() *StopLogs {
+	if x != nil {
+		if x, ok := x.Msg.(*ServerMessage_StopLogs); ok {
+			return x.StopLogs
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Msg interface {
 	isServerMessage_Msg()
 }
@@ -1127,6 +1163,14 @@ type ServerMessage_IntegrationPoll struct {
 	IntegrationPoll *IntegrationPoll `protobuf:"bytes,7,opt,name=integration_poll,json=integrationPoll,proto3,oneof"`
 }
 
+type ServerMessage_StartLogs struct {
+	StartLogs *StartLogs `protobuf:"bytes,8,opt,name=start_logs,json=startLogs,proto3,oneof"`
+}
+
+type ServerMessage_StopLogs struct {
+	StopLogs *StopLogs `protobuf:"bytes,9,opt,name=stop_logs,json=stopLogs,proto3,oneof"`
+}
+
 func (*ServerMessage_Config) isServerMessage_Msg() {}
 
 func (*ServerMessage_RequestInventory) isServerMessage_Msg() {}
@@ -1140,6 +1184,10 @@ func (*ServerMessage_CancelJob) isServerMessage_Msg() {}
 func (*ServerMessage_UpdateAgent) isServerMessage_Msg() {}
 
 func (*ServerMessage_IntegrationPoll) isServerMessage_Msg() {}
+
+func (*ServerMessage_StartLogs) isServerMessage_Msg() {}
+
+func (*ServerMessage_StopLogs) isServerMessage_Msg() {}
 
 // Config is pushed on connect and whenever it changes.
 type Config struct {
@@ -1554,6 +1602,280 @@ func (x *IntegrationResult) GetError() string {
 	return ""
 }
 
+// StartLogs asks the agent to read a container's log from its engine: the
+// last tail lines, then, with follow, new lines as they are written until
+// the server sends StopLogs or max_seconds pass. Only agents that report
+// the container-logs capability get one (agent.conf container_logs). The
+// agent sends LogChunks and never stores the log.
+type StartLogs struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // echoed in every LogChunk
+	Engine        string                 `protobuf:"bytes,2,opt,name=engine,proto3" json:"engine,omitempty"`                        // docker, podman or podman:<user>, as the containers section names it
+	Container     string                 `protobuf:"bytes,3,opt,name=container,proto3" json:"container,omitempty"`                  // name or ID
+	Tail          uint32                 `protobuf:"varint,4,opt,name=tail,proto3" json:"tail,omitempty"`                           // lines from the end; 0 is none (follow only)
+	Follow        bool                   `protobuf:"varint,5,opt,name=follow,proto3" json:"follow,omitempty"`
+	MaxSeconds    uint32                 `protobuf:"varint,6,opt,name=max_seconds,json=maxSeconds,proto3" json:"max_seconds,omitempty"` // how long to follow; the agent caps it
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartLogs) Reset() {
+	*x = StartLogs{}
+	mi := &file_agent_v1_agent_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartLogs) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartLogs) ProtoMessage() {}
+
+func (x *StartLogs) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_v1_agent_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartLogs.ProtoReflect.Descriptor instead.
+func (*StartLogs) Descriptor() ([]byte, []int) {
+	return file_agent_v1_agent_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *StartLogs) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *StartLogs) GetEngine() string {
+	if x != nil {
+		return x.Engine
+	}
+	return ""
+}
+
+func (x *StartLogs) GetContainer() string {
+	if x != nil {
+		return x.Container
+	}
+	return ""
+}
+
+func (x *StartLogs) GetTail() uint32 {
+	if x != nil {
+		return x.Tail
+	}
+	return 0
+}
+
+func (x *StartLogs) GetFollow() bool {
+	if x != nil {
+		return x.Follow
+	}
+	return false
+}
+
+func (x *StartLogs) GetMaxSeconds() uint32 {
+	if x != nil {
+		return x.MaxSeconds
+	}
+	return 0
+}
+
+// StopLogs ends a StartLogs. The agent answers with a final LogChunk.
+type StopLogs struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopLogs) Reset() {
+	*x = StopLogs{}
+	mi := &file_agent_v1_agent_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopLogs) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopLogs) ProtoMessage() {}
+
+func (x *StopLogs) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_v1_agent_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopLogs.ProtoReflect.Descriptor instead.
+func (*StopLogs) Descriptor() ([]byte, []int) {
+	return file_agent_v1_agent_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *StopLogs) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+// LogChunk carries lines of a StartLogs. done marks the last one, with
+// error set when the log couldn't be read.
+type LogChunk struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Seq       uint64                 `protobuf:"varint,2,opt,name=seq,proto3" json:"seq,omitempty"`
+	Lines     []*LogLine             `protobuf:"bytes,3,rep,name=lines,proto3" json:"lines,omitempty"`
+	// dropped counts lines left out since the previous chunk because the
+	// container wrote faster than the stream carries.
+	Dropped       uint64 `protobuf:"varint,4,opt,name=dropped,proto3" json:"dropped,omitempty"`
+	Done          bool   `protobuf:"varint,5,opt,name=done,proto3" json:"done,omitempty"`
+	Error         string `protobuf:"bytes,6,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogChunk) Reset() {
+	*x = LogChunk{}
+	mi := &file_agent_v1_agent_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogChunk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogChunk) ProtoMessage() {}
+
+func (x *LogChunk) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_v1_agent_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogChunk.ProtoReflect.Descriptor instead.
+func (*LogChunk) Descriptor() ([]byte, []int) {
+	return file_agent_v1_agent_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *LogChunk) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *LogChunk) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *LogChunk) GetLines() []*LogLine {
+	if x != nil {
+		return x.Lines
+	}
+	return nil
+}
+
+func (x *LogChunk) GetDropped() uint64 {
+	if x != nil {
+		return x.Dropped
+	}
+	return 0
+}
+
+func (x *LogChunk) GetDone() bool {
+	if x != nil {
+		return x.Done
+	}
+	return false
+}
+
+func (x *LogChunk) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type LogLine struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Stream        string                 `protobuf:"bytes,1,opt,name=stream,proto3" json:"stream,omitempty"` // stdout | stderr
+	Text          string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`     // the engine's RFC 3339 timestamp, a space, the line
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogLine) Reset() {
+	*x = LogLine{}
+	mi := &file_agent_v1_agent_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogLine) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogLine) ProtoMessage() {}
+
+func (x *LogLine) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_v1_agent_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogLine.ProtoReflect.Descriptor instead.
+func (*LogLine) Descriptor() ([]byte, []int) {
+	return file_agent_v1_agent_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *LogLine) GetStream() string {
+	if x != nil {
+		return x.Stream
+	}
+	return ""
+}
+
+func (x *LogLine) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
 type ReleaseRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
@@ -1564,7 +1886,7 @@ type ReleaseRequest struct {
 
 func (x *ReleaseRequest) Reset() {
 	*x = ReleaseRequest{}
-	mi := &file_agent_v1_agent_proto_msgTypes[19]
+	mi := &file_agent_v1_agent_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1576,7 +1898,7 @@ func (x *ReleaseRequest) String() string {
 func (*ReleaseRequest) ProtoMessage() {}
 
 func (x *ReleaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[19]
+	mi := &file_agent_v1_agent_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1589,7 +1911,7 @@ func (x *ReleaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseRequest) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{19}
+	return file_agent_v1_agent_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ReleaseRequest) GetVersion() string {
@@ -1615,7 +1937,7 @@ type ReleaseChunk struct {
 
 func (x *ReleaseChunk) Reset() {
 	*x = ReleaseChunk{}
-	mi := &file_agent_v1_agent_proto_msgTypes[20]
+	mi := &file_agent_v1_agent_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1627,7 +1949,7 @@ func (x *ReleaseChunk) String() string {
 func (*ReleaseChunk) ProtoMessage() {}
 
 func (x *ReleaseChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[20]
+	mi := &file_agent_v1_agent_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1640,7 +1962,7 @@ func (x *ReleaseChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseChunk.ProtoReflect.Descriptor instead.
 func (*ReleaseChunk) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{20}
+	return file_agent_v1_agent_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ReleaseChunk) GetData() []byte {
@@ -1669,7 +1991,7 @@ type RunJob struct {
 
 func (x *RunJob) Reset() {
 	*x = RunJob{}
-	mi := &file_agent_v1_agent_proto_msgTypes[21]
+	mi := &file_agent_v1_agent_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1681,7 +2003,7 @@ func (x *RunJob) String() string {
 func (*RunJob) ProtoMessage() {}
 
 func (x *RunJob) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[21]
+	mi := &file_agent_v1_agent_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1694,7 +2016,7 @@ func (x *RunJob) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunJob.ProtoReflect.Descriptor instead.
 func (*RunJob) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{21}
+	return file_agent_v1_agent_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *RunJob) GetJobId() string {
@@ -1760,7 +2082,7 @@ type StackFiles struct {
 
 func (x *StackFiles) Reset() {
 	*x = StackFiles{}
-	mi := &file_agent_v1_agent_proto_msgTypes[22]
+	mi := &file_agent_v1_agent_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1772,7 +2094,7 @@ func (x *StackFiles) String() string {
 func (*StackFiles) ProtoMessage() {}
 
 func (x *StackFiles) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[22]
+	mi := &file_agent_v1_agent_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1785,7 +2107,7 @@ func (x *StackFiles) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StackFiles.ProtoReflect.Descriptor instead.
 func (*StackFiles) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{22}
+	return file_agent_v1_agent_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *StackFiles) GetCompose() []byte {
@@ -1817,7 +2139,7 @@ type Script struct {
 
 func (x *Script) Reset() {
 	*x = Script{}
-	mi := &file_agent_v1_agent_proto_msgTypes[23]
+	mi := &file_agent_v1_agent_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1829,7 +2151,7 @@ func (x *Script) String() string {
 func (*Script) ProtoMessage() {}
 
 func (x *Script) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[23]
+	mi := &file_agent_v1_agent_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1842,7 +2164,7 @@ func (x *Script) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Script.ProtoReflect.Descriptor instead.
 func (*Script) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{23}
+	return file_agent_v1_agent_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *Script) GetInterpreter() string {
@@ -1890,7 +2212,7 @@ type CancelJob struct {
 
 func (x *CancelJob) Reset() {
 	*x = CancelJob{}
-	mi := &file_agent_v1_agent_proto_msgTypes[24]
+	mi := &file_agent_v1_agent_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1902,7 +2224,7 @@ func (x *CancelJob) String() string {
 func (*CancelJob) ProtoMessage() {}
 
 func (x *CancelJob) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[24]
+	mi := &file_agent_v1_agent_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1915,7 +2237,7 @@ func (x *CancelJob) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelJob.ProtoReflect.Descriptor instead.
 func (*CancelJob) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{24}
+	return file_agent_v1_agent_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *CancelJob) GetJobId() string {
@@ -1947,7 +2269,7 @@ type JobEvent struct {
 
 func (x *JobEvent) Reset() {
 	*x = JobEvent{}
-	mi := &file_agent_v1_agent_proto_msgTypes[25]
+	mi := &file_agent_v1_agent_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1959,7 +2281,7 @@ func (x *JobEvent) String() string {
 func (*JobEvent) ProtoMessage() {}
 
 func (x *JobEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_v1_agent_proto_msgTypes[25]
+	mi := &file_agent_v1_agent_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1972,7 +2294,7 @@ func (x *JobEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JobEvent.ProtoReflect.Descriptor instead.
 func (*JobEvent) Descriptor() ([]byte, []int) {
-	return file_agent_v1_agent_proto_rawDescGZIP(), []int{25}
+	return file_agent_v1_agent_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *JobEvent) GetJobId() string {
@@ -2057,7 +2379,7 @@ const file_agent_v1_agent_proto_rawDesc = "" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12&\n" +
 	"\x0fclient_cert_der\x18\x02 \x01(\fR\rclientCertDer\x12\x1e\n" +
 	"\vca_cert_der\x18\x03 \x01(\fR\tcaCertDer\x12,\n" +
-	"\x12release_public_key\x18\x04 \x01(\fR\x10releasePublicKey\"\xa7\x04\n" +
+	"\x12release_public_key\x18\x04 \x01(\fR\x10releasePublicKey\"\xe3\x04\n" +
 	"\fAgentMessage\x120\n" +
 	"\x05hello\x18\x01 \x01(\v2\x18.baseline.agent.v1.HelloH\x00R\x05hello\x12C\n" +
 	"\tinventory\x18\x02 \x01(\v2#.baseline.agent.v1.InventorySectionH\x00R\tinventory\x12<\n" +
@@ -2067,7 +2389,8 @@ const file_agent_v1_agent_proto_rawDesc = "" +
 	"\ametrics\x18\x05 \x01(\v2\x1e.baseline.agent.v1.MetricBatchH\x00R\ametrics\x12:\n" +
 	"\tjob_event\x18\x06 \x01(\v2\x1b.baseline.agent.v1.JobEventH\x00R\bjobEvent\x12F\n" +
 	"\rupdate_result\x18\a \x01(\v2\x1f.baseline.agent.v1.UpdateResultH\x00R\fupdateResult\x12U\n" +
-	"\x12integration_result\x18\b \x01(\v2$.baseline.agent.v1.IntegrationResultH\x00R\x11integrationResultB\x05\n" +
+	"\x12integration_result\x18\b \x01(\v2$.baseline.agent.v1.IntegrationResultH\x00R\x11integrationResult\x12:\n" +
+	"\tlog_chunk\x18\t \x01(\v2\x1b.baseline.agent.v1.LogChunkH\x00R\blogChunkB\x05\n" +
 	"\x03msg\"\xa9\x03\n" +
 	"\x05Hello\x12#\n" +
 	"\ragent_version\x18\x01 \x01(\tR\fagentVersion\x12;\n" +
@@ -2106,7 +2429,7 @@ const file_agent_v1_agent_proto_rawDesc = "" +
 	"\x05value\x18\x04 \x01(\x01R\x05value\">\n" +
 	"\fUpdateResult\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error\"\xf1\x03\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\"\xec\x04\n" +
 	"\rServerMessage\x123\n" +
 	"\x06config\x18\x01 \x01(\v2\x19.baseline.agent.v1.ConfigH\x00R\x06config\x12R\n" +
 	"\x11request_inventory\x18\x02 \x01(\v2#.baseline.agent.v1.RequestInventoryH\x00R\x10requestInventory\x12E\n" +
@@ -2116,7 +2439,10 @@ const file_agent_v1_agent_proto_rawDesc = "" +
 	"\n" +
 	"cancel_job\x18\x05 \x01(\v2\x1c.baseline.agent.v1.CancelJobH\x00R\tcancelJob\x12C\n" +
 	"\fupdate_agent\x18\x06 \x01(\v2\x1e.baseline.agent.v1.UpdateAgentH\x00R\vupdateAgent\x12O\n" +
-	"\x10integration_poll\x18\a \x01(\v2\".baseline.agent.v1.IntegrationPollH\x00R\x0fintegrationPollB\x05\n" +
+	"\x10integration_poll\x18\a \x01(\v2\".baseline.agent.v1.IntegrationPollH\x00R\x0fintegrationPoll\x12=\n" +
+	"\n" +
+	"start_logs\x18\b \x01(\v2\x1c.baseline.agent.v1.StartLogsH\x00R\tstartLogs\x12:\n" +
+	"\tstop_logs\x18\t \x01(\v2\x1b.baseline.agent.v1.StopLogsH\x00R\bstopLogsB\x05\n" +
 	"\x03msg\"\xc7\x02\n" +
 	"\x06Config\x12Y\n" +
 	"\x10interval_seconds\x18\x01 \x03(\v2..baseline.agent.v1.Config.IntervalSecondsEntryR\x0fintervalSeconds\x12+\n" +
@@ -2153,7 +2479,30 @@ const file_agent_v1_agent_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12!\n" +
 	"\fpayload_json\x18\x02 \x01(\fR\vpayloadJson\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\">\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\xad\x01\n" +
+	"\tStartLogs\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x16\n" +
+	"\x06engine\x18\x02 \x01(\tR\x06engine\x12\x1c\n" +
+	"\tcontainer\x18\x03 \x01(\tR\tcontainer\x12\x12\n" +
+	"\x04tail\x18\x04 \x01(\rR\x04tail\x12\x16\n" +
+	"\x06follow\x18\x05 \x01(\bR\x06follow\x12\x1f\n" +
+	"\vmax_seconds\x18\x06 \x01(\rR\n" +
+	"maxSeconds\")\n" +
+	"\bStopLogs\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\"\xb1\x01\n" +
+	"\bLogChunk\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x10\n" +
+	"\x03seq\x18\x02 \x01(\x04R\x03seq\x120\n" +
+	"\x05lines\x18\x03 \x03(\v2\x1a.baseline.agent.v1.LogLineR\x05lines\x12\x18\n" +
+	"\adropped\x18\x04 \x01(\x04R\adropped\x12\x12\n" +
+	"\x04done\x18\x05 \x01(\bR\x04done\x12\x14\n" +
+	"\x05error\x18\x06 \x01(\tR\x05error\"5\n" +
+	"\aLogLine\x12\x16\n" +
+	"\x06stream\x18\x01 \x01(\tR\x06stream\x12\x12\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\">\n" +
 	"\x0eReleaseRequest\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x12\n" +
 	"\x04arch\x18\x02 \x01(\tR\x04arch\"\"\n" +
@@ -2220,7 +2569,7 @@ func file_agent_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_agent_v1_agent_proto_goTypes = []any{
 	(JobEvent_Type)(0),        // 0: baseline.agent.v1.JobEvent.Type
 	(*HostIdentity)(nil),      // 1: baseline.agent.v1.HostIdentity
@@ -2242,16 +2591,20 @@ var file_agent_v1_agent_proto_goTypes = []any{
 	(*UpdateAgent)(nil),       // 17: baseline.agent.v1.UpdateAgent
 	(*IntegrationPoll)(nil),   // 18: baseline.agent.v1.IntegrationPoll
 	(*IntegrationResult)(nil), // 19: baseline.agent.v1.IntegrationResult
-	(*ReleaseRequest)(nil),    // 20: baseline.agent.v1.ReleaseRequest
-	(*ReleaseChunk)(nil),      // 21: baseline.agent.v1.ReleaseChunk
-	(*RunJob)(nil),            // 22: baseline.agent.v1.RunJob
-	(*StackFiles)(nil),        // 23: baseline.agent.v1.StackFiles
-	(*Script)(nil),            // 24: baseline.agent.v1.Script
-	(*CancelJob)(nil),         // 25: baseline.agent.v1.CancelJob
-	(*JobEvent)(nil),          // 26: baseline.agent.v1.JobEvent
-	nil,                       // 27: baseline.agent.v1.Hello.SectionHashesEntry
-	nil,                       // 28: baseline.agent.v1.Config.IntervalSecondsEntry
-	nil,                       // 29: baseline.agent.v1.Script.EnvEntry
+	(*StartLogs)(nil),         // 20: baseline.agent.v1.StartLogs
+	(*StopLogs)(nil),          // 21: baseline.agent.v1.StopLogs
+	(*LogChunk)(nil),          // 22: baseline.agent.v1.LogChunk
+	(*LogLine)(nil),           // 23: baseline.agent.v1.LogLine
+	(*ReleaseRequest)(nil),    // 24: baseline.agent.v1.ReleaseRequest
+	(*ReleaseChunk)(nil),      // 25: baseline.agent.v1.ReleaseChunk
+	(*RunJob)(nil),            // 26: baseline.agent.v1.RunJob
+	(*StackFiles)(nil),        // 27: baseline.agent.v1.StackFiles
+	(*Script)(nil),            // 28: baseline.agent.v1.Script
+	(*CancelJob)(nil),         // 29: baseline.agent.v1.CancelJob
+	(*JobEvent)(nil),          // 30: baseline.agent.v1.JobEvent
+	nil,                       // 31: baseline.agent.v1.Hello.SectionHashesEntry
+	nil,                       // 32: baseline.agent.v1.Config.IntervalSecondsEntry
+	nil,                       // 33: baseline.agent.v1.Script.EnvEntry
 }
 var file_agent_v1_agent_proto_depIdxs = []int32{
 	1,  // 0: baseline.agent.v1.EnrollRequest.identity:type_name -> baseline.agent.v1.HostIdentity
@@ -2260,36 +2613,40 @@ var file_agent_v1_agent_proto_depIdxs = []int32{
 	8,  // 3: baseline.agent.v1.AgentMessage.heartbeat:type_name -> baseline.agent.v1.Heartbeat
 	9,  // 4: baseline.agent.v1.AgentMessage.cert_renew:type_name -> baseline.agent.v1.CertRenewRequest
 	10, // 5: baseline.agent.v1.AgentMessage.metrics:type_name -> baseline.agent.v1.MetricBatch
-	26, // 6: baseline.agent.v1.AgentMessage.job_event:type_name -> baseline.agent.v1.JobEvent
+	30, // 6: baseline.agent.v1.AgentMessage.job_event:type_name -> baseline.agent.v1.JobEvent
 	12, // 7: baseline.agent.v1.AgentMessage.update_result:type_name -> baseline.agent.v1.UpdateResult
 	19, // 8: baseline.agent.v1.AgentMessage.integration_result:type_name -> baseline.agent.v1.IntegrationResult
-	1,  // 9: baseline.agent.v1.Hello.identity:type_name -> baseline.agent.v1.HostIdentity
-	27, // 10: baseline.agent.v1.Hello.section_hashes:type_name -> baseline.agent.v1.Hello.SectionHashesEntry
-	6,  // 11: baseline.agent.v1.Hello.policy:type_name -> baseline.agent.v1.Policy
-	11, // 12: baseline.agent.v1.MetricBatch.metrics:type_name -> baseline.agent.v1.Metric
-	14, // 13: baseline.agent.v1.ServerMessage.config:type_name -> baseline.agent.v1.Config
-	15, // 14: baseline.agent.v1.ServerMessage.request_inventory:type_name -> baseline.agent.v1.RequestInventory
-	16, // 15: baseline.agent.v1.ServerMessage.cert_renew:type_name -> baseline.agent.v1.CertRenewResponse
-	22, // 16: baseline.agent.v1.ServerMessage.run_job:type_name -> baseline.agent.v1.RunJob
-	25, // 17: baseline.agent.v1.ServerMessage.cancel_job:type_name -> baseline.agent.v1.CancelJob
-	17, // 18: baseline.agent.v1.ServerMessage.update_agent:type_name -> baseline.agent.v1.UpdateAgent
-	18, // 19: baseline.agent.v1.ServerMessage.integration_poll:type_name -> baseline.agent.v1.IntegrationPoll
-	28, // 20: baseline.agent.v1.Config.interval_seconds:type_name -> baseline.agent.v1.Config.IntervalSecondsEntry
-	24, // 21: baseline.agent.v1.RunJob.script:type_name -> baseline.agent.v1.Script
-	23, // 22: baseline.agent.v1.RunJob.stack_files:type_name -> baseline.agent.v1.StackFiles
-	29, // 23: baseline.agent.v1.Script.env:type_name -> baseline.agent.v1.Script.EnvEntry
-	0,  // 24: baseline.agent.v1.JobEvent.type:type_name -> baseline.agent.v1.JobEvent.Type
-	2,  // 25: baseline.agent.v1.AgentGateway.Enroll:input_type -> baseline.agent.v1.EnrollRequest
-	4,  // 26: baseline.agent.v1.AgentGateway.Connect:input_type -> baseline.agent.v1.AgentMessage
-	20, // 27: baseline.agent.v1.AgentGateway.DownloadRelease:input_type -> baseline.agent.v1.ReleaseRequest
-	3,  // 28: baseline.agent.v1.AgentGateway.Enroll:output_type -> baseline.agent.v1.EnrollResponse
-	13, // 29: baseline.agent.v1.AgentGateway.Connect:output_type -> baseline.agent.v1.ServerMessage
-	21, // 30: baseline.agent.v1.AgentGateway.DownloadRelease:output_type -> baseline.agent.v1.ReleaseChunk
-	28, // [28:31] is the sub-list for method output_type
-	25, // [25:28] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	22, // 9: baseline.agent.v1.AgentMessage.log_chunk:type_name -> baseline.agent.v1.LogChunk
+	1,  // 10: baseline.agent.v1.Hello.identity:type_name -> baseline.agent.v1.HostIdentity
+	31, // 11: baseline.agent.v1.Hello.section_hashes:type_name -> baseline.agent.v1.Hello.SectionHashesEntry
+	6,  // 12: baseline.agent.v1.Hello.policy:type_name -> baseline.agent.v1.Policy
+	11, // 13: baseline.agent.v1.MetricBatch.metrics:type_name -> baseline.agent.v1.Metric
+	14, // 14: baseline.agent.v1.ServerMessage.config:type_name -> baseline.agent.v1.Config
+	15, // 15: baseline.agent.v1.ServerMessage.request_inventory:type_name -> baseline.agent.v1.RequestInventory
+	16, // 16: baseline.agent.v1.ServerMessage.cert_renew:type_name -> baseline.agent.v1.CertRenewResponse
+	26, // 17: baseline.agent.v1.ServerMessage.run_job:type_name -> baseline.agent.v1.RunJob
+	29, // 18: baseline.agent.v1.ServerMessage.cancel_job:type_name -> baseline.agent.v1.CancelJob
+	17, // 19: baseline.agent.v1.ServerMessage.update_agent:type_name -> baseline.agent.v1.UpdateAgent
+	18, // 20: baseline.agent.v1.ServerMessage.integration_poll:type_name -> baseline.agent.v1.IntegrationPoll
+	20, // 21: baseline.agent.v1.ServerMessage.start_logs:type_name -> baseline.agent.v1.StartLogs
+	21, // 22: baseline.agent.v1.ServerMessage.stop_logs:type_name -> baseline.agent.v1.StopLogs
+	32, // 23: baseline.agent.v1.Config.interval_seconds:type_name -> baseline.agent.v1.Config.IntervalSecondsEntry
+	23, // 24: baseline.agent.v1.LogChunk.lines:type_name -> baseline.agent.v1.LogLine
+	28, // 25: baseline.agent.v1.RunJob.script:type_name -> baseline.agent.v1.Script
+	27, // 26: baseline.agent.v1.RunJob.stack_files:type_name -> baseline.agent.v1.StackFiles
+	33, // 27: baseline.agent.v1.Script.env:type_name -> baseline.agent.v1.Script.EnvEntry
+	0,  // 28: baseline.agent.v1.JobEvent.type:type_name -> baseline.agent.v1.JobEvent.Type
+	2,  // 29: baseline.agent.v1.AgentGateway.Enroll:input_type -> baseline.agent.v1.EnrollRequest
+	4,  // 30: baseline.agent.v1.AgentGateway.Connect:input_type -> baseline.agent.v1.AgentMessage
+	24, // 31: baseline.agent.v1.AgentGateway.DownloadRelease:input_type -> baseline.agent.v1.ReleaseRequest
+	3,  // 32: baseline.agent.v1.AgentGateway.Enroll:output_type -> baseline.agent.v1.EnrollResponse
+	13, // 33: baseline.agent.v1.AgentGateway.Connect:output_type -> baseline.agent.v1.ServerMessage
+	25, // 34: baseline.agent.v1.AgentGateway.DownloadRelease:output_type -> baseline.agent.v1.ReleaseChunk
+	32, // [32:35] is the sub-list for method output_type
+	29, // [29:32] is the sub-list for method input_type
+	29, // [29:29] is the sub-list for extension type_name
+	29, // [29:29] is the sub-list for extension extendee
+	0,  // [0:29] is the sub-list for field type_name
 }
 
 func init() { file_agent_v1_agent_proto_init() }
@@ -2306,6 +2663,7 @@ func file_agent_v1_agent_proto_init() {
 		(*AgentMessage_JobEvent)(nil),
 		(*AgentMessage_UpdateResult)(nil),
 		(*AgentMessage_IntegrationResult)(nil),
+		(*AgentMessage_LogChunk)(nil),
 	}
 	file_agent_v1_agent_proto_msgTypes[12].OneofWrappers = []any{
 		(*ServerMessage_Config)(nil),
@@ -2315,6 +2673,8 @@ func file_agent_v1_agent_proto_init() {
 		(*ServerMessage_CancelJob)(nil),
 		(*ServerMessage_UpdateAgent)(nil),
 		(*ServerMessage_IntegrationPoll)(nil),
+		(*ServerMessage_StartLogs)(nil),
+		(*ServerMessage_StopLogs)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2322,7 +2682,7 @@ func file_agent_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_v1_agent_proto_rawDesc), len(file_agent_v1_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   29,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

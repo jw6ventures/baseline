@@ -60,6 +60,7 @@ func (s *Server) apiRoutes(mux *http.ServeMux) {
 
 	get("/containers", anyRole, s.apiContainers)
 	get("/containers/{id}", anyRole, s.apiContainer)
+	get("/containers/{id}/logs", anyRole, s.apiContainerLogs)
 	get("/stacks", anyRole, s.apiStacks)
 	get("/stacks/{id}", anyRole, s.apiStack)
 	get("/stacks/{id}/files", anyRole, s.apiStackFiles)

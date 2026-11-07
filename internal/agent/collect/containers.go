@@ -460,6 +460,16 @@ func (c *ContainerCollector) engine(ctx context.Context, name string) (*ctrEngin
 	return nil, fmt.Errorf("no %s engine on this host", name)
 }
 
+// Logs reads a container's log from its engine for the server (agent.conf
+// container_logs). Nothing is kept: lines go straight to emit.
+func (c *ContainerCollector) Logs(ctx context.Context, engine, ctr string, opt container.LogsOptions, emit func(container.LogLine)) error {
+	eng, err := c.engine(ctx, engine)
+	if err != nil {
+		return err
+	}
+	return eng.client.Logs(ctx, ctr, opt, emit)
+}
+
 // Stack is a Compose stack as compose.pull and compose.update see it: read
 // from its engine at the time, with the engine's socket and the stack's
 // containers.

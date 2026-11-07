@@ -20,6 +20,10 @@ var ErrAgentOffline = errors.New("the host's agent isn't connected")
 // turned off in its agent.conf.
 var ErrNoCapability = errors.New("the host's agent can't poll this (update it, or check integrations in its agent.conf)")
 
+// ErrNoLogs is a log read from an agent that doesn't read container logs:
+// too old, or turned off in its agent.conf.
+var ErrNoLogs = errors.New("the host's agent doesn't read container logs (update it, or check container_logs in its agent.conf)")
+
 type pendingPoll struct {
 	agentID string
 	done    chan *agentv1.IntegrationResult

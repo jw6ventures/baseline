@@ -108,6 +108,9 @@ type Agent struct {
 	// Polls answer the server's IntegrationPolls of other kinds, whatever
 	// Integrations says: a cluster agent's "k8s.pods" and "k8s.logs".
 	Polls map[string]PollFunc
+	// ContainerLogs reads container logs for the server (agent.conf
+	// container_logs); nil: it doesn't, and doesn't say it can.
+	ContainerLogs LogReader
 	// Runner runs jobs; nil: the agent reports no policy and the server
 	// sends it none.
 	Runner  *runner.Runner
@@ -453,6 +456,10 @@ func (a *Agent) session(ctx context.Context) error {
 	// Integration polls run beside everything else; their results come
 	// back here to be sent.
 	polled := make(chan *agentv1.IntegrationResult, 4)
+	// Container logs the server asked for are read beside everything
+	// else too, and end with the session.
+	logChunks := make(chan *agentv1.LogChunk, 16)
+	var logs logStreams
 
 	var updating bool
 	updateDone := make(chan error, 1)
@@ -502,6 +509,10 @@ func (a *Agent) session(ctx context.Context) error {
 				if _, ok := a.Collectors[name]; ok {
 					work.add(name, false, req.jobID)
 				}
+			}
+		case c := <-logChunks:
+			if err := stream.Send(&agentv1.AgentMessage{Msg: &agentv1.AgentMessage_LogChunk{LogChunk: c}}); err != nil {
+				return err
 			}
 		case res := <-polled:
 			if err := stream.Send(&agentv1.AgentMessage{Msg: &agentv1.AgentMessage_IntegrationResult{IntegrationResult: res}}); err != nil {
@@ -595,6 +606,10 @@ func (a *Agent) session(ctx context.Context) error {
 					case <-ctx.Done():
 					}
 				}(msg.IntegrationPoll)
+			case *agentv1.ServerMessage_StartLogs:
+				a.startLogs(ctx, &logs, msg.StartLogs, logChunks)
+			case *agentv1.ServerMessage_StopLogs:
+				logs.stop(msg.StopLogs.GetRequestId())
 			case *agentv1.ServerMessage_CancelJob:
 				if a.Runner != nil {
 					a.Runner.Cancel(msg.CancelJob.GetJobId())

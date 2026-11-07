@@ -267,6 +267,7 @@ type Inspect struct {
 	} `json:"State"`
 	RestartCount int `json:"RestartCount"`
 	Config       struct {
+		Tty    bool              `json:"Tty"`   // its log is one raw stream, not stdout and stderr framed
 		Image  string            `json:"Image"` // the reference it was created from
 		Labels map[string]string `json:"Labels"`
 	} `json:"Config"`

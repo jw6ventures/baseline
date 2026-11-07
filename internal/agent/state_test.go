@@ -133,4 +133,14 @@ func TestLoadConfigPolicy(t *testing.T) {
 	if _, err := load("integrations = of\n"); err == nil || !strings.Contains(err.Error(), ":2: integrations") {
 		t.Errorf("integrations = of: %v", err)
 	}
+	// So are container logs.
+	if c, _ = load(""); !c.ContainerLogs {
+		t.Fatal("container logs off by default")
+	}
+	if c, _ = load("container_logs = off\n"); c.ContainerLogs {
+		t.Fatal("container_logs = off not read")
+	}
+	if _, err := load("container_logs = no\n"); err == nil || !strings.Contains(err.Error(), ":2: container_logs") {
+		t.Errorf("container_logs = no: %v", err)
+	}
 }

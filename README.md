@@ -155,6 +155,12 @@ Traefik container on the same host, or one on another node set on the host's
 Containers tab. To have the agent start a rootful `podman.socket` that isn't
 running, add `start_podman_socket = true` to `/etc/baseline/agent.conf`.
 
+Operators can read a container's log from its page, or follow it live for up
+to 30 minutes, from Docker and Podman alike. The log is read from the host when
+asked and passed straight through: nothing is stored, and every read is
+recorded in the audit log. `container_logs = off` in `agent.conf` turns it off
+for a host.
+
 ## Virtual machines and Kubernetes
 
 Agents on Proxmox VE nodes and libvirt hosts report their guests (VMs and

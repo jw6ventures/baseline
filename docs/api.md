@@ -103,6 +103,7 @@ All paths are under `/api/v1`.
 |---|---|
 | `GET /containers` | Containers on visible hosts, with image check results and semver advice; `host`, `stack`, `q`, `updates=1`. |
 | `GET /containers/{id}` | One container, by its CI ID. |
+| `GET /containers/{id}/logs` | The end of a container's log, read from its host now: `tail` (default 200, at most 5000) gives `{"container", "lines": [{"s": "stdout"\|"stderr", "t": "<timestamp> <text>"}], "dropped", "truncated"}`. With `follow=1` it streams newline-delimited JSON instead: a `{"s", "t"}` object per line, `{"dropped": n}` when lines were left out, and a last `{"done": true}` with `error` if the log couldn't be read; it follows for up to 30 minutes, or until the client disconnects. Needs the operator role on the host and an agent with container logs on (`container_logs` in `agent.conf`); each read is audited. Nothing is stored. |
 | `GET /stacks` | Compose stacks; `host`, `q`. |
 | `GET /stacks/{id}` | A stack with its containers. |
 | `GET /stacks/{id}/files` | What a `compose.edit` starts from: whether Baseline can edit the stack (`editable`, `edit_block`), its Compose file (`path`, `sha256`, `content`, and `masked` when it is inventory's copy with secret values masked rather than Baseline's own), and the .env Baseline last wrote (`known`, `revision`, `keys`, `hash`). `env=1` adds the .env's `text`; it needs the operator role on the host, and each read is audited. |

@@ -6,6 +6,7 @@
     <p class="muted sub">{{template "ctr-state" $c}} · on <a href="{{.Base}}/hosts/{{$c.HostID}}/containers">{{$c.Hostname}}</a> ({{$c.Engine}}){{with $v.Stack}} · stack <a href="{{$.Base}}/stacks/{{.CIID}}">{{.Project}}</a>{{if $c.ComposeService}}, service {{$c.ComposeService}}{{end}}{{end}}</p>
   </div>
   <div>
+    {{if $c.CanEdit}}<a class="button" href="{{.Base}}/containers/{{$c.CIID}}/logs">Logs</a>{{end}}
     {{if and $c.CanEdit $c.HostConnected}}<a class="button" href="{{.Base}}/changes/new?action=container.restart&amp;container={{$c.CIID}}">Restart…</a>{{end}}
     <a class="button" href="{{.Base}}/cis/{{$c.CIID}}">CI and relationships</a>
   </div>

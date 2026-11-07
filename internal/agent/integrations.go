@@ -30,6 +30,9 @@ func (a *Agent) capabilities() []string {
 	if a.Integrations {
 		caps = append(caps, model.CapUniFi)
 	}
+	if a.ContainerLogs != nil {
+		caps = append(caps, model.CapContainerLogs)
+	}
 	return caps
 }
 

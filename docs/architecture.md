@@ -78,6 +78,7 @@ service AgentGateway {
 | `InventorySection` | A full snapshot of one section: os, hardware, packages, updates, smart, containers (with Compose stacks), vms, k8s_node, services, ports, reboot, certs, or a cluster agent's k8s. The payload is the section's JSON (types in `internal/model`, shared by agent and server) with its SHA-256 and a schema version. Sent only when the section's content hash changes, or when the server asks. The server diffs it against the stored copy and writes change history. |
 | `MetricBatch` | Every 60s for host metrics and every 90s for container metrics. Carries when the readings were taken and when the batch was sent, both by the agent's clock; the server shifts the timestamps by the difference between "sent" and its own clock when they disagree by more than 2s. |
 | `IntegrationResult` | Answers an `IntegrationPoll`: what the agent read (JSON), or why it couldn't. |
+| `LogChunk` | Lines of a container log a `StartLogs` asked for, numbered, with how many were dropped; the last one is marked done, with the error if the log couldn't be read (agent.md §3.5). |
 | `UpdateResult` | A self-update failed: bad download or signature, or a new version that was rolled back. Success shows as the new version in the next `Hello`. |
 | `JobEvent` | Command accepted/started, output chunk (stdout/stderr), progress, result (exit code, structured result). |
 | `Heartbeat` | Every 30s when nothing else has been sent. |
@@ -92,6 +93,7 @@ service AgentGateway {
 | `CancelJob` | Best-effort cancellation. |
 | `CertRenewResponse` | A new client cert. |
 | `IntegrationPoll` | Read a system on the host's network for the server, such as a UniFi console: kind, settings, the API key (held for the poll only) and a timeout. Sent only to agents reporting the integration's capability (integrations.md). |
+| `StartLogs` / `StopLogs` | Read a container's log: engine, container, tail lines, follow and a time limit; `StopLogs` ends a followed read. Sent only to agents reporting `container-logs`. The server passes the lines on to the viewer and stores none (agent.md §3.5). |
 | `UpdateAgent` | Target version, arch, size, sha256 and the ed25519 signatures made in CI. The agent pulls it with `DownloadRelease` (agent.md §5.2). |
 
 **Rules:**

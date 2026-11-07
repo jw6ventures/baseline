@@ -59,10 +59,11 @@ type Server struct {
 	log     *jw6_utils.Utils
 	pages   *renderer
 	version string
-	checker Checker     // nil: no registry checks (tests)
-	unifi   UniFiPoller // nil: UniFi consoles aren't polled (tests)
-	jobs    Jobs        // nil: jobs aren't dispatched (tests)
-	polls   AgentPoller // nil: cluster agents aren't asked for pods and logs (tests)
+	checker Checker              // nil: no registry checks (tests)
+	unifi   UniFiPoller          // nil: UniFi consoles aren't polled (tests)
+	jobs    Jobs                 // nil: jobs aren't dispatched (tests)
+	polls   AgentPoller          // nil: cluster agents aren't asked for pods and logs (tests)
+	ctrLogs ContainerLogStreamer // nil: container logs can't be read (tests)
 	// changes checks schedules and runs patch groups on demand; the
 	// scheduler itself runs beside the dispatcher.
 	changes  *change.Manager
@@ -139,6 +140,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /containers", s.page(anyRole, s.containers))
 	mux.Handle("GET /containers/{id}", s.page(anyRole, s.containerPage))
 	mux.Handle("POST /containers/{id}/check", s.page(anyRole, s.containerCheck))
+	mux.Handle("GET /containers/{id}/logs", s.page(anyRole, s.containerLogs))
+	mux.Handle("GET /containers/{id}/logs/events", s.page(anyRole, s.containerLogEvents))
 	mux.Handle("POST /containers/{id}/rule", s.page(anyRole, s.containerRule))
 	mux.Handle("GET /stacks", s.page(anyRole, s.stacks))
 	mux.Handle("GET /stacks/{id}", s.page(anyRole, s.stackPage))
