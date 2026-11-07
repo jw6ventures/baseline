@@ -27,7 +27,7 @@ host_group(id, name, description, rule jsonb NULL)  -- static members and/or dyn
 host_group_member(group_id, ci_id)
 ```
 
-- **UniFi CIs** (`source = unifi`) are kept by the polls of a UniFi console: its sites, devices, Protect devices and the wired clients no other CI has the MAC of (integrations.md §1). Like manual CIs they live on no host, so every viewer sees them.
+- **UniFi CIs** (`source = unifi`) are kept by the polls of a UniFi console: its sites, devices, Protect devices and the wired clients no other CI has the MAC of; wireless clients are only linked to their access point when a CI has their MAC (integrations.md §1). Like manual CIs they live on no host, so every viewer sees them.
 - **Agentless CIs** are rows with `source = manual`. Their attributes follow `ci_type.attr_schema`, a small JSON-schema subset that drives the UI form.
 - CIs that have **disappeared** from discovery move to `status = missing` after a grace period: 1h for containers, Compose stacks and Traefik hostnames (a sweep runs every 10 minutes). They're never deleted automatically, so history survives; an admin can delete a missing or retired one. Revoking a host retires its containers, stacks and Traefik hostnames.
 - **Container identity:** `source_key` is `<host>/<engine>/<name>` for containers and `<host>/<engine>/compose:<project>` for stacks. Names survive Compose recreating a container; engine IDs don't.
@@ -462,6 +462,6 @@ unifi_object(ci_id PK → ci, controller → unifi_controller ON DELETE CASCADE,
    state, state_since, firmware_updatable, present)
 ```
 
-- A poll replaces what the console reported in one transaction; see integrations.md §1 for the CIs and relationships it keeps. Relationships have `attrs`: a wired client's `connected_to` carries its switch `port` and `address`, and the CI page shows the port.
+- A poll replaces what the console reported in one transaction; see integrations.md §1 for the CIs and relationships it keeps. Relationships have `attrs`: a wired client's `connected_to` carries its switch `port` and `address`, a wireless client's `via: wireless` and its `address`, and the CI page shows the port or "wireless".
 - `unifi_object.state_since` moves only when the state changes, which is what `unifi_offline` alerts measure. A failed poll only sets `last_poll` and `last_error`.
-- The agentless forms of network devices, NAS, UPS, printers, servers, appliances, VMs and LXC containers gained a `mac` field, which wired clients are matched by; `network_client`, `camera` and `protect_device` take network_device's form.
+- The agentless forms of network devices, NAS, UPS, printers, servers, appliances, VMs and LXC containers gained a `mac` field, which clients are matched by; `network_client`, `camera` and `protect_device` take network_device's form.
