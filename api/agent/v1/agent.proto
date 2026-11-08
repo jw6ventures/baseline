@@ -53,6 +53,7 @@ message AgentMessage {
     JobEvent job_event = 6;
     UpdateResult update_result = 7;
     IntegrationResult integration_result = 8;
+    LogChunk log_chunk = 9;
   }
 }
 
@@ -131,6 +132,8 @@ message ServerMessage {
     CancelJob cancel_job = 5;
     UpdateAgent update_agent = 6;
     IntegrationPoll integration_poll = 7;
+    StartLogs start_logs = 8;
+    StopLogs stop_logs = 9;
   }
 }
 
@@ -193,6 +196,43 @@ message IntegrationResult {
   string request_id = 1;
   bytes payload_json = 2;
   string error = 3;
+}
+
+// StartLogs asks the agent to read a container's log from its engine: the
+// last tail lines, then, with follow, new lines as they are written until
+// the server sends StopLogs or max_seconds pass. Only agents that report
+// the container-logs capability get one (agent.conf container_logs). The
+// agent sends LogChunks and never stores the log.
+message StartLogs {
+  string request_id = 1; // echoed in every LogChunk
+  string engine = 2;     // docker, podman or podman:<user>, as the containers section names it
+  string container = 3;  // name or ID
+  uint32 tail = 4;       // lines from the end; 0 is none (follow only)
+  bool follow = 5;
+  uint32 max_seconds = 6; // how long to follow; the agent caps it
+}
+
+// StopLogs ends a StartLogs. The agent answers with a final LogChunk.
+message StopLogs {
+  string request_id = 1;
+}
+
+// LogChunk carries lines of a StartLogs. done marks the last one, with
+// error set when the log couldn't be read.
+message LogChunk {
+  string request_id = 1;
+  uint64 seq = 2;
+  repeated LogLine lines = 3;
+  // dropped counts lines left out since the previous chunk because the
+  // container wrote faster than the stream carries.
+  uint64 dropped = 4;
+  bool done = 5;
+  string error = 6;
+}
+
+message LogLine {
+  string stream = 1; // stdout | stderr
+  string text = 2;   // the engine's RFC 3339 timestamp, a space, the line
 }
 
 message ReleaseRequest {

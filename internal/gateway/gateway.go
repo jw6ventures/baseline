@@ -95,6 +95,7 @@ type Gateway struct {
 	mu       sync.Mutex
 	sessions map[string]*session     // by agent ID
 	polls    map[string]*pendingPoll // integration polls awaiting results, by request ID
+	logs     map[string]*logStream   // container logs being read, by request ID
 
 	// Checker, when set, is nudged when a host's containers change, so new
 	// images are checked on their registry within seconds.
@@ -137,7 +138,7 @@ var errIdentityInUse = status.Error(codes.FailedPrecondition,
 	"another machine is connected with this agent's identity (a cloned VM?); re-enroll this one with --force")
 
 func New(st *store.Store, ca *pki.Authority, log *jw6_utils.Utils) *Gateway {
-	return &Gateway{st: st, ca: ca, log: log, sessions: map[string]*session{}, polls: map[string]*pendingPoll{}}
+	return &Gateway{st: st, ca: ca, log: log, sessions: map[string]*session{}, polls: map[string]*pendingPoll{}, logs: map[string]*logStream{}}
 }
 
 // TLSConfig accepts agents with or without a client cert: Enroll has none
@@ -456,6 +457,8 @@ func (g *Gateway) handle(ctx context.Context, sess *session, msg *agentv1.AgentM
 		}
 	case *agentv1.AgentMessage_IntegrationResult:
 		g.pollResult(sess, m.IntegrationResult)
+	case *agentv1.AgentMessage_LogChunk:
+		g.logChunk(sess, m.LogChunk)
 	case *agentv1.AgentMessage_Hello:
 		return status.Error(codes.InvalidArgument, "duplicate Hello")
 	}

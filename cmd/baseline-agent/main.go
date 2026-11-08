@@ -151,6 +151,9 @@ func run(ctx context.Context, args []string) error {
 		Sampler: sampler, ContainerSampler: containers, Version: Version, Log: log, Integrations: cfg.Integrations,
 		Runner: &runner.Runner{Dir: filepath.Join(cfg.StateDir, "jobs"), Env: env, Containers: containers, Policy: cfg.Policy, Log: log,
 			ComposeRoot: cfg.ComposeRoot}}
+	if cfg.ContainerLogs {
+		a.ContainerLogs = containers
+	}
 	log.Log("Agent", "run", jw6_utils.Info, "Local policy: "+describePolicy(cfg.Policy))
 	keys, err := pki.ReleaseKeys()
 	if err == nil {

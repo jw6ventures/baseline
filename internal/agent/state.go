@@ -69,10 +69,13 @@ type Config struct {
 	// Integrations lets the server have this agent poll systems on its
 	// network, such as a UniFi console (integrations = off stops it).
 	Integrations bool
+	// ContainerLogs lets the server read container logs through this
+	// agent, on demand (container_logs = off stops it).
+	ContainerLogs bool
 }
 
 func LoadConfig(path string) (Config, error) {
-	c := Config{StateDir: FindStateDir(), LogLevel: "Info", Policy: action.Policy{Jobs: true, AllowScripts: true}, Integrations: true}
+	c := Config{StateDir: FindStateDir(), LogLevel: "Info", Policy: action.Policy{Jobs: true, AllowScripts: true}, Integrations: true, ContainerLogs: true}
 	f, err := os.Open(path)
 	if err != nil {
 		return c, err
@@ -133,6 +136,15 @@ func LoadConfig(path string) (Config, error) {
 			default:
 				return c, fmt.Errorf("%s:%d: integrations: %q is not on or off", path, n, v)
 			}
+		case "container_logs":
+			switch v {
+			case "on":
+				c.ContainerLogs = true
+			case "off":
+				c.ContainerLogs = false
+			default:
+				return c, fmt.Errorf("%s:%d: container_logs: %q is not on or off", path, n, v)
+			}
 		default:
 			// Unknown keys are allowed so a newer config works with an
 			// older agent until self-update catches up.
@@ -185,7 +197,11 @@ func WriteConfig(path string, c Config) error {
 			"#compose_root = /var/lib/baseline/stacks", "",
 			"# integrations = off stops the server having this agent poll systems",
 			"# on its network for it, such as a UniFi console.",
-			"#integrations = on", "")
+			"#integrations = on", "",
+			"# container_logs = off stops the server reading container logs",
+			"# through this agent (operators view them on demand; they are never",
+			"# stored).",
+			"#container_logs = on", "")
 	}
 	keys := make([]string, 0, len(set))
 	for k := range set {

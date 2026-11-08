@@ -325,6 +325,7 @@ pre.output {
 }
 pre.output .stderr { color: var(--bad); }
 pre.output .info { color: var(--accent); }
+#logs-stop[hidden], .notice[hidden] { display: none; }
 .actions-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.5rem; }
 .actions-list .card.off { opacity: 0.55; pointer-events: none; }
 td.row-actions { white-space: nowrap; text-align: right; }

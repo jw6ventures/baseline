@@ -1,0 +1,35 @@
+{{define "head"}}{{if .Body.Follow}}<script src="{{.Base}}/static/logs.js" defer></script>{{end}}{{end}}
+
+{{define "content"}}
+{{$v := .Body}}{{$c := $v.C}}
+<div class="titlebar">
+  <div>
+    <h1>{{$c.Name}}</h1>
+    <p class="muted sub">Log of container <a href="{{.Base}}/containers/{{$c.CIID}}">{{$c.Name}}</a> on <a href="{{.Base}}/hosts/{{$c.HostID}}/containers">{{$c.Hostname}}</a> ({{$c.Engine}})</p>
+  </div>
+  {{if $v.Follow}}<div><span id="logs-state" class="tag caution">connecting</span> <button type="button" id="logs-stop" class="small">Stop</button></div>{{end}}
+</div>
+<form class="search inline-form" method="get" action="{{.Base}}/containers/{{$c.CIID}}/logs">
+  <label>Lines<input type="number" name="tail" min="0" max="5000" value="{{$v.Tail}}" class="narrow"></label>
+  <label class="check"><input type="checkbox" name="follow" value="1"{{if $v.Follow}} checked{{end}}> follow new lines</label>
+  <button class="small">Show</button>
+</form>
+{{if not $c.HostConnected}}<p class="notice warn">The host's agent is offline, so the log can't be read.</p>{{end}}
+{{if $v.Follow}}
+<p id="logs-error" class="notice bad" hidden></p>
+<p id="logs-dropped" class="notice warn" hidden></p>
+<pre class="output" id="logs" data-src="{{.Base}}/containers/{{$c.CIID}}/logs/events?tail={{$v.Tail}}"><span id="logs-wait" class="info">Waiting for the host's agent…
+</span></pre>
+<noscript><p class="notice warn">Following a log needs JavaScript. Untick "follow new lines" to read its end.</p></noscript>
+<p class="muted small">Streamed from the host just now and not kept. Following stops after {{$v.Minutes}} minutes or when you leave the page; reading logs is recorded in the audit log.</p>
+{{else}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Logs}}
+{{if .Truncated}}<p class="notice warn">Only the first 4 MB of the lines asked for are shown.</p>{{end}}
+{{if .Dropped}}<p class="notice warn">{{.Dropped}} lines were left out: the container wrote faster than they could be sent.</p>{{end}}
+<pre class="output">{{range .Lines}}<span class="{{.Stream}}">{{.Text}}
+</span>{{else}}{{if not $v.Error}}<span class="info">(empty)</span>{{end}}{{end}}</pre>
+{{end}}
+<p class="muted small">Read from the host just now and not kept; reading logs is recorded in the audit log.</p>
+{{end}}
+{{end}}

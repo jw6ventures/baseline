@@ -187,6 +187,7 @@ func serve(ctx context.Context, cfg config.Config, log *jw6_utils.Utils) error {
 	unifiPoller := &unifipoll.Poller{Store: st, Open: secrets.Open, Agents: gw, Log: log}
 	srv.SetUniFi(unifiPoller)
 	srv.SetAgentPolls(gw)
+	srv.SetContainerLogs(gw)
 	go unifiPoller.Run(ctx)
 
 	dispatcher := jobs.New(st, gw, log)
