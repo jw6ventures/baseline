@@ -120,6 +120,55 @@ func TestPass(t *testing.T) {
 	}
 }
 
+// TestPassAdvisedDigest: a tag that serves the image a container already
+// runs isn't offered; the next newest is, once its digest is known.
+func TestPassAdvisedDigest(t *testing.T) {
+	s, _ := storetest.New(t)
+	r := host(t, s)
+	cur := "sha256:" + strings.Repeat("1", 64)
+	c := model.Containers{
+		Engines:    []model.ContainerEngine{{Name: "docker", Kind: "docker"}},
+		Containers: []model.Container{{Engine: "docker", Name: "app", Image: "ghcr.io/x/app:1.4.0", ImageID: "i1", State: "running"}},
+		Images:     []model.ContainerImage{{Engine: "docker", ID: "i1", Digests: []string{"ghcr.io/x/app@" + cur}}},
+	}
+	b, h, _ := model.Encode(c)
+	if _, err := s.IngestSection(ctx, r.HostID, r.AgentID, model.SectionContainers, h, b, ""); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := s.ListContainers(ctx, []string{r.HostID})
+	if err := s.SetSemverRule(ctx, store.System, rows[0].CIID, &registry.Rule{Track: "minor"}); err != nil {
+		t.Fatal(err)
+	}
+	reg := &fakeRegistry{
+		digests: map[string]string{
+			"ghcr.io/x/app:1.4.0": cur,
+			"ghcr.io/x/app:1.6.0": cur, // retagged, same image
+			"ghcr.io/x/app:1.5.0": "sha256:" + strings.Repeat("2", 64),
+		},
+		tags: map[string][]string{"ghcr.io/x/app": {"1.4.0", "1.5.0", "1.6.0"}},
+	}
+	ck := &checks.Checker{Store: s, Registry: reg}
+	now := time.Now()
+	ck.Pass(ctx, now)
+
+	advice := func() string {
+		rows, _ := s.ListContainers(ctx, []string{r.HostID})
+		rule := store.SemverRules(rows, nil)[0]
+		tags, _ := s.RepositoryTags(ctx, []string{"ghcr.io/x/app"})
+		known, _ := s.RepositoryImageChecks(ctx, []string{"ghcr.io/x/app"})
+		tag, _ := rows[0].Advise(*rule, tags["ghcr.io/x/app"], known)
+		return tag
+	}
+	if got := advice(); got != "1.5.0" {
+		t.Fatalf("advice = %q, want 1.5.0; asked %v", got, reg.asked)
+	}
+	n := len(reg.asked)
+	ck.Pass(ctx, now.Add(time.Minute))
+	if len(reg.asked) != n {
+		t.Fatalf("rechecked within the TTL: %v", reg.asked[n:])
+	}
+}
+
 func TestProbe(t *testing.T) {
 	ts := httptest.NewTLSServer(http.NotFoundHandler())
 	defer ts.Close()

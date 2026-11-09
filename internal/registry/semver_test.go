@@ -55,13 +55,32 @@ func TestAdvise(t *testing.T) {
 		{"metadata only", "1.0.0+build1", []string{"1.0.0+build2"}, Rule{Track: "patch"}, ""},
 
 		{"two components", "2025.1", []string{"2025.1.1", "2025.10", "2025.2", "2025.9.3", "2024.12"}, Rule{Track: "minor"}, "2025.10"},
-		{"two components patch", "2025.1", []string{"2025.1.1", "2025.10", "2025.2"}, Rule{Track: "patch"}, "2025.1.1"},
+		{"two components patch", "2025.1", []string{"2025.1.1", "2025.10", "2025.2"}, Rule{Track: "patch"}, ""},
+		{"floating minor skips its own patches", "2026.8", []string{"2026.8", "2026.8.4", "2026.8.5"}, Rule{Track: "minor"}, ""},
+		{"floating minor offers next series", "2026.8", []string{"2026.8.5", "2026.11.0", "2026.11.2", "2026.11", "2027.1"}, Rule{Track: "minor"}, "2026.11"},
+		{"floating minor without floating tags", "2026.8", []string{"2026.8.5", "2026.11.0", "2026.11.2"}, Rule{Track: "minor"}, "2026.11.2"},
+		{"floating major skips own patches", "2026.8", []string{"2026.8.5", "2026.10.1"}, Rule{Track: "major"}, "2026.10.1"},
+		{"floating major tag", "3", []string{"3.1", "3.2.4", "4", "4.0.1"}, Rule{Track: "major"}, "4"},
+		{"floating major tag minor track", "3", []string{"3.1", "3.2.4"}, Rule{Track: "minor"}, ""},
+		{"floating flavor", "3.20-alpine", []string{"3.20.1-alpine", "3.21.0-alpine"}, Rule{Track: "minor"}, "3.21.0-alpine"},
 		{"calendar major", "2025.1.2", []string{"2026.1.0", "2025.12.4"}, Rule{Track: "major"}, "2026.1.0"},
 	} {
 		got, ok := Advise(c.current, c.tags, c.rule)
 		if got != c.want || ok != (c.want != "") {
 			t.Errorf("%s: Advise(%q) = %q, %v; want %q", c.name, c.current, got, ok, c.want)
 		}
+	}
+}
+
+func TestAdviseExcept(t *testing.T) {
+	tags := []string{"1.4.8", "1.5.0", "1.5.1"}
+	same := func(tag string) bool { return tag == "1.5.1" }
+	if got, ok := AdviseExcept("1.4.7", tags, Rule{Track: "minor"}, same); !ok || got != "1.5.0" {
+		t.Errorf("AdviseExcept = %q, %v; want 1.5.0", got, ok)
+	}
+	all := func(string) bool { return true }
+	if got, ok := AdviseExcept("1.4.7", tags, Rule{Track: "minor"}, all); ok {
+		t.Errorf("AdviseExcept = %q; want none", got)
 	}
 }
 

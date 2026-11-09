@@ -328,6 +328,46 @@ func scanContainer(row interface{ Scan(...any) error }) (ContainerRow, error) {
 	return c, json.Unmarshal([]byte(attrs), &c.Container)
 }
 
+// SemverRules returns the rule that applies to each row: its Compose
+// service's, kept on its stack, else its own; nil for none.
+func SemverRules(rows []ContainerRow, stacks []Stack) []*registry.Rule {
+	byService := map[string]registry.Rule{} // stack CI + service -> rule
+	for _, st := range stacks {
+		for svc, rule := range st.SemverRules {
+			byService[st.CIID+"/"+svc] = rule
+		}
+	}
+	out := make([]*registry.Rule, len(rows))
+	for i, c := range rows {
+		if rule, ok := byService[c.StackCI+"/"+c.ComposeService]; ok && c.StackCI != "" && c.ComposeService != "" {
+			out[i] = &rule
+		} else if c.SemverRule != nil {
+			var rule registry.Rule
+			if json.Unmarshal(c.SemverRule, &rule) == nil {
+				out[i] = &rule
+			}
+		}
+	}
+	return out
+}
+
+// Advise returns the newest tag of its repository that rule allows the
+// container, given the repository's tags and what its tags were last
+// checked to serve (by reference, from RepositoryImageChecks). A tag
+// serving the image the container's tag does, or the one it runs, is no
+// update and is passed over.
+func (c ContainerRow) Advise(rule registry.Rule, tags []string, checks map[string]ImageCheck) (string, bool) {
+	ref, err := registry.ParseRef(c.CheckRef)
+	if err != nil || ref.Tag == "" {
+		return "", false
+	}
+	same := func(tag string) bool {
+		d := checks[ref.Repo()+":"+tag].Digest
+		return d != "" && (d == c.LatestDigest || slices.Contains(c.ImageDigests, d))
+	}
+	return registry.AdviseExcept(ref.Tag, tags, rule, same)
+}
+
 // ListContainers returns the containers on the given hosts, by host and name.
 func (s *Store) ListContainers(ctx context.Context, hostIDs []string) ([]ContainerRow, error) {
 	rows, err := s.db.QueryContext(ctx, `

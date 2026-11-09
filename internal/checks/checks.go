@@ -85,7 +85,7 @@ func (c *Checker) Run(ctx context.Context) {
 }
 
 // Pass runs one round: stale image digests, tags for repositories a semver
-// rule watches, endpoints due for a probe, and missing containers.
+// rule watches, the digests of the tags those rules would offer, endpoints due for a probe, and missing containers.
 func (c *Checker) Pass(ctx context.Context, now time.Time) {
 	if n, err := c.Store.MarkMissing(ctx, now); err != nil {
 		c.logf(jw6_utils.Error, "mark missing CIs: %v", err)
@@ -108,6 +108,7 @@ func (c *Checker) Pass(ctx context.Context, now time.Time) {
 	}
 	c.images(ctx, reg, now)
 	c.tags(ctx, reg, now)
+	c.advisedDigests(ctx, reg, now)
 	if now.Sub(c.lastEndpoint) >= endpointTTL || c.lastEndpoint.IsZero() {
 		c.endpoints(ctx)
 		c.lastEndpoint = now
@@ -191,6 +192,118 @@ func (c *Checker) tags(ctx context.Context, reg Registry, now time.Time) {
 			c.logf(jw6_utils.Error, "save tags: %v", err)
 		}
 	})
+}
+
+// maxAdviceRounds bounds how many tags in a row advisedDigests looks at
+// for a container whose next tag turns out to be its own image.
+const maxAdviceRounds = 3
+
+// advisedDigests checks the digest of each tag a semver rule would offer,
+// so a tag that serves the image a container's tag already does (an alias
+// such as 2026.8.5 of 2026.8, or a retag) isn't offered as an update. A tag
+// found to be one passes the offer to the next, whose digest is checked in
+// the next round.
+func (c *Checker) advisedDigests(ctx context.Context, reg Registry, now time.Time) {
+	hosts, err := c.Store.ListHosts(ctx)
+	if err != nil {
+		c.logf(jw6_utils.Error, "advised digests: %v", err)
+		return
+	}
+	var ids []string
+	for _, h := range hosts {
+		if !h.Revoked {
+			ids = append(ids, h.ID)
+		}
+	}
+	rows, err := c.Store.ListContainers(ctx, ids)
+	if err != nil {
+		c.logf(jw6_utils.Error, "advised digests: %v", err)
+		return
+	}
+	stacks, err := c.Store.ListStacks(ctx, ids)
+	if err != nil {
+		c.logf(jw6_utils.Error, "advised digests: %v", err)
+		return
+	}
+	rules := store.SemverRules(rows, stacks)
+	var repos []string
+	for i, rule := range rules {
+		if rule == nil || rows[i].CheckRef == "" {
+			continue
+		}
+		if ref, err := registry.ParseRef(rows[i].CheckRef); err == nil {
+			repos = append(repos, ref.Repo())
+		}
+	}
+	if len(repos) == 0 {
+		return
+	}
+	tags, err := c.Store.RepositoryTags(ctx, repos)
+	if err != nil {
+		c.logf(jw6_utils.Error, "advised digests: %v", err)
+		return
+	}
+	known, err := c.Store.RepositoryImageChecks(ctx, repos)
+	if err != nil {
+		c.logf(jw6_utils.Error, "advised digests: %v", err)
+		return
+	}
+	fresh := func(ic store.ImageCheck, ok bool) bool {
+		ttl := ImageTTL
+		if ic.Error != "" {
+			ttl = retryAfter
+		}
+		return ok && now.Sub(ic.CheckedAt) < ttl
+	}
+	for range maxAdviceRounds {
+		due := map[string]bool{}
+		for i, rule := range rules {
+			if rule == nil || rows[i].CheckRef == "" {
+				continue
+			}
+			ref, err := registry.ParseRef(rows[i].CheckRef)
+			if err != nil {
+				continue
+			}
+			tag, ok := rows[i].Advise(*rule, tags[ref.Repo()], known)
+			if !ok {
+				continue
+			}
+			cand := ref.Repo() + ":" + tag
+			if ic, ok := known[cand]; !fresh(ic, ok) {
+				due[cand] = true
+			}
+		}
+		if len(due) == 0 || ctx.Err() != nil {
+			return
+		}
+		refs := make([]string, 0, len(due))
+		for r := range due {
+			refs = append(refs, r)
+		}
+		sort.Strings(refs)
+		var mu sync.Mutex
+		parallel(ctx, refs, func(s string) {
+			ref, err := registry.ParseRef(s)
+			if err != nil {
+				return
+			}
+			cctx, cancel := context.WithTimeout(ctx, time.Minute)
+			defer cancel()
+			digest, err := reg.Digest(cctx, ref)
+			c.save(ctx, s, ref.Registry, digest, err)
+			mu.Lock()
+			defer mu.Unlock()
+			ic := known[s] // a failed check keeps the last digest it knew
+			ic.CheckedAt, ic.Error = now, ""
+			if err != nil {
+				ic.Error = err.Error()
+			} else {
+				ic.Digest = digest
+			}
+			known[s] = ic
+		})
+	}
 }
 
 // endpoints probes the TLS endpoints configured on agentless CIs.

@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -64,25 +63,15 @@ func (s *Server) containerViews(r *http.Request, rows []store.ContainerRow, stac
 
 // advise sets each container's rule and the newest tag it allows.
 func (s *Server) advise(ctx context.Context, out []containerView, stacks []store.Stack) error {
-	rules := map[string]registry.Rule{} // stack CI + service -> rule
-	for _, st := range stacks {
-		for svc, rule := range st.SemverRules {
-			rules[st.CIID+"/"+svc] = rule
-		}
+	rows := make([]store.ContainerRow, len(out))
+	for i := range out {
+		rows[i] = out[i].ContainerRow
 	}
 	var repos []string
-	for i := range out {
-		c := &out[i]
-		if rule, ok := rules[c.StackCI+"/"+c.ComposeService]; ok && c.StackCI != "" && c.ComposeService != "" {
-			c.Rule = &rule
-		} else if c.SemverRule != nil {
-			var rule registry.Rule
-			if json.Unmarshal(c.SemverRule, &rule) == nil {
-				c.Rule = &rule
-			}
-		}
-		if c.Rule != nil && c.CheckRef != "" {
-			if ref, err := registry.ParseRef(c.CheckRef); err == nil {
+	for i, rule := range store.SemverRules(rows, stacks) {
+		out[i].Rule = rule
+		if rule != nil && out[i].CheckRef != "" {
+			if ref, err := registry.ParseRef(out[i].CheckRef); err == nil {
 				repos = append(repos, ref.Repo())
 			}
 		}
@@ -94,6 +83,10 @@ func (s *Server) advise(ctx context.Context, out []containerView, stacks []store
 	if err != nil {
 		return err
 	}
+	checks, err := s.store.RepositoryImageChecks(ctx, repos)
+	if err != nil {
+		return err
+	}
 	for i := range out {
 		if out[i].Rule == nil || out[i].CheckRef == "" {
 			continue
@@ -102,7 +95,7 @@ func (s *Server) advise(ctx context.Context, out []containerView, stacks []store
 		if err != nil {
 			continue
 		}
-		if tag, ok := registry.Advise(ref.Tag, tags[ref.Repo()], *out[i].Rule); ok {
+		if tag, ok := out[i].ContainerRow.Advise(*out[i].Rule, tags[ref.Repo()], checks); ok {
 			out[i].Advice = tag
 		}
 	}

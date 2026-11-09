@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -37,6 +38,46 @@ func (s *Store) SaveImageCheck(ctx context.Context, ref, registry, digest, check
 func (s *Store) ForgetImageCheck(ctx context.Context, ref string) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE image_check SET checked_at = 'epoch' WHERE image_ref = $1`, ref)
 	return err
+}
+
+// ImageCheck is what a registry last served for a reference.
+type ImageCheck struct {
+	Digest    string
+	CheckedAt time.Time
+	Error     string
+}
+
+// RepositoryImageChecks returns the image checks of every tag of the given
+// repositories, by reference ("ghcr.io/a/b:1.2"): the tags containers run
+// and the tags semver advisories were checked against.
+func (s *Store) RepositoryImageChecks(ctx context.Context, repos []string) (map[string]ImageCheck, error) {
+	patterns := make([]string, len(repos))
+	for i, r := range repos {
+		patterns[i] = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(r) + ":%"
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT image_ref, latest_digest, checked_at, error FROM image_check WHERE image_ref LIKE ANY($1)`,
+		pq.Array(nonNil(patterns)))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	want := map[string]bool{}
+	for _, r := range repos {
+		want[r] = true
+	}
+	out := map[string]ImageCheck{}
+	for rows.Next() {
+		var ref string
+		var ic ImageCheck
+		if err := rows.Scan(&ref, &ic.Digest, &ic.CheckedAt, &ic.Error); err != nil {
+			return nil, err
+		}
+		// Keep plain tag refs; one that also pins a digest matches too.
+		if i := strings.LastIndexByte(ref, ':'); i >= 0 && want[ref[:i]] && !strings.Contains(ref[i+1:], "/") {
+			out[ref] = ic
+		}
+	}
+	return out, rows.Err()
 }
 
 // RuledImageRefs lists the references of containers that have a semver rule,
