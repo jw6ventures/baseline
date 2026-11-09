@@ -8,6 +8,7 @@
 package model
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -65,12 +66,40 @@ func Tracked(section string) bool {
 // Encode returns a section's canonical JSON and its content hash. Struct
 // fields encode in declaration order and collectors sort their lists, so the
 // same state always hashes the same.
+//
+// NUL characters are dropped: collectors read strings from firmware, device
+// trees and sysfs that are NUL-padded, and PostgreSQL can't store U+0000.
 func Encode(v any) ([]byte, string, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return nil, "", err
 	}
+	b = StripNUL(b)
 	return b, Hash(b), nil
+}
+
+// StripNUL removes \u0000 escapes from a JSON document, which PostgreSQL
+// rejects in jsonb and text ("unsupported Unicode escape sequence"). Valid
+// JSON has no raw control characters and no backslashes outside strings, so
+// a scan over escapes is enough. b is returned unchanged when it has none.
+func StripNUL(b []byte) []byte {
+	if !bytes.Contains(b, []byte(`\u0000`)) {
+		return b
+	}
+	out := make([]byte, 0, len(b))
+	for i := 0; i < len(b); i++ {
+		if b[i] != '\\' || i+1 >= len(b) {
+			out = append(out, b[i])
+			continue
+		}
+		if bytes.HasPrefix(b[i+1:], []byte("u0000")) {
+			i += 5
+			continue
+		}
+		out = append(out, b[i], b[i+1]) // keep the escape, e.g. \\ before "u0000"
+		i++
+	}
+	return out
 }
 
 // Hash is the hex SHA-256 of a section payload.

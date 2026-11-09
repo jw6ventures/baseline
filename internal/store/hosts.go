@@ -289,6 +289,10 @@ func (s *Store) RevokeHost(ctx context.Context, actor Actor, hostID string) erro
 // the cause, if its action can change the section. Everything else is an
 // unplanned change.
 func (s *Store) IngestSection(ctx context.Context, hostID, agentID, section, hash string, payload []byte, jobID string) (changed bool, err error) {
+	// Older agents sent NUL characters read from firmware strings,
+	// which PostgreSQL can't store. The agent's hash is kept so the section
+	// isn't asked for again on every reconnect.
+	payload = model.StripNUL(payload)
 	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var prevHash, prevData string
 		err := tx.QueryRowContext(ctx, `
