@@ -49,7 +49,19 @@ func checkRegexp(field, expr string) error {
 // Candidates must have current's prerelease "shape": none if current has
 // none, otherwise the same non-numeric flavor, so a container on
 // 1.27.3-alpine is offered 1.28.0-alpine and never 1.28.0 or 1.28.0-rc1.
+//
+// "Newer" is judged at current's precision. A floating tag such as
+// 2026.8 already moves to each 2026.8.x release, which digest drift
+// reports, so it is only offered a newer series (2026.9, 2027.1): never
+// 2026.8.5. The tag written like current is preferred, so 2026.8 is
+// offered 2026.11 over 2026.11.2 when the registry has both.
 func Advise(current string, tags []string, r Rule) (string, bool) {
+	return AdviseExcept(current, tags, r, nil)
+}
+
+// AdviseExcept is Advise skipping the tags same reports true for: tags
+// known to serve the image current already does, which are no update.
+func AdviseExcept(current string, tags []string, r Rule, same func(tag string) bool) (string, bool) {
 	switch r.Track {
 	case "patch", "minor", "major":
 	default:
@@ -71,6 +83,7 @@ func Advise(current string, tags []string, r Rule) (string, bool) {
 		}
 	}
 	flavor := flavorOf(cur)
+	prec := min(components(current), 3)
 
 	var best *semver.Version
 	bestTag := ""
@@ -92,19 +105,66 @@ func Advise(current string, tags []string, r Rule) (string, bool) {
 				continue
 			}
 		}
-		if compareVersions(v, cur) <= 0 {
+		if !newerAt(v, tag, cur, prec) {
 			continue
 		}
-		if best == nil {
-			best, bestTag = v, tag
+		if same != nil && same(tag) {
 			continue
 		}
-		switch c := compareVersions(v, best); {
-		case c > 0, c == 0 && preferSpelling(tag, bestTag, current):
+		if best == nil || better(v, tag, best, bestTag, current, prec) {
 			best, bestTag = v, tag
 		}
 	}
 	return bestTag, best != nil
+}
+
+// newerAt reports whether v (spelled tag) is newer than cur, comparing
+// only the prec version numbers cur is written with. A tag that matches
+// those and goes on to name a release inside cur's series (2026.8.5 for
+// 2026.8) is not newer: the floating tag already gets it.
+func newerAt(v *semver.Version, tag string, cur *semver.Version, prec int) bool {
+	switch c := compareAt(v, cur, prec); {
+	case c != 0:
+		return c > 0
+	case prec < 3 && components(tag) > prec:
+		return false
+	}
+	return compareVersions(v, cur) > 0
+}
+
+// better reports whether candidate v (spelled tag) beats best (spelled
+// bestTag) for a container on current, written with prec numbers.
+func better(v *semver.Version, tag string, best *semver.Version, bestTag, current string, prec int) bool {
+	if c := compareAt(v, best, prec); c != 0 {
+		return c > 0
+	}
+	if sa, sb := spellingScore(tag, current), spellingScore(bestTag, current); sa != sb {
+		return sa > sb
+	}
+	if c := compareVersions(v, best); c != 0 {
+		return c > 0
+	}
+	return preferSpelling(tag, bestTag, current)
+}
+
+// compareAt is compareVersions limited to the first prec version numbers
+// when prec is under 3.
+func compareAt(a, b *semver.Version, prec int) int {
+	if prec >= 3 {
+		return compareVersions(a, b)
+	}
+	for i, d := range [][2]uint64{{a.Major(), b.Major()}, {a.Minor(), b.Minor()}} {
+		if i >= prec {
+			break
+		}
+		switch {
+		case d[0] > d[1]:
+			return 1
+		case d[0] < d[1]:
+			return -1
+		}
+	}
+	return 0
 }
 
 // flavorOf is a version's prerelease with digits and dots stripped, so
