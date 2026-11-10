@@ -221,6 +221,9 @@ func (s *Store) QueuedJobs(ctx context.Context) ([]QueuedJob, error) {
 		(SELECT count(*) FROM job o WHERE o.change_id = j.change_id AND o.state IN ('dispatched', 'running')),
 		c.kind, COALESCE(c.window_ends_at, 'epoch')`+jobFrom+`
 		WHERE c.state = 'in_progress' AND j.state = 'queued' AND NOT h.revoked
+		  AND (j.update_group = '' OR NOT EXISTS (
+		      SELECT 1 FROM job e WHERE e.change_id = j.change_id AND e.update_group = j.update_group
+		        AND e.update_order < j.update_order AND e.state IN ('queued', 'dispatched', 'running')))
 		ORDER BY c.number, j.seq`)
 	if err != nil {
 		return nil, err
@@ -389,16 +392,17 @@ func finishJob(ctx context.Context, tx *sql.Tx, actor Actor, jobID string, r Job
 	default:
 		return false, fmt.Errorf("unknown job state %q", r.State)
 	}
-	var changeID, hostname, act, stopped string
+	var changeID, hostname, act, stopped, group string
 	var number int64
 	var stop bool
+	var order int
 	err := tx.QueryRowContext(ctx, `
 		UPDATE job j SET state = $2, exit_code = $3, result = COALESCE($4, j.result), error = $5,
 		       started_at = COALESCE(j.started_at, now()), finished_at = now()
 		FROM change c, host h
 		WHERE j.id::text = $1 AND c.id = j.change_id AND h.ci_id = j.host AND j.state IN ('queued', 'dispatched', 'running')
-		RETURNING j.change_id, c.number, h.hostname, j.action, c.stop_on_failure, c.state`,
-		jobID, r.State, exit, result, errMsg).Scan(&changeID, &number, &hostname, &act, &stop, &stopped)
+		RETURNING j.change_id, c.number, h.hostname, j.action, c.stop_on_failure, c.state, j.update_group, j.update_order`,
+		jobID, r.State, exit, result, errMsg).Scan(&changeID, &number, &hostname, &act, &stop, &stopped, &group, &order)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -414,6 +418,16 @@ func finishJob(ctx context.Context, tx *sql.Tx, actor Actor, jobID string, r Job
 	}
 	if err := appendAudit(ctx, tx, actor, AuditEvent{Action: "job.result", ObjectType: "job", ObjectID: jobID, Details: details}); err != nil {
 		return false, err
+	}
+	if r.State != JobSucceeded && group != "" {
+		// What comes later in its update group must not run ahead of it.
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE job SET state = 'cancelled', finished_at = now(),
+			       error = 'skipped: an earlier member of update group ' || $2 || ' didn''t succeed'
+			WHERE change_id = $1 AND update_group = $2 AND update_order > $3 AND state = 'queued'`,
+			changeID, group, order); err != nil {
+			return false, err
+		}
 	}
 	if r.State != JobSucceeded && stop && stopped == ChangeInProgress {
 		if _, err := tx.ExecContext(ctx, `

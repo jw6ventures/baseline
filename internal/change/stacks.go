@@ -12,6 +12,7 @@ import (
 
 	"github.com/jw6ventures/baseline/internal/action"
 	"github.com/jw6ventures/baseline/internal/store"
+	"github.com/jw6ventures/baseline/internal/updategroup"
 )
 
 const (
@@ -85,6 +86,10 @@ func (m *Manager) AutoUpdate(ctx context.Context, now time.Time) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	ix, hosts, err := m.GroupIndex(ctx)
+	if err != nil {
+		return 0, err
+	}
 	n := 0
 	for _, st := range stacks {
 		h, known := cal.Hosts[st.HostID]
@@ -109,9 +114,20 @@ func (m *Manager) AutoUpdate(ctx context.Context, now time.Time) (int, error) {
 		if err != nil {
 			return n, err
 		}
-		params, err := StackParams(action.ComposeUpdate, model.Params, st, nil)
+		// Its services in update groups update with their groups, in order
+		// (docs/change-management.md §5.4).
+		targets := []updategroup.Target{{Stack: st}}
+		check := m.scheduledCheck(ctx, ix, hosts, targets, action.ComposeUpdate,
+			"auto-update doesn't update a stack ahead of the members after it unless that stack updates itself", now)
+		steps, cis, held, err := m.GroupedSteps(ctx, ix, action.ComposeUpdate, model.Params, targets, check)
 		if err != nil {
 			m.logf(jw6_utils.Warn, "Stack %s on %s: %v", st.Project, st.Hostname, err)
+			continue
+		}
+		if len(steps) == 0 {
+			if len(held) > 0 {
+				m.logf(jw6_utils.Debug, "Stack %s on %s waits: %s", st.Project, st.Hostname, updategroup.Describe(held))
+			}
 			continue
 		}
 		window := st.WindowID
@@ -120,15 +136,28 @@ func (m *Manager) AutoUpdate(ctx context.Context, now time.Time) (int, error) {
 				window = w.ID
 			}
 		}
+		// The window must cover every host of the change.
+		if window != "" {
+			if w, ok := cal.Windows[window]; ok {
+				for _, s := range steps {
+					if !w.Covers(cal.Groups[s.HostIDs[0]]) {
+						window = ""
+						break
+					}
+				}
+			}
+		}
+		title := fmt.Sprintf("Auto-update stack %s on %s", st.Project, st.Hostname)
+		if len(cis) > 1 {
+			title += " with its update groups"
+		}
 		c, err := m.St.CreateChange(ctx, store.System, store.NewChange{
-			Kind: store.KindStandard, ModelID: model.ID,
-			Title: fmt.Sprintf("Auto-update stack %s on %s", st.Project, st.Hostname),
+			Kind: store.KindStandard, ModelID: model.ID, Title: title,
 			Justification: fmt.Sprintf("The registry has newer images behind the tags of %s, and the stack is set to update itself",
 				plural(st.Drift, "container")),
-			Risk: action.Risk(model.Risk), Concurrency: 1, StopOnFailure: true, WindowID: window,
-			Steps: []store.PlanStep{{Action: action.ComposeUpdate, Params: params,
-				Summary: action.Describe(action.ComposeUpdate, params), HostIDs: []string{st.HostID}}},
-			CIs: []string{st.CIID},
+			Description: groupNote(steps, held),
+			Risk:        action.Risk(model.Risk), Concurrency: 1, StopOnFailure: true, WindowID: window,
+			Steps: steps, CIs: cis,
 		})
 		if err != nil {
 			m.errorf(ctx, "auto-update stack %s on %s: %v", st.Project, st.Hostname, err)

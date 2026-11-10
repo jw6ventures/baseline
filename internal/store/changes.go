@@ -143,6 +143,11 @@ type PlanStep struct {
 	HostIDs       []string        `json:"hosts"`
 	ScriptID      string          `json:"script_id,omitempty"`
 	ScriptVersion int             `json:"script_version,omitempty"`
+	// UpdateGroup and UpdateOrder order the step's jobs within the change:
+	// they wait for the jobs of the same update group with a lower order,
+	// and are skipped if one of those didn't succeed.
+	UpdateGroup string `json:"update_group,omitempty"`
+	UpdateOrder int    `json:"update_order,omitempty"`
 }
 
 // NewChange is a change to create, with the jobs that implement it.
@@ -397,9 +402,11 @@ func (s *Store) CreateChange(ctx context.Context, actor Actor, nc NewChange) (Ch
 				}
 				timeout := action.Timeout(st.Action, st.Params)
 				if _, err := tx.ExecContext(ctx, `
-					INSERT INTO job (change_id, seq, host, action, params, script_id, script_version, timeout_s, requested_by)
-					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-					id, seq, h, st.Action, string(st.Params), script, version, int(timeout.Seconds()), userID); err != nil {
+					INSERT INTO job (change_id, seq, host, action, params, script_id, script_version, timeout_s, requested_by,
+					                 update_group, update_order)
+					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+					id, seq, h, st.Action, string(st.Params), script, version, int(timeout.Seconds()), userID,
+					st.UpdateGroup, st.UpdateOrder); err != nil {
 					return mapErr(err)
 				}
 				if !slices.Contains(hosts, h) {

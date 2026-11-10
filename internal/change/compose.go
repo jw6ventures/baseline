@@ -2,6 +2,7 @@ package change
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/jw6ventures/baseline/internal/action"
 	"github.com/jw6ventures/baseline/internal/stackname"
 	"github.com/jw6ventures/baseline/internal/store"
+	"github.com/jw6ventures/baseline/internal/updategroup"
 )
 
 // planStacks plans a Compose group's cycle (docs/change-management.md §4):
@@ -42,8 +44,7 @@ func (m *Manager) planStacks(ctx context.Context, g store.PatchGroup, model stor
 		}
 	}
 	spec := action.MustGet(model.Action)
-	var steps []store.PlanStep
-	var cis []string
+	var targets []updategroup.Target
 	for _, id := range g.Stacks {
 		i := slices.IndexFunc(all, func(st store.Stack) bool { return st.CIID == id })
 		if i < 0 {
@@ -85,17 +86,51 @@ func (m *Manager) planStacks(ctx context.Context, g store.PatchGroup, model stor
 			}
 		}
 		cycle.Planned = append(cycle.Planned, p)
-		if !p.Job {
+		if p.Job {
+			targets = append(targets, updategroup.Target{Stack: st, Services: p.Services})
+		}
+	}
+	if len(targets) == 0 {
+		return nil, nil, nil
+	}
+	// Services in update groups update with their groups, in order
+	// (docs/change-management.md §5.4).
+	ix := updategroup.New(all, rows)
+	check := m.scheduledCheck(ctx, ix, byHost, targets, model.Action,
+		"it isn't in patch group "+g.Name+", and this group's stacks don't update ahead of it", now)
+	steps, cis, held, err := m.GroupedSteps(ctx, ix, model.Action, model.Params, targets, check)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, h := range held {
+		i := slices.IndexFunc(cycle.Planned, func(p store.PlannedHost) bool { return p.StackID == h.Member.Stack.CIID })
+		if i < 0 {
 			continue
 		}
-		params, err := StackParams(model.Action, model.Params, st, p.Services)
-		if err != nil {
-			return nil, nil, fmt.Errorf("%s on %s: %w", st.Project, st.Hostname, err)
+		note := h.Member.Service + " waits: " + h.Why
+		if cycle.Planned[i].Note != "" {
+			note = cycle.Planned[i].Note + "; " + note
 		}
-		steps = append(steps, store.PlanStep{Action: model.Action, Params: params,
-			Summary: action.Describe(model.Action, params), HostIDs: []string{st.HostID}})
-		cis = append(cis, st.CIID)
-		cycle.Hosts++
+		cycle.Planned[i].Note = note
+	}
+	// Members of other stacks that come along.
+	for _, s := range steps {
+		var p action.ComposeParams
+		json.Unmarshal(s.Params, &p)
+		host := s.HostIDs[0]
+		i := slices.IndexFunc(all, func(st store.Stack) bool {
+			return st.HostID == host && st.Project == p.Project && st.Engine == p.Engine
+		})
+		if i < 0 || slices.ContainsFunc(cycle.Planned, func(x store.PlannedHost) bool { return x.StackID == all[i].CIID }) {
+			continue
+		}
+		cycle.Planned = append(cycle.Planned, store.PlannedHost{HostID: host, Hostname: byHost[host].DisplayName(),
+			StackID: all[i].CIID, Project: p.Project, Services: p.Services, Job: true,
+			Note: "with update group " + s.UpdateGroup})
+	}
+	cycle.Hosts = len(steps)
+	if len(steps) == 0 {
+		return nil, nil, nil
 	}
 	return steps, cis, nil
 }
