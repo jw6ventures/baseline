@@ -645,7 +645,7 @@ func (s *Store) SetSemverRule(ctx context.Context, actor Actor, containerCI stri
 }
 
 // UpdateGroup puts a Compose service in an update group: its members
-// update together, lowest Order first (docs/change-management.md §5.4).
+// update together, lowest Order first (docs/change-management.md §5.3).
 type UpdateGroup struct {
 	Group string `json:"group"`
 	Order int    `json:"order"`

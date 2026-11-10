@@ -1,10 +1,16 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
 	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/jw6ventures/baseline/internal/action"
 	"github.com/jw6ventures/baseline/internal/change"
@@ -15,7 +21,7 @@ import (
 
 // withGroups turns the compose.update steps of a change made by hand, one
 // per stack, into steps that update the stacks' update groups with them
-// (docs/change-management.md §5.4): their members, in order, each after
+// (docs/change-management.md §5.3): their members, in order, each after
 // the ones before it succeeded. Members of other stacks come along, ahead
 // of what was asked for when they come first in the group; the requester
 // must be able to change them. With a model (a Standard change), they also
@@ -36,6 +42,23 @@ func (s *Server) withGroups(ctx context.Context, g rbac.Grants, hosts map[string
 		}
 		base[st.CIID] = p
 		targets = append(targets, updategroup.Target{Stack: st, Services: p.Services})
+	}
+	// A new tag asked for by hand applies to what was named, nothing more;
+	// the update group's own page moves a whole group.
+	for _, st := range stacks {
+		if base[st.CIID].Tag == "" {
+			continue
+		}
+		if !slices.Contains(all[st.HostID].Capabilities, action.CapComposeRetag) {
+			return nil, nil, nil, errors.New(st.Hostname + "'s agent can't change tags in Compose files; update it")
+		}
+	}
+	if slices.ContainsFunc(stacks, func(st store.Stack) bool { return base[st.CIID].Tag != "" }) {
+		var cis, objects []string
+		for _, st := range stacks {
+			cis, objects = append(cis, st.CIID), append(objects, st.Project)
+		}
+		return steps, cis, objects, nil
 	}
 	isTarget := func(ci string) bool { _, ok := base[ci]; return ok }
 	check := func(m updategroup.Member, wanted bool) string {
@@ -119,4 +142,245 @@ func stepHosts(steps []store.PlanStep) []string {
 	}
 	slices.Sort(out)
 	return slices.Compact(out)
+}
+
+// Pages ---------------------------------------------------------------------
+
+// groupView is an update group as the user may see it.
+type groupView struct {
+	*updategroup.Group
+	Members []updategroup.Member // on hosts the user can see
+	Hidden  int                  // members on hosts the user can't see
+	Tag     string               // the leaders' tag
+	Advice  string               // the newer tag the leaders' semver rule allows
+	// Retag: whether the user may ask to move the group to a tag, or why not.
+	CanRetag   bool
+	RetagBlock string
+	CanApprove bool // approver on every member's host
+	Changes    []store.Change
+}
+
+// Mixed reports whether members run tags other than the leaders'.
+func (g groupView) Mixed() bool {
+	return slices.ContainsFunc(g.Members, func(m updategroup.Member) bool { return m.Tag() != g.Tag })
+}
+
+type groupsView struct {
+	Groups []groupView
+	Notice string
+	Error  string
+}
+
+// groupViews are the update groups with members on hosts the user can see.
+func (s *Server) groupViews(r *http.Request) ([]groupView, *updategroup.Index, map[string]store.Host, error) {
+	ctx := r.Context()
+	ix, all, err := s.changes.GroupIndex(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	visible, err := s.visibleHostIDs(r)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	g := principal(r).Grants
+	var out []groupView
+	for _, grp := range ix.Groups {
+		v := groupView{Group: grp, CanRetag: true, CanApprove: true}
+		if l := grp.Leaders(); len(l) > 0 {
+			v.Tag = l[0].Tag()
+		}
+		for _, m := range grp.Members {
+			if !slices.Contains(visible, m.Stack.HostID) {
+				v.Hidden++
+				continue
+			}
+			v.Members = append(v.Members, m)
+			h := all[m.Stack.HostID]
+			v.CanRetag = v.CanRetag && g.HasOn(rbac.Operator, h.GroupIDs)
+			v.CanApprove = v.CanApprove && g.HasOn(rbac.Approver, h.GroupIDs)
+		}
+		if len(v.Members) == 0 {
+			continue
+		}
+		if v.Hidden > 0 {
+			v.CanRetag, v.CanApprove = false, false
+			v.RetagBlock = "some of its members are on hosts you can't see"
+		} else if !v.CanRetag {
+			v.RetagBlock = "moving it to a tag needs the operator role on every member's host"
+		}
+		if v.Advice, err = s.changes.Advice(ctx, ix, grp); err != nil {
+			return nil, nil, nil, err
+		}
+		out = append(out, v)
+	}
+	return out, ix, all, nil
+}
+
+// updateGroups lists the update groups.
+func (s *Server) updateGroups(w http.ResponseWriter, r *http.Request) {
+	groups, _, _, err := s.groupViews(r)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	s.pages.render(w, http.StatusOK, "update_groups", s.data(r, "Update groups", groupsView{Groups: groups}))
+}
+
+// updateGroupPage is one update group: its members, and moving it to a tag.
+func (s *Server) updateGroupPage(w http.ResponseWriter, r *http.Request) {
+	groups, _, _, err := s.groupViews(r)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	i := slices.IndexFunc(groups, func(g groupView) bool { return g.Key == r.PathValue("key") })
+	if i < 0 {
+		s.errorPage(w, r, http.StatusNotFound, "No such update group.")
+		return
+	}
+	v := groups[i]
+	cis := map[string]bool{}
+	for _, m := range v.Members {
+		if cis[m.Stack.CIID] {
+			continue
+		}
+		cis[m.Stack.CIID] = true
+		cs, err := s.store.ListChanges(r.Context(), store.ChangeFilter{CIID: m.Stack.CIID, Limit: 20})
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		for _, c := range cs {
+			if strings.HasPrefix(c.Title, "Move update group "+v.Key+" to tag ") &&
+				!slices.ContainsFunc(v.Changes, func(x store.Change) bool { return x.ID == c.ID }) {
+				v.Changes = append(v.Changes, c)
+			}
+		}
+	}
+	q := r.URL.Query()
+	s.pages.render(w, http.StatusOK, "update_group", s.data(r, "Update group "+v.Key,
+		struct {
+			groupView
+			Notice, Error, TagInput string
+		}{v, q.Get("notice"), q.Get("error"), cmp.Or(q.Get("tag"), v.Advice)}))
+}
+
+// updateGroupRetag asks to move every member of an update group to a tag:
+// a Normal change, submitted for approval or approved at once by an
+// approver of every member's host.
+func (s *Server) updateGroupRetag(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	key := r.PathValue("key")
+	back := func(kind, msg, tag string) {
+		http.Redirect(w, r, s.url("/update-groups/"+url.PathEscape(key)+"?tag="+urlQueryEscape(tag)+"&"+kind+"="+
+			urlQueryEscape(msg)), http.StatusSeeOther)
+	}
+	groups, ix, all, err := s.groupViews(r)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	i := slices.IndexFunc(groups, func(g groupView) bool { return g.Key == key })
+	if i < 0 {
+		s.errorPage(w, r, http.StatusNotFound, "No such update group.")
+		return
+	}
+	v := groups[i]
+	tag := strings.TrimSpace(r.FormValue("tag"))
+	if !v.CanRetag {
+		back("error", "You can't move this group: "+v.RetagBlock+".", tag)
+		return
+	}
+	approve := r.FormValue("submit") == "approve"
+	if approve && !v.CanApprove {
+		back("error", "Approving needs the approver role on every member's host; submit it for approval instead.", tag)
+		return
+	}
+	grp, _ := ix.Group(key)
+	steps, cis, err := s.changes.RetagSteps(ctx, grp, all, tag)
+	if err != nil {
+		back("error", sentence(err), tag)
+		return
+	}
+	justification := strings.TrimSpace(r.FormValue("justification"))
+	if justification == "" {
+		justification = "Move every member of update group " + key + " to tag " + tag + ", the leaders first."
+	}
+	c, err := s.store.CreateChange(ctx, s.actor(r), store.NewChange{
+		Kind: store.KindNormal, Title: change.RetagTitle(grp, tag), Justification: justification,
+		Description: "Every member moves to tag " + tag + ", lowest order first, each after the ones before it succeeded. " +
+			"A member whose update fails is rolled back, with its Compose file.",
+		Risk: action.Medium, Concurrency: 1, StopOnFailure: true, Steps: steps, CIs: cis, SelfApprove: approve,
+	})
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	msg := c.Ref() + " submitted. It runs once an approver approves it."
+	if approve {
+		s.nudgeJobs()
+		msg = c.Ref() + " approved by you (self-approval, recorded as such). Its jobs are starting."
+	}
+	s.backToChange(w, r, c.ID, "notice", msg)
+}
+
+// stackUpdateGroup puts a service of a stack in an update group, or takes
+// it out. Since update groups bring services into Standard changes, it is
+// an approver's call on the host, like the stack's change model.
+func (s *Server) stackUpdateGroup(w http.ResponseWriter, r *http.Request) {
+	st, err := s.store.GetStack(r.Context(), r.PathValue("id"))
+	if errors.Is(err, store.ErrNotFound) {
+		s.errorPage(w, r, http.StatusNotFound, "No such stack.")
+		return
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if _, ok := s.hostAccess(w, r, st.HostID, rbac.Approver, "No such stack."); !ok {
+		return
+	}
+	back := func(kind, msg string) {
+		http.Redirect(w, r, s.url("/stacks/"+st.CIID+"?"+kind+"="+urlQueryEscape(msg)+"#update-groups"), http.StatusSeeOther)
+	}
+	service := r.FormValue("service")
+	ix, _, err := s.changes.GroupIndex(r.Context())
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if !slices.Contains(ix.Services(st.CIID), service) {
+		back("error", "The stack has no service "+service+".")
+		return
+	}
+	name := strings.ToLower(strings.TrimSpace(r.FormValue("group")))
+	if name == "" {
+		if err := s.store.SetStackUpdateGroup(r.Context(), s.actor(r), st.CIID, service, nil); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		back("notice", service+" is in no update group now.")
+		return
+	}
+	order, err := strconv.Atoi(cmp.Or(strings.TrimSpace(r.FormValue("order")), strconv.Itoa(updategroup.DefaultOrder)))
+	if err == nil {
+		err = updategroup.CheckOrder(order)
+	}
+	if err == nil {
+		err = updategroup.CheckName(name)
+	}
+	if err != nil {
+		back("error", sentence(err))
+		return
+	}
+	if err := s.store.SetStackUpdateGroup(r.Context(), s.actor(r), st.CIID, service,
+		&store.UpdateGroup{Group: name, Order: order}); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	msg := fmt.Sprintf("%s is in update group %s, order %d.", service, name, order)
+	if m, ok := ix.Of(st.CIID, service); ok && m.Label {
+		msg += " Its containers' labels put it in " + m.Name + ", and labels win."
+	}
+	back("notice", msg)
 }

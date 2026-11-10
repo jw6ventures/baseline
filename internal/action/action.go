@@ -950,13 +950,13 @@ type ComposeResult struct {
 // ComposeService is one service's image before and after.
 type ComposeService struct {
 	Service string `json:"service"`
-	Image   string `json:"image"`          // the reference it runs
+	Image   string `json:"image"` // the reference it runs
 	// Retagged is the reference it ran before a new tag (ComposeParams.Tag)
 	// moved it to Image.
 	Retagged string `json:"retagged,omitempty"`
-	From    string `json:"from,omitempty"` // image ID before
-	To      string `json:"to,omitempty"`   // image ID after the pull
-	Changed bool   `json:"changed,omitempty"`
+	From     string `json:"from,omitempty"` // image ID before
+	To       string `json:"to,omitempty"`   // image ID after the pull
+	Changed  bool   `json:"changed,omitempty"`
 }
 
 // PackageChange is one package's version before and after.

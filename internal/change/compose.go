@@ -94,7 +94,7 @@ func (m *Manager) planStacks(ctx context.Context, g store.PatchGroup, model stor
 		return nil, nil, nil
 	}
 	// Services in update groups update with their groups, in order
-	// (docs/change-management.md §5.4).
+	// (docs/change-management.md §5.3).
 	ix := updategroup.New(all, rows)
 	check := m.scheduledCheck(ctx, ix, byHost, targets, model.Action,
 		"it isn't in patch group "+g.Name+", and this group's stacks don't update ahead of it", now)

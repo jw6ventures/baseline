@@ -65,7 +65,7 @@ Current-state tables. Each is replaced section by section on ingest, in one tran
 | `ci_cert` | ci_id, location (path, `tcp:<port>[/<sni>]`, or `host:port` for server probes), source [agent\|probe], subject, sans[], issuer, not_before, not_after, serial, fingerprint, self_signed, error, checked_at. Keyed to any CI, so hosts and agentless endpoints share one expiry list. |
 | `host_smart` | host, device, model, serial, passed (NULL: no health status), degrading, attrs jsonb (the device as reported), rose_at (when the bad sector count last went up; §7). When it was checked is the section's `received_at`. |
 | `container` | ci_id, host, engine, name, engine_id, image_ref, image_id, check_ref (the normalized ref registries are asked about; '' when the image can't be checked), image_digests[] (digests the image was pulled by), state, health, started_at, labels jsonb, attrs jsonb (the container as reported), compose_project, compose_service. Current state: a removed container loses its row, and its CI turns `missing` an hour later. |
-| `compose_stack` | ci_id, host, engine, project, working_dir, config_files[], cli, orphaned, stopped (found under a Compose root, not running), present, auto_update bool **default false**, pinned, semver_rules jsonb (service → rule). Kept with `present = false` when the stack goes away, so its settings survive. |
+| `compose_stack` | ci_id, host, engine, project, working_dir, config_files[], cli, orphaned, stopped (found under a Compose root, not running), present, auto_update bool **default false**, pinned, semver_rules jsonb (service → rule), update_groups jsonb (service → {group, order}, set on the stack's page; container labels win, change-management.md §5.3). Kept with `present = false` when the stack goes away, so its settings survive. |
 | `image_check` | image_ref, registry, latest_digest, checked_at, error. One row per normalized reference, shared by every host. The view `container_update` joins it to containers: **drift** is a registry digest the image wasn't pulled by. |
 | `registry_tags` | repository, tags[], checked_at, error: tags of repositories a semver rule watches. Advisories are computed from them when a page is shown, since rules differ per container. |
 | `vm_guest` | ci_id, host (the hypervisor running it), platform [proxmox\|libvirt], kind (qemu or lxc on Proxmox, the domain type on libvirt), guest_id (VMID or domain UUID), name, uuid (the SMBIOS UUID the guest sees), macs[], state, config jsonb (the guest as reported), present. Kept with `present = false` when the guest goes away. |
@@ -420,6 +420,8 @@ wf_status(..., x double precision NULL, y double precision NULL)   -- where it s
 host(..., manage_compose bool NOT NULL DEFAULT false, manage_compose_since timestamptz,
      compose_roots text[] NOT NULL DEFAULT '{}')   -- v0.26.0: where deploys go, and where stopped stacks are found
 compose_stack(..., stopped bool)                    -- v0.26.0
+compose_stack(..., update_groups jsonb)             -- v0.32.0: update groups set on the stack's page
+job(..., update_group text, update_order int)       -- v0.32.0: a job waits for lower orders of its update group in its change
 
 compose_revision(
   id uuid PK, host uuid FK host, engine text, project text,

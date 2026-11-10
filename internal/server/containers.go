@@ -12,6 +12,7 @@ import (
 	"github.com/jw6ventures/baseline/internal/rbac"
 	"github.com/jw6ventures/baseline/internal/registry"
 	"github.com/jw6ventures/baseline/internal/store"
+	"github.com/jw6ventures/baseline/internal/updategroup"
 )
 
 // Checker runs the server's registry checks (internal/checks).
@@ -401,6 +402,15 @@ type stackPageView struct {
 	CanSeeEnv bool // operators see .env values
 	// Drift: the Compose file on the host isn't the one Baseline last wrote.
 	FileDrift bool
+	// Update groups of its services (docs/change-management.md §5.3).
+	Groups []stackGroupRow
+}
+
+// stackGroupRow is a service of a stack and the update group it is in.
+type stackGroupRow struct {
+	Service string
+	Member  *updategroup.Member // nil: in none
+	Setting store.UpdateGroup   // what the stack's page sets, if anything
 }
 
 type composeFileView struct {
@@ -458,6 +468,18 @@ func (s *Server) stackPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := s.stackUpdatesView(r, &v); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if ix, _, err := s.changes.GroupIndex(ctx); err == nil {
+		for _, svc := range ix.Services(st.CIID) {
+			row := stackGroupRow{Service: svc, Setting: st.UpdateGroups[svc]}
+			if m, ok := ix.Of(st.CIID, svc); ok {
+				row.Member = &m
+			}
+			v.Groups = append(v.Groups, row)
+		}
+	} else {
 		s.serverError(w, r, err)
 		return
 	}

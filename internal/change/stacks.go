@@ -115,7 +115,7 @@ func (m *Manager) AutoUpdate(ctx context.Context, now time.Time) (int, error) {
 			return n, err
 		}
 		// Its services in update groups update with their groups, in order
-		// (docs/change-management.md §5.4).
+		// (docs/change-management.md §5.3).
 		targets := []updategroup.Target{{Stack: st}}
 		check := m.scheduledCheck(ctx, ix, hosts, targets, action.ComposeUpdate,
 			"auto-update doesn't update a stack ahead of the members after it unless that stack updates itself", now)

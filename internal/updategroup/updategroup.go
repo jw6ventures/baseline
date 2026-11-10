@@ -1,5 +1,5 @@
 // Package updategroup works out update groups (docs/change-management.md
-// §5.4): Compose services, possibly in different stacks and on different
+// §5.3): Compose services, possibly in different stacks and on different
 // hosts, that update together and in order, such as an identity server and
 // the proxy outposts that must never run ahead of it. A container joins a
 // group with the labels baseline.update.group and baseline.update.order, or
@@ -53,8 +53,9 @@ type Member struct {
 	Label   bool // set by the containers' labels, not on the stack's page
 	Stack   store.Stack
 	Service string
-	Image   string // the reference its containers run
-	Drift   bool   // the registry has a newer image behind its tag
+	Image   string             // the reference its containers run
+	Drift   bool               // the registry has a newer image behind its tag
+	Row     store.ContainerRow // its first container
 	// Problem says what was wrong with its labels, if anything; the member
 	// still counts, with what could be read.
 	Problem string
@@ -128,7 +129,7 @@ func New(stacks []store.Stack, rows []store.ContainerRow) *Index {
 			m.Drift = m.Drift || (c.Drift && !c.Pinned)
 			continue
 		}
-		m := Member{Stack: st, Service: c.ComposeService, Image: c.Image, Drift: c.Drift && !c.Pinned, Order: DefaultOrder}
+		m := Member{Stack: st, Service: c.ComposeService, Image: c.Image, Drift: c.Drift && !c.Pinned, Order: DefaultOrder, Row: c}
 		if name := strings.TrimSpace(c.Labels[LabelGroup]); name != "" {
 			m.Name, m.Label = name, true
 			if err := CheckName(name); err != nil {
@@ -312,4 +313,19 @@ func Describe(held []Held) string {
 		out = append(out, h.Member.Where()+": "+h.Why)
 	}
 	return strings.Join(out, "; ")
+}
+
+// Tag is the tag of the image reference a member runs, "" when it has none.
+func (m Member) Tag() string {
+	ref := m.Image
+	if i := strings.LastIndex(ref, "/"); i >= 0 {
+		ref = ref[i:]
+	}
+	if strings.Contains(ref, "@") {
+		return ""
+	}
+	if _, tag, ok := strings.Cut(ref, ":"); ok {
+		return tag
+	}
+	return ""
 }

@@ -1,0 +1,51 @@
+{{define "content"}}
+{{$v := .Body}}
+<div class="titlebar">
+  <div>
+    <h1>{{$v.Name}}{{with $v.Environment}} <span class="tag">{{.}}</span>{{end}}</h1>
+    <p class="muted sub">Update group · {{len $v.Members}} members{{if $v.Hidden}}, and {{$v.Hidden}} on hosts you can't see{{end}}</p>
+  </div>
+  <div class="actions"><a class="button secondary" href="{{.Base}}/update-groups">All update groups</a></div>
+</div>
+{{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+
+<h2>Members</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Order</th><th>Service</th><th>Stack</th><th>Image</th><th>Set by</th><th>Update</th></tr></thead>
+  <tbody>{{range $v.Members}}<tr>
+    <td>{{.Order}}</td>
+    <td><strong>{{.Service}}</strong>{{with .Problem}}<br><span class="bad-text small">{{.}}</span>{{end}}</td>
+    <td><a href="{{$.Base}}/stacks/{{.Stack.CIID}}">{{.Stack.Project}}</a> <span class="muted small">on {{.Stack.Hostname}}</span></td>
+    <td class="mono small">{{.Image}}{{if ne .Tag $v.Tag}} <span class="tag caution" title="Not the leaders' tag">other tag</span>{{end}}</td>
+    <td class="small">{{if .Label}}labels{{else}}stack page{{end}}</td>
+    <td>{{if .Stack.Pinned}}<span class="muted">pinned</span>{{else if .Drift}}<span class="tag caution">newer image</span>{{else}}<span class="muted">current</span>{{end}}</td>
+  </tr>{{end}}</tbody>
+</table></div>
+<p class="muted small">Members update lowest order first; members of the same order may update in either order. A member waits for the ones before it to succeed, and is skipped when one of them failed or was rolled back. When auto-update or a patch group would update a later member while an earlier one can't update (it's pinned, its host is offline, or its stack doesn't update itself), the later member waits.</p>
+
+<section class="panel">
+  <h2>Move to a new tag</h2>
+  <p>The members run different images that share a tag ({{with $v.Tag}}<code>{{.}}</code> now{{else}}none yet{{end}}). Moving the group writes the new tag into each member's image in its Compose file, on the host, then pulls and recreates it: the leaders first, then the rest in order. A member that doesn't come up healthy is rolled back, Compose file included, and the members after it are skipped. Only tags written in the Compose file itself can be moved, not ones set through a variable.</p>
+  {{with $v.Advice}}<p>The leaders' semver rule allows <strong>{{.}}</strong>. When a leader's stack updates itself or is in a patch group, Baseline proposes the move on its own, as a change an approver must approve.</p>{{else}}<p class="muted small">Set a semver rule on a leader's container to have newer tags suggested, and proposed for approval when its stack updates itself or is in a patch group.</p>{{end}}
+  {{if $v.CanRetag}}
+  <form class="inline-form" method="post" action="{{.Base}}/update-groups/{{urlquery $v.Key}}/retag">
+    <label>Tag<input name="tag" value="{{$v.TagInput}}" required pattern="[A-Za-z0-9_][A-Za-z0-9_.\-]{0,127}" class="mono"></label>
+    <label>Justification<textarea name="justification" rows="2" placeholder="Why now"></textarea></label>
+    <div class="actions">
+      <button name="submit" value="submit">Submit for approval</button>
+      {{if $v.CanApprove}}<button name="submit" value="approve" class="secondary" title="Recorded as self-approval">Approve and run</button>{{end}}
+    </div>
+  </form>
+  {{else}}<p class="muted">You can't move this group: {{$v.RetagBlock}}.</p>{{end}}
+  {{with $v.Changes}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Change</th><th>Title</th><th>State</th><th>When</th></tr></thead>
+    <tbody>{{range .}}<tr>
+      <td class="nowrap"><a href="{{$.Base}}/changes/{{.ID}}">{{.Ref}}</a></td><td>{{.Title}}</td>
+      <td class="nowrap">{{template "change-state" .}}</td><td class="nowrap muted small">{{ago .CreatedAt}}</td>
+    </tr>{{end}}</tbody>
+  </table></div>
+  {{end}}
+</section>
+{{end}}

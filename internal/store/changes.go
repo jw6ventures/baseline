@@ -327,8 +327,10 @@ func (s *Store) CreateChange(ctx context.Context, actor Actor, nc NewChange) (Ch
 	if !slices.Contains(ChangeKinds, nc.Kind) {
 		return Change{}, fmt.Errorf("unknown change kind %q", nc.Kind)
 	}
-	if !userID.Valid && nc.Kind != KindStandard {
-		return Change{}, errors.New("only Standard changes are requested by the system")
+	// The system requests Standard changes, and proposes Normal ones for
+	// approvers to approve (moving an update group to a new tag).
+	if !userID.Valid && (nc.Kind == KindEmergency || nc.Draft || nc.SelfApprove) {
+		return Change{}, errors.New("the system requests Standard changes and submits Normal ones")
 	}
 	if (nc.Kind == KindStandard) != (nc.ModelID != "") {
 		return Change{}, errors.New("a Standard change, and only one, comes from a change model")

@@ -1,4 +1,4 @@
--- Update groups (docs/change-management.md §5.4): Compose services that
+-- Update groups (docs/change-management.md §5.3): Compose services that
 -- update together, in order, such as an identity server and the proxy
 -- outposts that must never run ahead of it. A container joins one with the
 -- labels baseline.update.group and baseline.update.order; a service can

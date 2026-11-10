@@ -11,6 +11,7 @@
 <nav class="tabs" aria-label="Containers or stacks">
   <a href="{{.Base}}/containers"{{if eq $v.Tab "containers"}} aria-current="page"{{end}}>Containers</a>
   <a href="{{.Base}}/stacks"{{if eq $v.Tab "stacks"}} aria-current="page"{{end}}>Compose stacks</a>
+  <a href="{{.Base}}/update-groups">Update groups</a>
 </nav>
 {{template "list" $v.List}}
 <p class="muted small">The server checks each image's registry every 6 hours: a newer image behind the same tag is flagged. Newer version tags are suggested only for containers with a semver rule, set on the container's page.{{if eq $v.Tab "stacks"}} Agents discover stacks from container labels; a stack's name can carry its environment, category and visibility.{{end}}</p>
