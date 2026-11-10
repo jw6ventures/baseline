@@ -76,6 +76,9 @@ const (
 	// CapComposeRootless: compose.deploy and compose.edit also take rootless
 	// Podman stacks, whose files the agent writes as the stack's user.
 	CapComposeRootless = "compose-rootless"
+	// CapComposeRetag: compose.update takes a new tag for the services it
+	// names (ComposeParams.Tag), written into their Compose file.
+	CapComposeRetag = "compose-retag"
 )
 
 type Risk string
@@ -278,6 +281,32 @@ type ComposeParams struct {
 	// Dest (compose.move) is the host's Compose root the stack moves
 	// under, to <dest>/<project>.
 	Dest string `json:"dest,omitempty"`
+	// Tag (compose.update) moves the named services to this tag of their
+	// images: the agent writes it into the image reference in their Compose
+	// file before pulling, and puts the file back if the update fails. It
+	// needs CapComposeRetag and services.
+	Tag string `json:"tag,omitempty"`
+}
+
+// reTag is what a registry accepts as a tag.
+var reTag = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
+
+// CheckTag says what is wrong with an image tag, or nil.
+func CheckTag(tag string) error {
+	if !reTag.MatchString(tag) {
+		return fmt.Errorf("%q isn't an image tag", tag)
+	}
+	return nil
+}
+
+// NeedsRetag reports whether compose.update parameters move services to
+// a new tag, which only agents with CapComposeRetag understand.
+func NeedsRetag(name string, params []byte) bool {
+	if name != ComposeUpdate {
+		return false
+	}
+	var p ComposeParams
+	return json.Unmarshal(params, &p) == nil && p.Tag != ""
 }
 
 // StackFileParams are compose.deploy's and compose.edit's. The files
@@ -476,6 +505,17 @@ func Validate(name string, raw []byte) ([]byte, error) {
 			}
 		} else if p.Dest != "" {
 			return nil, errors.New("dest is compose.move's")
+		}
+		if p.Tag != "" {
+			if name != ComposeUpdate {
+				return nil, errors.New("tag is compose.update's")
+			}
+			if len(p.Services) == 0 {
+				return nil, errors.New("a new tag goes with the services it applies to")
+			}
+			if err := CheckTag(p.Tag); err != nil {
+				return nil, err
+			}
 		}
 		if name == ComposePull || name == ComposeArchive {
 			if p.HealthTimeout != 0 {
@@ -764,6 +804,9 @@ func Describe(name string, params []byte) string {
 		if len(p.Services) > 0 {
 			s += " (" + strings.Join(p.Services, ", ") + ")"
 		}
+		if p.Tag != "" {
+			s += " to tag " + p.Tag
+		}
 		return s
 	case ComposeDeploy:
 		var p StackFileParams
@@ -908,6 +951,9 @@ type ComposeResult struct {
 type ComposeService struct {
 	Service string `json:"service"`
 	Image   string `json:"image"`          // the reference it runs
+	// Retagged is the reference it ran before a new tag (ComposeParams.Tag)
+	// moved it to Image.
+	Retagged string `json:"retagged,omitempty"`
 	From    string `json:"from,omitempty"` // image ID before
 	To      string `json:"to,omitempty"`   // image ID after the pull
 	Changed bool   `json:"changed,omitempty"`

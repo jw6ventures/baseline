@@ -265,6 +265,15 @@ func (s *Server) createChangeFromAPI(r *http.Request, req changeRequest) (store.
 			step.HostIDs = []string{st.HostID}
 			steps, cis, objects = append(steps, step), append(cis, st.CIID), append(objects, st.Project)
 		}
+		if spec.Name == action.ComposeUpdate {
+			if steps, cis, objects, err = s.withGroups(ctx, p.Grants, hosts, model, stacks, steps); err != nil {
+				return zero, bad("%s", err)
+			}
+			targets = stepHosts(steps)
+			if names, err = checkTargets(p.Grants, spec, targets, hosts); err != nil {
+				return zero, bad("%s", err)
+			}
+		}
 	case containers != nil:
 		for _, c := range containers {
 			raw, _ := json.Marshal(action.ContainerParams{Engine: c.Engine, Name: c.Name})

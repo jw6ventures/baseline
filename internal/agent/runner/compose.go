@@ -74,9 +74,30 @@ func (r *Runner) compose(ctx context.Context, name string, p action.ComposeParam
 		}
 	}
 
+	// A new tag goes into the Compose file first; restore puts it back.
+	var restore func() error
+	if p.Tag != "" {
+		var why string
+		if restore, why = r.retag(ctx, st, p, &res, out); why != "" {
+			return outcome{failed: true, exitCode: -1, result: &res, err: why}
+		}
+	}
+	undo := func(why string) outcome {
+		if restore == nil {
+			return outcome{failed: true, exitCode: -1, result: &res, err: why}
+		}
+		if err := restore(); err != nil {
+			return outcome{failed: true, exitCode: -1, result: &res, err: fmt.Sprintf("%s; putting the Compose file back failed too: %v", why, err)}
+		}
+		out.info("Put the previous Compose file back; nothing was restarted.\n")
+		return outcome{failed: true, exitCode: -1, result: &res, err: why}
+	}
+
 	out.info("Pulling images for %s (%s)…\n", st.Project, strings.Join(services, ", "))
 	if code, err := r.exec(ctx, composeCmd(st, append([]string{"pull"}, p.Services...)...), out); err != nil || code != 0 {
-		return outcome{failed: true, exitCode: code, result: &res, err: composeExit("pull", code, err)}
+		o := undo(composeExit("pull", code, err))
+		o.exitCode = code
+		return o
 	}
 	var changed []string
 	for i := range res.Services {
@@ -86,11 +107,11 @@ func (r *Runner) compose(ctx context.Context, name string, p action.ComposeParam
 			err = fmt.Errorf("%s: the engine has no image %s after the pull", s.Service, s.Image)
 		}
 		if err != nil {
-			o := failed("%v", err)
-			o.result = &res
-			return o
+			return undo(err.Error())
 		}
-		s.To, s.Changed = id, id != s.From
+		// A new tag recreates the containers even when it names the same
+		// image, so that they run the reference the file now says.
+		s.To, s.Changed = id, id != s.From || s.Retagged != ""
 		if s.Changed {
 			changed = append(changed, s.Service)
 			out.info("%s: %s has a new image, %s → %s\n", s.Service, s.Image, shortID(s.From), shortID(s.To))
@@ -117,7 +138,7 @@ func (r *Runner) compose(ctx context.Context, name string, p action.ComposeParam
 		why = r.waitHealthy(ctx, p, watch, out, false)
 	}
 	if why != "" {
-		return r.rollback(ctx, st, &res, changed, why, out)
+		return r.rollback(ctx, st, &res, changed, why, restore, out)
 	}
 	out.info("Updated %s.\n", strings.Join(changed, ", "))
 	return outcome{result: &res}
@@ -277,7 +298,7 @@ func containersReady(st collect.Stack, services []string, exitOK bool) (ready ma
 // mustn't leave a stack half-updated, so it runs on its own deadline. The
 // new images are kept; nothing is pruned.
 func (r *Runner) rollback(ctx context.Context, st collect.Stack, res *action.ComposeResult, changed []string,
-	why string, out *output) outcome {
+	why string, restore func() error, out *output) outcome {
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackTimeout)
 	defer cancel()
 	out.info("\n%s. Rolling back %s.\n", upperFirst(why), strings.Join(changed, ", "))
@@ -286,9 +307,17 @@ func (r *Runner) rollback(ctx context.Context, st collect.Stack, res *action.Com
 	r.exec(rctx, composeCmd(st, append([]string{"logs", "--tail", "50"}, changed...)...), out)
 
 	var errs []string
+	if restore != nil {
+		// The old tags still name the old images: the file is all to undo.
+		out.info("Putting the previous Compose file back\n")
+		if err := restore(); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
 	for _, s := range res.Services {
-		// A reference pinned by digest still names the old image.
-		if !s.Changed || strings.Contains(s.Image, "@") {
+		// A reference pinned by digest still names the old image, and so
+		// does a service's old tag.
+		if !s.Changed || strings.Contains(s.Image, "@") || s.Retagged != "" {
 			continue
 		}
 		out.info("Tagging %s as %s again\n", shortID(s.From), s.Image)
