@@ -80,6 +80,31 @@
   {{end}}
 </section>
 
+{{with $v.Groups}}
+<section class="panel" id="update-groups">
+  <h2>Update groups</h2>
+  <p class="muted small">A service in an <a href="{{$.Base}}/update-groups">update group</a> updates with the group's other members, lowest order first, whichever stack an update starts from. The container labels <code>baseline.update.group</code> and <code>baseline.update.order</code> put a service in one and win over what is set here.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Service</th><th>Group</th><th>Order</th>{{if $v.CanSettings}}<th></th>{{end}}</tr></thead>
+    <tbody>{{range .}}<tr>
+      <td><strong>{{.Service}}</strong></td>
+      {{if .Member}}{{$m := .Member}}
+      <td><a href="{{$.Base}}/update-groups/{{urlquery $m.Group}}">{{$m.Group}}</a>{{if $m.Label}} <span class="tag" title="Set by the containers' labels">label</span>{{end}}{{with $m.Problem}}<br><span class="bad-text small">{{.}}</span>{{end}}</td>
+      <td>{{$m.Order}}</td>
+      {{else}}<td class="muted">none</td><td></td>{{end}}
+      {{if $v.CanSettings}}<td>{{if and .Member .Member.Label}}<span class="muted small">set by labels</span>{{else}}
+        <form class="inline" method="post" action="{{$.Base}}/stacks/{{$s.CIID}}/update-group">
+          <input type="hidden" name="service" value="{{.Service}}">
+          <input name="group" value="{{.Setting.Group}}" placeholder="group" size="12" aria-label="Group">
+          <input name="order" value="{{if .Setting.Group}}{{.Setting.Order}}{{end}}" placeholder="1" size="3" inputmode="numeric" aria-label="Order">
+          <button class="small secondary">Save</button>
+        </form>{{end}}</td>{{end}}
+    </tr>{{end}}</tbody>
+  </table></div>
+  {{if $v.CanSettings}}<p class="muted small">Clear the group and save to take a service out.</p>{{end}}
+</section>
+{{end}}
+
 {{if or $v.Revisions $v.EditBlock}}
 <section class="panel">
   <h2>Files from Baseline</h2>

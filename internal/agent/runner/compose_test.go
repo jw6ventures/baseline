@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/jw6ventures/baseline/internal/action"
 	"github.com/jw6ventures/baseline/internal/agent/collect"
+	"github.com/jw6ventures/baseline/internal/composefile"
 	"github.com/jw6ventures/baseline/internal/model"
 )
 
@@ -49,8 +52,12 @@ type composeHost struct {
 	// changed behind the same reference alone unless --force-recreate.
 	stickyUp bool
 	pullCode int
-	nextID   int
-	fe       *fakeExec
+	// files: Compose reads each service's image reference from the stack's
+	// Compose files (real ones, in a test's directory) on pull and up.
+	files      bool
+	configCode int
+	nextID     int
+	fe         *fakeExec
 }
 
 func newComposeHost() *composeHost {
@@ -92,9 +99,23 @@ func (h *composeHost) runner(t *testing.T) *Runner {
 func (h *composeHost) exec(_ context.Context, c Cmd, stdout, _ io.Writer) (int, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	i := slices.IndexFunc(c.Args, func(a string) bool { return a == "pull" || a == "up" || a == "logs" })
+	i := slices.IndexFunc(c.Args, func(a string) bool { return a == "pull" || a == "up" || a == "logs" || a == "config" })
 	if i < 0 {
 		return 127, nil
+	}
+	if c.Args[i] == "config" {
+		return h.configCode, nil
+	}
+	if h.files {
+		for j := range h.st.Containers {
+			ctr := &h.st.Containers[j]
+			for _, f := range h.st.ConfigFiles {
+				data, _ := os.ReadFile(f.Path)
+				if _, ref, err := composefile.SetTag(data, ctr.ComposeService, "x"); err == nil {
+					ctr.Image = ref
+				}
+			}
+		}
 	}
 	var services []string
 	for _, a := range c.Args[i+1:] {
@@ -639,4 +660,114 @@ func TestComposeWaitsForAnotherComposeJob(t *testing.T) {
 	<-r.stacks
 	_, res := untilResult(t, r, id)
 	checkResult(t, res, "succeeded", 0, "")
+}
+
+// retagHost is a composeHost whose stack runs from a real Compose file.
+func retagHost(t *testing.T) (*composeHost, string) {
+	h := newComposeHost()
+	dir := t.TempDir()
+	file := filepath.Join(dir, "compose.yaml")
+	if err := os.WriteFile(file, []byte(retagCompose), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	h.st.WorkingDir, h.st.ConfigFiles, h.files = dir, []model.ComposeFile{{Path: file}}, true
+	h.registry["ghcr.io/acme/app:3"] = appNew
+	return h, file
+}
+
+const retagCompose = `services:
+  app:
+    image: ghcr.io/acme/app:2 # follows the server
+    deploy: {replicas: 2}
+  db:
+    image: postgres:16
+  migrate:
+    image: ghcr.io/acme/migrate:2
+`
+
+func TestComposeUpdateRetag(t *testing.T) {
+	h, file := retagHost(t)
+	r := h.runner(t)
+	id := jobID(70)
+	start(r, id, action.ComposeUpdate, `{"engine":"docker","project":"web","services":["app"],"tag":"3","health_timeout":30}`)
+	evs, res := untilResult(t, r, id)
+	checkResult(t, res, "succeeded", 0, "")
+	base := "DOCKER_HOST=unix:///var/run/docker.sock docker compose -p web -f " + file + " --project-directory " + filepath.Dir(file) + " "
+	if got := h.fe.lines(); !slices.Equal(got, []string{base + "config --quiet", base + "pull app", base + "up -d --no-deps app"}) {
+		t.Errorf("commands = %q", got)
+	}
+	b, _ := os.ReadFile(file)
+	if want := strings.Replace(retagCompose, "app:2 #", "app:3 #", 1); string(b) != want {
+		t.Errorf("file:\n%s", b)
+	}
+	if prev, _ := os.ReadFile(file + prevSuffix); string(prev) != retagCompose {
+		t.Errorf("previous file:\n%s", prev)
+	}
+	if fi, _ := os.Stat(file); fi.Mode().Perm() != 0o640 {
+		t.Errorf("mode %v", fi.Mode())
+	}
+	cr := composeResult(t, res.GetResultJson())
+	if !slices.Equal(cr.Services, []action.ComposeService{{Service: "app", Image: "ghcr.io/acme/app:3",
+		Retagged: "ghcr.io/acme/app:2", From: appOld, To: appNew, Changed: true}}) {
+		t.Errorf("result = %+v", cr)
+	}
+	for _, c := range h.st.Containers {
+		if c.ComposeService == "app" && (c.ImageID != appNew || c.Image != "ghcr.io/acme/app:3") {
+			t.Errorf("%s runs %s %s", c.Name, c.Image, c.ImageID)
+		}
+	}
+	if info := outputOf(evs, "info"); !strings.Contains(info, "app: ghcr.io/acme/app:2 → ghcr.io/acme/app:3 in "+file) {
+		t.Errorf("info = %q", info)
+	}
+}
+
+func TestComposeUpdateRetagRollsBack(t *testing.T) {
+	h, file := retagHost(t)
+	h.status = func(svc, img string, _ int) (string, string) {
+		if img == appNew {
+			return "running", "unhealthy"
+		}
+		return "running", ""
+	}
+	r := h.runner(t)
+	id := jobID(71)
+	start(r, id, action.ComposeUpdate, `{"engine":"docker","project":"web","services":["app"],"tag":"3","health_timeout":30}`)
+	_, res := untilResult(t, r, id)
+	checkResult(t, res, "rolled_back", -1, "unhealthy")
+	if b, _ := os.ReadFile(file); string(b) != retagCompose {
+		t.Errorf("file not put back:\n%s", b)
+	}
+	if len(h.tags) != 0 {
+		t.Errorf("tags moved: %v", h.tags)
+	}
+	for _, c := range h.st.Containers {
+		if c.ComposeService == "app" && (c.ImageID != appOld || c.Image != "ghcr.io/acme/app:2") {
+			t.Errorf("%s runs %s %s", c.Name, c.Image, c.ImageID)
+		}
+	}
+}
+
+func TestComposeUpdateRetagRefused(t *testing.T) {
+	h, file := retagHost(t)
+	os.WriteFile(file, []byte(strings.Replace(retagCompose, "ghcr.io/acme/app:2", "${APP_IMAGE}", 1)), 0o640)
+	r := h.runner(t)
+	id := jobID(72)
+	start(r, id, action.ComposeUpdate, `{"engine":"docker","project":"web","services":["app"],"tag":"3"}`)
+	_, res := untilResult(t, r, id)
+	checkResult(t, res, "failed", -1, "through a variable")
+	if len(h.fe.lines()) != 0 {
+		t.Errorf("commands = %q", h.fe.lines())
+	}
+
+	// A file Compose doesn't accept is put back before anything is pulled.
+	h, file = retagHost(t)
+	h.configCode = 1
+	r = h.runner(t)
+	id = jobID(73)
+	start(r, id, action.ComposeUpdate, `{"engine":"docker","project":"web","services":["app"],"tag":"3"}`)
+	_, res = untilResult(t, r, id)
+	checkResult(t, res, "failed", -1, "doesn't check out")
+	if b, _ := os.ReadFile(file); string(b) != retagCompose {
+		t.Errorf("file not put back:\n%s", b)
+	}
 }

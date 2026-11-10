@@ -75,6 +75,9 @@ func (m *Manager) Tick(ctx context.Context) {
 		m.errorf(ctx, "compose auto-update: %v", err)
 	}
 	created = created || n > 0
+	if _, err := m.ProposeRetags(ctx, now); err != nil {
+		m.errorf(ctx, "update group tags: %v", err)
+	}
 	if created && m.Nudge != nil {
 		m.Nudge()
 	}

@@ -838,6 +838,16 @@ func (s *Server) changeCreate(w http.ResponseWriter, r *http.Request) {
 			step.HostIDs = []string{st.HostID}
 			steps, cis, objects = append(steps, step), append(cis, st.CIID), append(objects, st.Project)
 		}
+		if spec.Name == action.ComposeUpdate {
+			if steps, cis, objects, err = s.withGroups(ctx, p.Grants, hosts, model, stacks, steps); err == nil {
+				targets = stepHosts(steps)
+				names, err = checkTargets(p.Grants, spec, targets, hosts)
+			}
+			if err != nil {
+				fail(sentence(err))
+				return
+			}
+		}
 	case containers != nil:
 		for _, c := range containers {
 			raw, _ := json.Marshal(action.ContainerParams{Engine: c.Engine, Name: c.Name})

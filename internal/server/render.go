@@ -220,7 +220,8 @@ func buildNav(p *Principal, path string) []navGroup {
 			{Path: "/changes", Label: "Changes"}, {Path: "/calendar", Label: "Calendar"}, {Path: "/windows", Label: "Windows"},
 			{Path: "/change-models", Label: "Change models"}}},
 		{Key: "patching", Label: "Patching", Items: []navItem{
-			{Path: "/updates", Label: "Updates"}, {Path: "/patch-groups", Label: "Patch groups"}, {Path: "/vulnerabilities", Label: "Vulnerabilities"}}},
+			{Path: "/updates", Label: "Updates"}, {Path: "/patch-groups", Label: "Patch groups"},
+			{Path: "/update-groups", Label: "Update groups"}, {Path: "/vulnerabilities", Label: "Vulnerabilities"}}},
 		{Key: "automation", Label: "Automation", Items: []navItem{
 			{Path: "/jobs", Label: "Jobs"}, {Path: "/scripts", Label: "Scripts"}}},
 	}

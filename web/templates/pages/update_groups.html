@@ -1,0 +1,14 @@
+{{define "content"}}
+{{$v := .Body}}
+<h1>Update groups</h1>
+<p class="muted">An update group is a set of Compose services, in any stacks and on any hosts, that update together and in order, such as an identity server and the proxy outposts that must never run ahead of it. A service joins one with the container labels <code>baseline.update.group=&lt;name&gt;</code> and <code>baseline.update.order=&lt;n&gt;</code>, or on its stack's page; the labels win. Every Compose update that touches a member (by hand, auto-update or a patch group) updates the group's members with it, lowest order first, each after the ones before it succeeded. Groups don't mix environments: a Dev and a Prod stack with the same group name are in separate groups.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Group</th><th>Leads</th><th>Members</th><th>Tag</th></tr></thead>
+  <tbody>{{range $v.Groups}}<tr>
+    <td><a href="{{$.Base}}/update-groups/{{urlquery .Key}}"><strong>{{.Name}}</strong></a>{{with .Environment}} <span class="tag">{{.}}</span>{{end}}</td>
+    <td class="small">{{range .Leaders}}{{.Service}} in {{.Stack.Project}} on {{.Stack.Hostname}}<br>{{end}}</td>
+    <td>{{len .Members}}{{if .Hidden}} <span class="muted small">(and {{.Hidden}} you can't see)</span>{{end}}</td>
+    <td class="nowrap mono small">{{with .Tag}}{{.}}{{else}}<span class="muted">—</span>{{end}}{{if .Mixed}} <span class="tag caution" title="Members run other tags than the leaders">mixed</span>{{end}}{{with .Advice}} <span class="tag caution" title="A newer tag the leaders' semver rule allows">{{.}} available</span>{{end}}</td>
+  </tr>{{else}}<tr><td colspan="4" class="muted">No update groups yet. Label a service's containers with <code>baseline.update.group</code>, or set it on its stack's page.</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}

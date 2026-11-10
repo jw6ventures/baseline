@@ -588,11 +588,11 @@ func TestComposeCapability(t *testing.T) {
 		{nil, nil, "pkg-pin"},
 		// A Compose CLI without its engine is no use.
 		{[]string{"/usr/libexec/docker/cli-plugins/docker-compose"}, nil, "pkg-pin"},
-		{[]string{"/usr/libexec/docker/cli-plugins/docker-compose"}, []string{"docker"}, "docker,compose,compose-files,compose-roots,compose-start,compose-archive,compose-rootless,pkg-pin"},
-		{nil, []string{"docker", "docker-compose"}, "docker,compose,compose-files,compose-roots,compose-start,compose-archive,compose-rootless,pkg-pin"},
+		{[]string{"/usr/libexec/docker/cli-plugins/docker-compose"}, []string{"docker"}, "docker,compose,compose-files,compose-roots,compose-start,compose-archive,compose-rootless,compose-retag,pkg-pin"},
+		{nil, []string{"docker", "docker-compose"}, "docker,compose,compose-files,compose-roots,compose-start,compose-archive,compose-rootless,compose-retag,pkg-pin"},
 		{nil, []string{"podman"}, "podman,pkg-pin"},
-		{nil, []string{"podman", "podman-compose"}, "podman,compose,compose-files,compose-roots,compose-start,compose-archive,compose-rootless,pkg-pin"},
-		{[]string{"/run/podman/podman.sock"}, []string{"podman-compose"}, "podman,compose,compose-files,compose-roots,compose-start,compose-archive,compose-rootless,pkg-pin"},
+		{nil, []string{"podman", "podman-compose"}, "podman,compose,compose-files,compose-roots,compose-start,compose-archive,compose-rootless,compose-retag,pkg-pin"},
+		{[]string{"/run/podman/podman.sock"}, []string{"podman-compose"}, "podman,compose,compose-files,compose-roots,compose-start,compose-archive,compose-rootless,compose-retag,pkg-pin"},
 	} {
 		f := newFixture(t)
 		for _, p := range tc.files {
@@ -610,7 +610,7 @@ func TestComposeCapability(t *testing.T) {
 func TestStackImageIDAndTag(t *testing.T) {
 	h := newCtrTestHost(t)
 	ctx := context.Background()
-	if caps := strings.Join(h.f.env.Capabilities(), ","); caps != "podman,docker,compose,compose-files,compose-roots,compose-start,compose-archive,compose-rootless,pkg-pin" {
+	if caps := strings.Join(h.f.env.Capabilities(), ","); caps != "podman,docker,compose,compose-files,compose-roots,compose-start,compose-archive,compose-rootless,compose-retag,pkg-pin" {
 		t.Errorf("caps = %s", caps)
 	}
 

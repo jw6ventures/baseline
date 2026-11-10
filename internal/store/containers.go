@@ -416,10 +416,13 @@ type Stack struct {
 	AutoUpdate  bool
 	Pinned      bool
 	SemverRules map[string]registry.Rule // by service
-	Containers  int
-	Running     int
-	Drift       int // containers whose tag moved on
-	Status      string
+	// UpdateGroups are the update groups set on the stack's page, by
+	// service; a container's labels win over them (internal/updategroup).
+	UpdateGroups map[string]UpdateGroup
+	Containers   int
+	Running      int
+	Drift        int // containers whose tag moved on
+	Status       string
 	// Updates: the Standard change model they run under (manual ones too;
 	// auto-update needs one) and the stack's own maintenance window.
 	ModelID    string
@@ -483,7 +486,7 @@ func (st Stack) Startable() (bool, string) {
 }
 
 const stackCols = `s.ci_id, s.host, h.hostname, s.engine, s.project, s.working_dir, s.config_files, s.cli,
-	s.orphaned, s.stopped, s.present, s.auto_update, s.pinned, s.semver_rules::text, ci.status,
+	s.orphaned, s.stopped, s.present, s.auto_update, s.pinned, s.semver_rules::text, s.update_groups::text, ci.status,
 	(SELECT count(*) FROM container c WHERE c.host = s.host AND c.engine = s.engine AND c.compose_project = s.project),
 	(SELECT count(*) FROM container c WHERE c.host = s.host AND c.engine = s.engine AND c.compose_project = s.project
 	   AND c.state = 'running'),
@@ -498,12 +501,15 @@ const stackFrom = ` FROM compose_stack s JOIN host h ON h.ci_id = s.host JOIN ci
 
 func scanStack(row interface{ Scan(...any) error }) (Stack, error) {
 	var st Stack
-	var rules string
+	var rules, groups string
 	err := row.Scan(&st.CIID, &st.HostID, &st.Hostname, &st.Engine, &st.Project, &st.WorkingDir, pq.Array(&st.ConfigFiles),
-		&st.CLI, &st.Orphaned, &st.Stopped, &st.Present, &st.AutoUpdate, &st.Pinned, &rules, &st.Status,
+		&st.CLI, &st.Orphaned, &st.Stopped, &st.Present, &st.AutoUpdate, &st.Pinned, &rules, &groups, &st.Status,
 		&st.Containers, &st.Running, &st.Drift, &st.ModelID, &st.ModelName, &st.ModelState, &st.WindowID, &st.WindowName,
 		&st.Environment, &st.Category, &st.Visibility)
 	if err != nil {
+		return st, err
+	}
+	if err := json.Unmarshal([]byte(groups), &st.UpdateGroups); err != nil {
 		return st, err
 	}
 	return st, json.Unmarshal([]byte(rules), &st.SemverRules)
@@ -634,6 +640,45 @@ func (s *Store) SetSemverRule(ctx context.Context, actor Actor, containerCI stri
 		return appendAudit(ctx, tx, actor, AuditEvent{
 			Action: "container.semver_rule", ObjectType: "container", ObjectID: containerCI,
 			Details: map[string]any{"container": name, "project": project, "service": service, "rule": rule},
+		})
+	})
+}
+
+// UpdateGroup puts a Compose service in an update group: its members
+// update together, lowest Order first (docs/change-management.md §5.3).
+type UpdateGroup struct {
+	Group string `json:"group"`
+	Order int    `json:"order"`
+}
+
+// SetStackUpdateGroup puts a service of a stack in an update group, or
+// takes it out (g nil). Labels on the service's containers win over it.
+func (s *Store) SetStackUpdateGroup(ctx context.Context, actor Actor, stackCI, service string, g *UpdateGroup) error {
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		var project, host string
+		var err error
+		if g != nil {
+			b, merr := json.Marshal(g)
+			if merr != nil {
+				return merr
+			}
+			err = tx.QueryRowContext(ctx, `
+				UPDATE compose_stack SET update_groups = jsonb_set(update_groups, ARRAY[$2::text], $3::jsonb)
+				WHERE ci_id = $1 RETURNING project, host`, stackCI, service, string(b)).Scan(&project, &host)
+		} else {
+			err = tx.QueryRowContext(ctx, `
+				UPDATE compose_stack SET update_groups = update_groups - $2::text
+				WHERE ci_id = $1 RETURNING project, host`, stackCI, service).Scan(&project, &host)
+		}
+		if err != nil {
+			return mapErr(err)
+		}
+		details := map[string]any{"project": project, "host": host, "service": service}
+		if g != nil {
+			details["group"], details["order"] = g.Group, g.Order
+		}
+		return appendAudit(ctx, tx, actor, AuditEvent{
+			Action: "stack.update_group", ObjectType: "compose_stack", ObjectID: stackCI, Details: details,
 		})
 	})
 }

@@ -226,7 +226,7 @@ func (e *Env) Capabilities() []string {
 	// lookup), and install exact package versions.
 	if (contains(caps, "docker") && e.composeCLI("docker") != "") || (contains(caps, "podman") && e.composeCLI("podman") != "") {
 		caps = append(caps, action.CapCompose, action.CapComposeFiles, action.CapComposeRoots, action.CapComposeStart,
-			action.CapComposeArchive, action.CapComposeRootless)
+			action.CapComposeArchive, action.CapComposeRootless, action.CapComposeRetag)
 	}
 	caps = append(caps, action.CapPkgPin)
 	return caps
