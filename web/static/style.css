@@ -821,3 +821,53 @@ main > details.help { margin: -0.5rem 0 1rem; }
 .stack-form .form-part > .inline-form { margin-top: 0; }
 .stack-form .form-part > .checks { margin-bottom: 0; }
 main > details.help p { max-width: 52rem; }
+
+/* Accessibility: focus, contrast and status cues that don't rely on color. -- */
+:root { --control-border: #848c97; }
+@media (prefers-color-scheme: dark) {
+  /* White on the dark theme's lighter accent was 3.2:1; dark text is 5.8:1. */
+  :root { --accent-text: #0f1216; --control-border: #6b7480; }
+}
+
+/* Form controls need a 3:1 edge against the page to be found. */
+input, select, textarea { border-color: var(--control-border); }
+input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
+
+/* One visible keyboard focus ring everywhere; mouse clicks don't show it. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offset: 0; border-color: var(--accent); }
+.side a:focus-visible, .tabs a:focus-visible, .tab-more summary:focus-visible, .cell-menu a:focus-visible, .nav-group summary:focus-visible { outline-offset: -2px; }
+main:focus { outline: none; }
+
+/* Hidden until focused: lets keyboard users jump past the nav. */
+.skip-link {
+  position: absolute; left: 0.5rem; top: -3rem; z-index: 100;
+  padding: 0.4rem 0.8rem; border-radius: var(--radius);
+  background: var(--accent); color: var(--accent-text); text-decoration: none; font-weight: 600;
+}
+.skip-link:focus { top: 0.5rem; }
+
+/* Text for screen readers only. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Status dots: filled for up, hollow ring for down, so they differ in shape too. */
+.dot.off { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
+
+/* Counts that need attention: a ring and bold weight as well as red. Critical is solid. */
+.tabs .count.warn { font-weight: 700; box-shadow: inset 0 0 0 1px currentColor; }
+.tabs .count.warn.crit { background: var(--bad); color: var(--surface); box-shadow: none; }
+
+/* Dimmed content stays readable: muted color (4.5:1+) rather than opacity, which fell to ~2.3:1. */
+tr.dim td, .palette-item.dim, .search-results li.dim { opacity: 1; color: var(--muted); }
+/* A pressed preset reads as pressed by weight and a thicker edge, not only its color. */
+.presets button[aria-pressed="true"] { font-weight: 600; box-shadow: inset 0 0 0 1px var(--accent); }
+.board-card.done { opacity: 1; background: var(--bg); }
+.board-card.done .card-title { color: var(--muted); }
+table.cal td.out .cal-day { opacity: 1; }
+table.cal td.past:not(.today) .cal-item { opacity: 1; filter: saturate(0.4); }
+.rel-graph .node.dim { opacity: 1; }
+.rel-graph .node.dim rect { stroke-dasharray: 3 3; }
+.rel-graph .node.dim text { fill: var(--muted); }

@@ -9,6 +9,7 @@
 {{block "head" .}}{{end}}
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <header class="topbar">
   {{if .Nav}}<button type="button" class="menu-toggle" aria-controls="main-nav" aria-expanded="false" data-nav-toggle hidden>Menu</button>{{end}}
   <a class="brand" href="{{.Base}}/">Baseline</a>
@@ -52,7 +53,7 @@
   </nav>
   <script src="{{.Base}}/static/nav.js" defer></script>
   {{end}}
-  <main>
+  <main id="main" tabindex="-1">
     {{template "content" .}}
   </main>
 </div>

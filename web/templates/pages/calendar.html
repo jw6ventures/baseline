@@ -30,7 +30,7 @@
   <tbody>{{range $v.Weeks}}<tr{{if .Empty}} class="empty"{{end}}>{{range .Days}}
     <td id="{{.ID}}" class="{{if not .InMonth}}out{{end}}{{if .Today}} today{{end}}{{if .Past}} past{{end}}"{{if .Today}} aria-current="date"{{end}}>
       <div class="cal-day">{{if $v.Week}}{{else}}<a href="{{$.Base}}/calendar?week={{.Date}}" title="Week of {{.Label}}">{{.Day}}</a>{{end}}{{if .Today}}{{if not $v.Week}} {{end}}<span class="small">today</span>{{end}}{{if and $v.IsAdmin (not .Past)}}<a class="cal-add" href="{{$.Base}}/windows/new?date={{.Date}}" title="New window on {{.Label}}" aria-label="New window on {{.Label}}">+</a>{{end}}</div>
-      {{range .Entries}}<a class="cal-item {{.Kind}}{{with .Outcome}} {{.}}{{end}}" href="{{$.Base}}{{.Href}}" title="{{.Name}} — {{.Detail}}"><span class="cal-time">{{.Time}}</span> {{.Name}}{{if .Outcome}} <span class="cal-state">({{.Detail}})</span>{{else if $v.Week}} <span class="cal-detail">{{.Detail}}</span>{{end}}</a>{{end}}
+      {{range .Entries}}<a class="cal-item {{.Kind}}{{with .Outcome}} {{.}}{{end}}" href="{{$.Base}}{{.Href}}" title="{{.Name}} — {{.Detail}}"><span class="sr-only">{{if eq .Kind "patch"}}patch run{{else}}{{.Kind}}{{end}}: </span><span class="cal-time">{{.Time}}</span> {{.Name}}{{if .Outcome}} <span class="cal-state">({{.Detail}})</span>{{else if $v.Week}} <span class="cal-detail">{{.Detail}}</span>{{end}}</a>{{end}}
       {{if .More}}<a class="cal-more" href="{{$.Base}}/calendar?week={{.Date}}">+{{.More}} more</a>{{end}}
     </td>{{end}}
   </tr>{{end}}</tbody>
