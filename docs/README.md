@@ -9,6 +9,7 @@ Baseline is a homelab-scale IT configuration management database (CMDB), change-
 | [data-model.md](data-model.md) | Postgres schema: CIs, inventory, metrics, jobs, changes, audit, work items, workflows, boards |
 | [change-management.md](change-management.md) | ITIL-style change lifecycle, maintenance windows, patch groups, Compose updates, RBAC |
 | [lists.md](lists.md) | The list engine: field registry, condition URLs, saved lists, inline edit and bulk actions |
+| [search.md](search.md) | Global search: the Ctrl-K palette, what it finds and how it respects scope |
 | [integrations.md](integrations.md) | Systems read without an agent, from the server or through one: UniFi Network and Protect |
 | [api.md](api.md) | The JSON API at `/api/v1`: tokens, conventions, every endpoint, creating changes |
 | [roadmap.md](roadmap.md) | Milestones, out-of-scope list, resolved questions |
