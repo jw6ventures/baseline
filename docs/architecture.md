@@ -153,6 +153,7 @@ Each row stores the SHA-256 of the previous row's hash plus its own content (a h
   - **uPlot** (single file, no deps) for interactive time-series charts.
 - Sparklines and small charts are **server-rendered SVG** from Go, with no JS.
 - Live job output streams with Server-Sent Events through a few lines of vanilla `EventSource` code.
+- The dashboard and host pages refresh their status in place: `static/live.js` refetches the page every 30 seconds while the tab is visible and swaps the regions marked `data-live`, skipping one the user is focused or selecting in. Polls send `X-Baseline-Live: 1`, so they don't extend the session's idle timeout, and a signed-out poll gets a 401 instead of the sign-in redirect.
 - The CSS is hand-written with custom properties and supports light and dark themes. There's no CSS framework.
 - Every page works without JS, apart from interactive zoom and live tailing.
 

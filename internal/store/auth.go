@@ -86,7 +86,8 @@ func (s *Store) CreateSession(ctx context.Context, ns NewSession) (string, error
 // LookupSession returns the live session for token, or ErrNotFound if it
 // doesn't exist or has expired. A session idle-expires after idle; activity
 // slides that forward (written at most once a minute), never past the
-// absolute expiry.
+// absolute expiry. An idle of zero or less looks the session up without
+// sliding it, for requests the user didn't make (live status polling).
 func (s *Store) LookupSession(ctx context.Context, token string, idle time.Duration) (Session, error) {
 	var ss Session
 	ss.idHash = hashToken(token)
@@ -100,7 +101,7 @@ func (s *Store) LookupSession(ctx context.Context, token string, idle time.Durat
 	if err != nil {
 		return ss, mapErr(err)
 	}
-	if time.Since(ss.LastSeen) > time.Minute {
+	if idle > 0 && time.Since(ss.LastSeen) > time.Minute {
 		now := time.Now()
 		exp := now.Add(idle)
 		if exp.After(ss.AbsoluteExp) {
