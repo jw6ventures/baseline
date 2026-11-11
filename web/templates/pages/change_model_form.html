@@ -5,15 +5,7 @@
 {{$action := print .Base "/change-models/new"}}{{if $v.ID}}{{$action = print .Base "/change-models/" $v.ID "/edit"}}{{end}}
 {{if not $v.Spec.Name}}
 <p class="muted">Pick the action the model pre-approves. Hosts are chosen for each change made from it.</p>
-<div class="cards">
-{{range $v.Actions}}
-  <a class="card" href="{{$action}}?action={{.Name}}">
-    <span class="badge">{{.Risk}} risk</span>
-    <strong>{{.Label}}</strong>
-    <span class="mono">{{.Name}}</span>
-  </a>
-{{end}}
-</div>
+{{template "action-picker" (dict "Groups" $v.ActionGroups "Href" $action)}}
 {{else if and (eq $v.Spec.Name "script.run") (not $v.Script)}}
 {{template "script-chooser" (dict "Base" .Base "V" $v "Action" $action)}}
 {{else}}

@@ -588,3 +588,29 @@ func TestCheckComposeRoot(t *testing.T) {
 		t.Error("an edit took a root")
 	}
 }
+
+func TestByTarget(t *testing.T) {
+	var all []Spec
+	for _, n := range Names {
+		all = append(all, MustGet(n))
+	}
+	groups := ByTarget(all)
+	var labels []string
+	n := 0
+	for _, g := range groups {
+		labels = append(labels, g.Label)
+		n += len(g.Specs)
+	}
+	if want := []string{"Hosts", "Containers", "Compose stacks", "Kubernetes"}; !slices.Equal(labels, want) {
+		t.Fatalf("groups = %v, want %v", labels, want)
+	}
+	if n != len(all) {
+		t.Fatalf("grouped %d of %d actions: a category has no target", n, len(all))
+	}
+	if g := groups[0]; g.Specs[0].Name != PkgUpgrade || !slices.ContainsFunc(g.Specs, func(s Spec) bool { return s.Name == HostReboot }) {
+		t.Fatalf("Hosts group: %+v", g.Specs)
+	}
+	if got := ByTarget([]Spec{MustGet(ServiceRestart)}); len(got) != 1 || got[0].Label != "Hosts" {
+		t.Fatalf("empty groups kept: %+v", got)
+	}
+}
