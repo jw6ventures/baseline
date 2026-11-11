@@ -15,6 +15,13 @@
 // Ticked rows always show. [data-picker-all] ticks every row shown and
 // [data-picker-count] says how many are ticked. The filters start hidden
 // and are shown here.
+//
+// [data-presets=NAME] holds buttons whose data-value fills the field NAME
+// of its form; the button matching the field's value is pressed. The
+// presets start hidden and are shown here.
+//
+// [data-preview="NAME ..."] is a server-made preview of those fields; once
+// any of them changes, its [data-stale] note shows until the form is saved.
 (function () {
   "use strict";
 
@@ -41,6 +48,45 @@
     }
     sel.addEventListener("change", apply);
     apply();
+  });
+
+  document.querySelectorAll("[data-presets]").forEach(function (box) {
+    var form = box.closest("form");
+    var field = form && form.elements[box.dataset.presets];
+    if (!field) return;
+    var buttons = box.querySelectorAll("button[data-value]");
+    function mark() {
+      var v = field.value.trim().split(/\s+/).join(" ");
+      buttons.forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.value === v ? "true" : "false"); });
+    }
+    buttons.forEach(function (b) {
+      b.addEventListener("click", function () {
+        field.value = b.dataset.value;
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+        field.focus();
+      });
+    });
+    field.addEventListener("input", mark);
+    box.hidden = false;
+    mark();
+  });
+
+  document.querySelectorAll("[data-preview]").forEach(function (preview) {
+    var form = preview.closest("form");
+    var note = preview.querySelector("[data-stale]");
+    if (!form || !note) return;
+    var fields = preview.dataset.preview.split(/\s+/).map(function (n) { return form.elements[n]; }).filter(Boolean);
+    var start = fields.map(function (f) { return f.value; });
+    function check() {
+      var changed = fields.some(function (f, i) { return f.value !== start[i]; });
+      note.hidden = !changed;
+      preview.classList.toggle("stale", changed);
+    }
+    fields.forEach(function (f) {
+      f.addEventListener("input", check);
+      f.addEventListener("change", check);
+    });
   });
 
   document.querySelectorAll("[data-picker]").forEach(function (picker) {
