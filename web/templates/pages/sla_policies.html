@@ -16,7 +16,7 @@
       <td>{{with .TypeName}}{{.}}{{else}}<span class="muted">any</span>{{end}}</td>
       {{range $v.Priorities}}<td class="nowrap small">{{with mins ($p.Targets.Target . "response")}}respond {{.}}{{end}}{{with mins ($p.Targets.Target . "resolution")}}<br>resolve {{.}}{{end}}</td>{{end}}
       <td class="num">{{.Running}}</td>
-      <td class="actions"><a class="button small" href="{{$.Base}}/settings/slas?edit={{.ID}}">Edit</a>
+      <td class="actions"><a class="button small secondary" href="{{$.Base}}/settings/slas?edit={{.ID}}">Edit</a>
         <form class="inline" method="post" action="{{$.Base}}/settings/slas/{{.ID}}/delete"><button class="small danger">Delete</button></form></td>
     </tr>{{else}}<tr><td colspan="{{add 5 (len $v.Priorities)}}" class="muted">No policies yet: work items get no SLA clocks.</td></tr>{{end}}</tbody>
   </table></div>

@@ -65,7 +65,7 @@ var hostTable = &list.Table{
 	},
 	Fields: []list.Field{
 		{Key: "name", Label: "Host", Type: list.Text, Expr: `COALESCE(NULLIF(h.hostname, ''), ci.name)`,
-			LinkExpr: `'/hosts/' || h.ci_id`, Search: true, Class: "strong"},
+			LinkExpr: `'/hosts/' || h.ci_id`, Search: true, Class: "nowrap strong"},
 		{Key: "fqdn", Label: "FQDN", Type: list.Text, Expr: `h.fqdn`, Search: true},
 		{Key: "status", Label: "Status", Type: list.Enum, Badge: "host",
 			Expr:    `CASE WHEN h.revoked THEN 'revoked' WHEN h.connected THEN 'online' ELSE 'offline' END`,

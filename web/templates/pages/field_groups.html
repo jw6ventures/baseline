@@ -13,7 +13,7 @@
       <td><strong>{{.Name}}</strong>{{with .Description}}<br><span class="muted small">{{.}}</span>{{end}}</td>
       <td class="small">{{range $i, $f := .Fields}}{{if $i}}, {{end}}{{$f.Label}}{{if $f.Required}}*{{end}}{{else}}<span class="muted">none</span>{{end}}</td>
       <td class="num">{{.Uses}}</td>
-      <td class="actions"><a class="button small" href="{{$.Base}}/settings/field-groups/{{.ID}}">Edit</a></td>
+      <td class="actions"><a class="button small secondary" href="{{$.Base}}/settings/field-groups/{{.ID}}">Edit</a></td>
     </tr>{{else}}<tr><td colspan="4" class="muted">No field groups yet.</td></tr>{{end}}</tbody>
   </table></div>
   <p class="muted small">* required</p>

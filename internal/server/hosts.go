@@ -173,12 +173,25 @@ var hostTabs = []string{"overview", "hardware", "packages", "updates", "vulnerab
 var tabLabels = map[string]string{"vms": "VMs"}
 
 // hostTab is a tab of a host's page. Its related lists have their own
-// paths (hostLists); the other tabs are ?tab=.
-type hostTab struct{ Key, Label, URL string }
+// paths (hostLists); the other tabs are ?tab=. More tabs are tucked into
+// the "More" menu so the row fits on one line.
+type hostTab struct {
+	Key, Label, URL string
+	More            bool
+}
+
+// moreTabs go under "More": they're visited less than the inventory ones.
+var moreTabs = map[string]bool{"jobs": true, "history": true, "settings": true}
+
+// sectionTabs show only once the agent has reported their section.
+var sectionTabs = map[string]string{
+	"services": model.SectionServices, "ports": model.SectionPorts, "certificates": model.SectionCerts,
+}
 
 // tabsFor lists the tabs a host's page has: a cluster agent is no machine,
-// the VMs and Kubernetes tabs only appear on hypervisors and nodes, and
-// Stacks only on hosts that run Compose stacks.
+// the VMs and Kubernetes tabs only appear on hypervisors and nodes, Stacks
+// only on hosts that run Compose stacks, and tabs for sections the agent
+// never reported (services, ports, certificates, containers) are left out.
 func tabsFor(h store.Host, sections []string, node, stacks bool) []hostTab {
 	var out []hostTab
 	for _, t := range hostTabs {
@@ -191,6 +204,10 @@ func tabsFor(h store.Host, sections []string, node, stacks bool) []hostTab {
 			continue
 		case t == "stacks" && !stacks:
 			continue
+		case t == "containers" && h.Containers == 0 && !stacks && !slices.Contains(sections, model.SectionContainers):
+			continue
+		case sectionTabs[t] != "" && !slices.Contains(sections, sectionTabs[t]):
+			continue
 		}
 		label := tabLabels[t]
 		if label == "" {
@@ -200,7 +217,7 @@ func tabsFor(h store.Host, sections []string, node, stacks bool) []hostTab {
 		if _, ok := hostLists[t]; ok {
 			u = "/hosts/" + h.ID + "/" + t
 		}
-		out = append(out, hostTab{t, label, u})
+		out = append(out, hostTab{Key: t, Label: label, URL: u, More: moreTabs[t]})
 	}
 	return out
 }

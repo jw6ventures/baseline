@@ -173,7 +173,7 @@ var updateHostTable = &list.Table{
 	},
 	Fields: []list.Field{
 		{Key: "name", Label: "Host", Type: list.Text, Expr: `COALESCE(NULLIF(h.hostname, ''), ci.name)`,
-			LinkExpr: `'/hosts/' || h.ci_id || '?tab=updates'`, Search: true, Class: "strong"},
+			LinkExpr: `'/hosts/' || h.ci_id || '?tab=updates'`, Search: true, Class: "nowrap strong"},
 		{Key: "status", Label: "Status", Type: list.Enum, Badge: "host",
 			Expr: `CASE WHEN h.connected THEN 'online' ELSE 'offline' END`, Options: opts("online", "offline")},
 		{Key: "os", Label: "OS", Type: list.Text, Expr: `h.os_pretty`, Search: true},

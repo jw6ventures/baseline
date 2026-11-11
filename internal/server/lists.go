@@ -253,6 +253,9 @@ type listView struct {
 	SelectForm string
 	Excluded   map[string]bool
 	AllTicked  bool
+	// HiddenEmpty names default columns left out because no row on the
+	// page has a value in them.
+	HiddenEmpty []string
 }
 
 type headerCell struct {
@@ -441,6 +444,9 @@ func (s *Server) buildTableList(w http.ResponseWriter, r *http.Request, t *list.
 			prevGroup = key
 		}
 		v.Rows = append(v.Rows, rv)
+	}
+	if slices.Equal(q.Cols, t.Default.Cols) {
+		v.hideEmptyColumns(q)
 	}
 	if n := len(res.Rows); n > 0 {
 		v.From = (max(q.Page, 1)-1)*list.PageSize + 1
@@ -1140,4 +1146,50 @@ func (s *Server) listBulk(w http.ResponseWriter, r *http.Request) {
 		msg += fmt.Sprintf(" Skipped %d that can't be changed here.", skipped)
 	}
 	done("notice", msg)
+}
+
+// hideEmptyColumns drops the columns no row on the page has a value in,
+// so a default list doesn't spend its width on blank columns. It only runs
+// on the table's default columns: one the viewer picked stays. The first
+// column, the sorted one and an editable one always stay.
+func (v *listView) hideEmptyColumns(q list.Query) {
+	if len(v.Rows) == 0 || len(v.Header) < 2 {
+		return
+	}
+	keep := make([]bool, len(v.Header))
+	keep[0] = true
+	for j := range v.Header {
+		if v.Header[j].Sorted {
+			keep[j] = true
+		}
+	}
+	for _, r := range v.Rows {
+		for j, c := range r.Cells {
+			if c.Text != "" || c.Raw != "" || len(c.Tags) > 0 || c.Edit != "" || c.Field.Key == q.Sort.Field {
+				keep[j] = true
+			}
+		}
+	}
+	var hdr []headerCell
+	for j, h := range v.Header {
+		if keep[j] {
+			hdr = append(hdr, h)
+		} else {
+			v.HiddenEmpty = append(v.HiddenEmpty, h.Label)
+		}
+	}
+	if len(v.HiddenEmpty) == 0 {
+		return
+	}
+	v.Header = hdr
+	v.Colspan -= len(v.HiddenEmpty)
+	for i := range v.Rows {
+		var cells []cellView
+		for j, c := range v.Rows[i].Cells {
+			if keep[j] {
+				cells = append(cells, c)
+			}
+		}
+		v.Rows[i].Cells = cells
+	}
 }

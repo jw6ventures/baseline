@@ -89,7 +89,7 @@
     <td>{{.Latest.Namespace}}</td>
     <td class="mono small">{{with .Current}}{{range .Objects}}{{.}}<br>{{end}}{{else}}<span class="muted">not applied yet</span>{{end}}</td>
     <td>{{with .Current}}<a href="{{$.Base}}/changes/{{.ChangeID}}">{{.ChangeRef}}</a> <span class="muted small">{{ago .CreatedAt}}</span>{{else}}<a href="{{$.Base}}/changes/{{.Latest.ChangeID}}">{{.Latest.ChangeRef}}</a> <span class="muted small">{{.Latest.ChangeState}}</span>{{end}}</td>
-    <td>{{if and $v.CanDeploy (not $v.DeployBlock) .Current (not .Pending)}}<a class="button small" href="{{$.Base}}/changes/new?action=k8s.edit&amp;cluster={{$c.CIID}}&amp;bundle={{.Latest.Bundle}}">Edit…</a>{{end}}</td>
+    <td>{{if and $v.CanDeploy (not $v.DeployBlock) .Current (not .Pending)}}<a class="button small secondary" href="{{$.Base}}/changes/new?action=k8s.edit&amp;cluster={{$c.CIID}}&amp;bundle={{.Latest.Bundle}}">Edit…</a>{{end}}</td>
   </tr>
   {{else}}<tr><td colspan="5" class="muted">Baseline hasn't applied any manifests to this cluster.</td></tr>{{end}}
   </tbody>

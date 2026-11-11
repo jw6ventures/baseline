@@ -11,7 +11,7 @@
     <h2>{{if eq $m.Kind "workflow"}}Migrate {{$m.From}} to {{$m.To}}{{else}}Move {{$m.From}} items to {{$m.To}}{{end}} {{template "migration-state" $m}}</h2>
     <p class="muted sub">{{if $m.Draft}}Drafted {{time $m.CreatedAt}}{{if $p.Target.ID}}. Items go to {{$p.Target.WorkflowName}} v{{$p.Target.Version}}{{end}}.{{else}}Started {{time $m.StartedAt}}{{with $m.ToVersion}}, onto {{$m.ToVersionWorkflow}} v{{.}}{{end}}.{{end}}</p>
   </div>
-  <div><a class="button" href="{{.Base}}/settings/migrations">All migrations</a></div>
+  <div><a class="button secondary" href="{{.Base}}/settings/migrations">All migrations</a></div>
 </div>
 
 {{if $m.Draft}}

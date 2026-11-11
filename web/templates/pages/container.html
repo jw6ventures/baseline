@@ -6,9 +6,9 @@
     <p class="muted sub">{{template "ctr-state" $c}} · on <a href="{{.Base}}/hosts/{{$c.HostID}}/containers">{{$c.Hostname}}</a> ({{$c.Engine}}){{with $v.Stack}} · stack <a href="{{$.Base}}/stacks/{{.CIID}}">{{.Project}}</a>{{if $c.ComposeService}}, service {{$c.ComposeService}}{{end}}{{end}}</p>
   </div>
   <div>
-    {{if $c.CanEdit}}<a class="button" href="{{.Base}}/containers/{{$c.CIID}}/logs">Logs</a>{{end}}
+    {{if $c.CanEdit}}<a class="button secondary" href="{{.Base}}/containers/{{$c.CIID}}/logs">Logs</a>{{end}}
     {{if and $c.CanEdit $c.HostConnected}}<a class="button" href="{{.Base}}/changes/new?action=container.restart&amp;container={{$c.CIID}}">Restart…</a>{{end}}
-    <a class="button" href="{{.Base}}/cis/{{$c.CIID}}">CI and relationships</a>
+    <a class="button secondary" href="{{.Base}}/cis/{{$c.CIID}}">CI and relationships</a>
   </div>
 </div>
 {{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
@@ -34,7 +34,7 @@
         {{with $c.CheckError}}<br><span class="bad-text">Last check failed: {{.}}</span>{{end}}
         <br><span class="muted small">checked {{ago $c.CheckedAt}}</span>
       {{end}}
-      {{if and $c.CanEdit $c.CheckRef}}<form class="inline" method="post" action="{{.Base}}/containers/{{$c.CIID}}/check"><button class="small">Check now</button></form>{{end}}
+      {{if and $c.CanEdit $c.CheckRef}}<form class="inline" method="post" action="{{.Base}}/containers/{{$c.CIID}}/check"><button class="small secondary">Check now</button></form>{{end}}
     </dd>
   </dl>
 </section>
@@ -69,12 +69,12 @@
   <h2>Runtime</h2>
   <dl class="facts">
     <dt>State</dt><dd>{{template "ctr-state" $c}}</dd>
-    <dt>Started</dt><dd>{{ts $c.StartedAt}}</dd>
-    <dt>Created</dt><dd>{{ts $c.Created}}</dd>
-    <dt>Restart policy</dt><dd>{{$c.RestartPolicy}}</dd>
+    {{$started := ts $c.StartedAt}}{{if ne $started "—"}}<dt>Started</dt><dd>{{$started}}</dd>{{end}}
+    {{$created := ts $c.Created}}{{if ne $created "—"}}<dt>Created</dt><dd>{{$created}}</dd>{{end}}
+    {{with $c.RestartPolicy}}<dt>Restart policy</dt><dd>{{.}}</dd>{{end}}
     <dt>Engine ID</dt><dd class="mono small">{{short $c.ID 12}}</dd>
     {{with $c.Pod}}<dt>Pod</dt><dd>{{.}}</dd>{{end}}
-    <dt>Networks</dt><dd>{{range $c.Networks}}<span class="tag">{{.}}</span> {{else}}—{{end}}</dd>
+    {{with $c.Networks}}<dt>Networks</dt><dd>{{range .}}<span class="tag">{{.}}</span> {{end}}</dd>{{end}}
   </dl>
 </section>
 <section class="panel">
@@ -88,10 +88,12 @@
 {{template "served-hostnames" dict "Base" .Base "Hostnames" $v.Hostnames}}
 
 <h2>Mounts</h2>
+{{with $c.Mounts}}
 <div class="table-wrap"><table>
   <thead><tr><th>Destination</th><th>Type</th><th>Source</th><th>Mode</th></tr></thead>
-  <tbody>{{range $c.Mounts}}<tr><td class="mono">{{.Destination}}</td><td>{{.Type}}</td><td class="mono small">{{.Source}}</td><td>{{if .RW}}rw{{else}}ro{{end}}</td></tr>{{else}}<tr><td colspan="4" class="muted">None.</td></tr>{{end}}</tbody>
+  <tbody>{{range .}}<tr><td class="mono">{{.Destination}}</td><td>{{.Type}}</td><td class="mono small">{{.Source}}</td><td>{{if .RW}}rw{{else}}ro{{end}}</td></tr>{{end}}</tbody>
 </table></div>
+{{else}}<p class="muted">None.</p>{{end}}
 
 {{with $c.Labels}}
 <details class="panel"><summary><strong>Labels ({{len .}})</strong></summary>

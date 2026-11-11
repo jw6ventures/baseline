@@ -7,7 +7,7 @@
   </div>
   <div>
     {{if $v.CanRun}}<a class="button" href="{{.Base}}/changes/new?action=script.run&amp;script={{$s.ID}}&amp;version={{$s.Latest}}">Run…</a>{{end}}
-    {{if $v.IsAdmin}}<a class="button" href="{{.Base}}/scripts/{{$s.ID}}/edit">New version</a>{{end}}
+    {{if $v.IsAdmin}}<a class="button secondary" href="{{.Base}}/scripts/{{$s.ID}}/edit">New version</a>{{end}}
   </div>
 </div>
 {{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}

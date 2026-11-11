@@ -1,34 +1,46 @@
 {{define "content"}}
 <h1>Dashboard</h1>
+<section class="stat-group" aria-labelledby="dash-fleet">
+<h2 id="dash-fleet" class="stat-head">Fleet</h2>
 <div class="stats">
   <a class="stat" href="{{.Base}}/hosts"><span class="n">{{.Body.Fleet.Total}}</span><span>hosts</span></a>
-  <a class="stat" href="{{.Base}}/hosts"><span class="n ok">{{.Body.Fleet.Online}}</span><span>online</span></a>
-  <a class="stat" href="{{.Base}}/hosts"><span class="n{{if .Body.Fleet.Offline}} bad{{end}}">{{.Body.Fleet.Offline}}</span><span>offline</span></a>
+  <a class="stat" href="{{.Base}}/hosts?cf=status&amp;co=eq&amp;cv=online"><span class="n{{if .Body.Fleet.Online}} ok{{end}}">{{.Body.Fleet.Online}}</span><span>online</span></a>
+  <a class="stat{{if not .Body.Fleet.Offline}} zero{{end}}" href="{{.Base}}/hosts?cf=status&amp;co=eq&amp;cv=offline"><span class="n{{if .Body.Fleet.Offline}} bad{{end}}">{{.Body.Fleet.Offline}}</span><span>offline</span></a>
   {{if .Body.Fleet.Duplicate}}<a class="stat" href="{{.Base}}/hosts"><span class="n bad">{{.Body.Fleet.Duplicate}}</span><span>duplicate identities</span></a>{{end}}
-</div>
-<div class="stats">
-  {{with .Body.Alerts}}<a class="stat" href="{{$.Base}}/alerts"><span class="n{{if .Critical}} bad{{else if .Warning}} caution{{else}} ok{{end}}">{{add .Critical (add .Warning .Info)}}</span><span>alerts firing{{if .Critical}} ({{.Critical}} critical){{end}}</span></a>{{end}}
-  <a class="stat" href="{{.Base}}/vulnerabilities"><span class="n{{if .Body.FixableSevere}} bad{{else if .Body.Fixable}} caution{{end}}">{{.Body.Fixable}}</span><span>fixable CVEs{{if .Body.FixableSevere}} ({{.Body.FixableSevere}} high or critical){{end}}</span></a>
-  <a class="stat" href="{{.Base}}/vulnerabilities?view=hosts"><span class="n">{{.Body.HostsFixable}}</span><span>hosts to patch for them</span></a>
-  <a class="stat" href="{{.Base}}/vulnerabilities?fixable=0"><span class="n">{{.Body.Vulns}}</span><span>known CVEs, fixed or not</span></a>
-</div>
-<div class="stats">
-  <a class="stat" href="{{.Base}}/updates"><span class="n">{{.Body.HostsWithUpdates}}</span><span>hosts with updates</span></a>
-  <a class="stat" href="{{.Base}}/updates/packages"><span class="n">{{.Body.Updates}}</span><span>pending updates</span></a>
-  <a class="stat" href="{{.Base}}/updates?security=1"><span class="n{{if .Body.SecurityUpdates}} bad{{end}}">{{.Body.SecurityUpdates}}</span><span>security updates</span></a>
-  <span class="stat"><span class="n{{if .Body.DisksFailing}} bad{{end}}">{{.Body.DisksFailing}}</span><span>failing drives</span></span>
+  {{if .Body.RebootRequired}}<a class="stat" href="{{.Base}}/hosts?cf=flags&amp;co=has&amp;cv=reboot+required"><span class="n caution">{{.Body.RebootRequired}}</span><span>hosts need a reboot</span></a>{{end}}
+  <span class="stat{{if not .Body.FailedServices}} zero{{end}}"><span class="n{{if .Body.FailedServices}} bad{{end}}">{{.Body.FailedServices}}</span><span>failed services</span></span>
+  <span class="stat{{if not .Body.DisksFailing}} zero{{end}}"><span class="n{{if .Body.DisksFailing}} bad{{end}}">{{.Body.DisksFailing}}</span><span>failing drives</span></span>
   {{if .Body.DisksDegrading}}<span class="stat"><span class="n caution">{{.Body.DisksDegrading}}</span><span>degrading drives</span></span>{{end}}
-  {{if .Body.RebootRequired}}<a class="stat" href="{{.Base}}/hosts"><span class="n caution">{{.Body.RebootRequired}}</span><span>hosts need a reboot</span></a>{{end}}
   {{if and .Body.IsAdmin .Body.AgentsOutdated}}<a class="stat" href="{{.Base}}/settings/agents"><span class="n">{{.Body.AgentsOutdated}}</span><span>agents to update</span></a>{{end}}
 </div>
+</section>
+<section class="stat-group" aria-labelledby="dash-security">
+<h2 id="dash-security" class="stat-head">Alerts and security</h2>
 <div class="stats">
-  <a class="stat" href="{{.Base}}/containers"><span class="n">{{.Body.Containers}}</span><span>containers</span></a>
-  <a class="stat" href="{{.Base}}/containers?show=updates"><span class="n{{if .Body.ContainerUpdates}} caution{{end}}">{{.Body.ContainerUpdates}}</span><span>newer images</span></a>
-  {{if .Body.Guests}}<a class="stat" href="{{.Base}}/vms"><span class="n">{{.Body.GuestsRunning}}<span class="of"> / {{.Body.Guests}}</span></span><span>VMs and LXC running</span></a>{{end}}
-  {{if .Body.Clusters}}<a class="stat" href="{{.Base}}/kubernetes"><span class="n{{if .Body.NodesNotReady}} bad{{end}}">{{.Body.NodesNotReady}}</span><span>Kubernetes nodes not ready</span></a>{{end}}
-  <span class="stat"><span class="n{{if .Body.FailedServices}} bad{{end}}">{{.Body.FailedServices}}</span><span>failed services</span></span>
-  <span class="stat"><span class="n{{if .Body.Expiring}} bad{{end}}">{{len .Body.Expiring}}</span><span>certificates expiring in 30 days</span></span>
+  {{with .Body.Alerts}}{{$n := add .Critical (add .Warning .Info)}}<a class="stat{{if not $n}} zero{{end}}" href="{{$.Base}}/alerts"><span class="n{{if .Critical}} bad{{else if .Warning}} caution{{end}}">{{$n}}</span><span>alerts firing{{if .Critical}} ({{.Critical}} critical){{end}}</span></a>{{end}}
+  <a class="stat{{if not .Body.Fixable}} zero{{end}}" href="{{.Base}}/vulnerabilities"><span class="n{{if .Body.FixableSevere}} bad{{else if .Body.Fixable}} caution{{end}}">{{.Body.Fixable}}</span><span>fixable CVEs{{if .Body.FixableSevere}} ({{.Body.FixableSevere}} high or critical){{end}}</span></a>
+  <a class="stat{{if not .Body.HostsFixable}} zero{{end}}" href="{{.Base}}/vulnerabilities?view=hosts"><span class="n">{{.Body.HostsFixable}}</span><span>hosts to patch for them</span></a>
+  <a class="stat{{if not .Body.Vulns}} zero{{end}}" href="{{.Base}}/vulnerabilities?fixable=0"><span class="n">{{.Body.Vulns}}</span><span>known CVEs, fixed or not</span></a>
+  <span class="stat{{if not .Body.Expiring}} zero{{end}}"><span class="n{{if .Body.Expiring}} bad{{end}}">{{len .Body.Expiring}}</span><span>certificates expiring in 30 days</span></span>
 </div>
+</section>
+<section class="stat-group" aria-labelledby="dash-patching">
+<h2 id="dash-patching" class="stat-head">Patching</h2>
+<div class="stats">
+  <a class="stat{{if not .Body.SecurityUpdates}} zero{{end}}" href="{{.Base}}/updates?security=1"><span class="n{{if .Body.SecurityUpdates}} bad{{end}}">{{.Body.SecurityUpdates}}</span><span>security updates</span></a>
+  <a class="stat{{if not .Body.Updates}} zero{{end}}" href="{{.Base}}/updates/packages"><span class="n">{{.Body.Updates}}</span><span>pending updates</span></a>
+  <a class="stat{{if not .Body.HostsWithUpdates}} zero{{end}}" href="{{.Base}}/updates"><span class="n">{{.Body.HostsWithUpdates}}</span><span>hosts with updates</span></a>
+</div>
+</section>
+<section class="stat-group" aria-labelledby="dash-workloads">
+<h2 id="dash-workloads" class="stat-head">Workloads</h2>
+<div class="stats">
+  <a class="stat{{if not .Body.Containers}} zero{{end}}" href="{{.Base}}/containers"><span class="n">{{.Body.Containers}}</span><span>containers</span></a>
+  <a class="stat{{if not .Body.ContainerUpdates}} zero{{end}}" href="{{.Base}}/containers?show=updates"><span class="n{{if .Body.ContainerUpdates}} caution{{end}}">{{.Body.ContainerUpdates}}</span><span>newer images</span></a>
+  {{if .Body.Guests}}<a class="stat" href="{{.Base}}/vms"><span class="n">{{.Body.GuestsRunning}}<span class="of"> / {{.Body.Guests}}</span></span><span>VMs and LXC running</span></a>{{end}}
+  {{if .Body.Clusters}}<a class="stat{{if not .Body.NodesNotReady}} zero{{end}}" href="{{.Base}}/kubernetes"><span class="n{{if .Body.NodesNotReady}} bad{{end}}">{{.Body.NodesNotReady}}</span><span>Kubernetes nodes not ready</span></a>{{end}}
+</div>
+</section>
 {{with .Body.Attention}}
 <h2>Needs attention</h2>
 <div class="table-wrap"><table>
@@ -53,6 +65,7 @@
 </table></div>
 {{end}}
 {{with .Body.Changes}}{{if or .AwaitingApproval .InProgress .Scheduled .AwaitingReview}}
+<h2>Changes</h2>
 <div class="stats">
   <a class="stat" href="{{$.Base}}/changes?show=approval"><span class="n{{if .AwaitingApproval}} caution{{end}}">{{.AwaitingApproval}}</span><span>changes awaiting approval</span></a>
   <a class="stat" href="{{$.Base}}/calendar"><span class="n">{{.Scheduled}}</span><span>changes scheduled</span></a>

@@ -101,7 +101,10 @@ not lists, and stay as they were.
   blank group to start an OR. Breadcrumbs above the table remove one
   condition each.
 - **Columns, sort, group-by:** the column picker, header links that sort,
-  and group rows with counts.
+  and group rows with counts. On the table's default columns, a column no
+  row on the page has a value in is left out and named under the table;
+  columns picked in the column picker always show.
+- **Quick search:** the search box filters as you type, after a short pause.
 - **Show matching / filter out:** clicking a cell (or a tag in it) offers
   both; they add the condition to every group.
 - **Saved lists:** personal, or shared with everyone by an operator. Only

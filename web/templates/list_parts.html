@@ -24,12 +24,12 @@
 <form class="list-tools" method="get" action="{{$b}}{{.Path}}">
   <input type="hidden" name="sort" value="{{if .Query.Sort.Desc}}-{{end}}{{.Query.Sort.Field}}">
   <div class="list-bar">
-    <input type="search" name="q" value="{{.Query.Search}}" placeholder="Search {{lower .Table.Label}}" aria-label="Search">
+    <input type="search" name="q" id="list-search-{{.Table.Key}}" value="{{.Query.Search}}" data-sent="{{.Query.Search}}" placeholder="Search {{lower .Table.Label}}" aria-label="Search" data-live-search autocomplete="off">
     <label class="list-group">Group by <select name="group" data-autosubmit>
       <option value="">nothing</option>
       {{range .GroupFields}}<option value="{{.Key}}"{{if eq .Key $v.Query.GroupBy}} selected{{end}}>{{.Label}}</option>{{end}}
     </select></label>
-    <button class="small">Search</button>
+    <button class="small secondary">Search</button>
   </div>
 
   <details class="list-builder"{{if .Problems}} open{{end}}>
@@ -51,7 +51,7 @@
     <fieldset class="checks">
       {{range .Columns}}<label class="check"><input type="checkbox" name="cols" value="{{.Key}}"{{if .On}} checked{{end}}> {{.Label}}</label>{{end}}
     </fieldset>
-    <button class="small">Apply</button>
+    <button class="small secondary">Apply</button>
   </details>
 </form>
 
@@ -85,7 +85,7 @@
   <span class="muted small">With selected:</span>
   <select name="action" aria-label="Action" data-bulk-action>{{range .Actions}}<option value="{{.Key}}">{{.Label}}</option>{{end}}</select>
   <select name="value" aria-label="Value">{{range .Actions}}{{$a := .}}<optgroup label="{{.Label}}" data-action="{{.Key}}">{{range .Options}}<option value="{{.Value}}">{{.Label}}</option>{{end}}</optgroup>{{end}}</select>
-  <button class="small">Apply</button>
+  <button class="small secondary">Apply</button>
 </form>
 {{end}}
 
@@ -110,7 +110,7 @@
   {{end}}
   </tbody>
 </table></div>
-<p class="list-pager muted small">{{if .Total}}{{.From}}–{{.To}} of {{.Total}}{{end}}{{with .Prev}} · <a href="{{$b}}{{.}}">Previous</a>{{end}}{{with .Next}} · <a href="{{$b}}{{.}}">Next</a>{{end}}</p>
+<p class="list-pager muted small">{{if .Total}}{{.From}}–{{.To}} of {{.Total}}{{end}}{{with .Prev}} · <a href="{{$b}}{{.}}">Previous</a>{{end}}{{with .Next}} · <a href="{{$b}}{{.}}">Next</a>{{end}}{{with .HiddenEmpty}} · <span title="No row on this page has a value in these columns.">Empty here, so hidden: {{join . ", "}}</span>{{end}}</p>
 </div>
 {{end}}
 
@@ -146,7 +146,7 @@
 {{- else if eq .Field.Badge "change"}}<span class="tag {{changeClass .Raw}}">{{.Text}}</span>
 {{- else if eq .Field.Badge "kind"}}{{template "change-kind" .Raw}}
 {{- else if eq .Field.Badge "ci"}}{{template "ci-status" .Raw}}
-{{- else if eq .Field.Badge "host"}}<span class="dot {{if eq .Raw "online"}}on{{else}}off{{end}}"></span>{{.Text}}
+{{- else if eq .Field.Badge "host"}}<span class="nowrap"><span class="dot {{if eq .Raw "online"}}on{{else}}off{{end}}"></span>{{.Text}}</span>
 {{- else if eq .Field.Badge "item-status"}}{{template "item-status" .Raw}}
 {{- else if eq .Field.Badge "item-priority"}}{{template "item-priority" .Raw}}
 {{- else if eq .Field.Badge "action"}}{{human .Text}}

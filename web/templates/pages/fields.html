@@ -14,7 +14,7 @@
       <td><strong>{{.Label}}</strong>{{with .Description}}<br><span class="muted small">{{.}}</span>{{end}}</td>
       <td class="mono">{{.Key}}</td><td>{{fieldType .Type}}</td>
       <td class="small">{{join .Options ", "}}</td><td class="num">{{.Groups}}</td>
-      <td class="actions"><a class="button small" href="{{$.Base}}/settings/fields?edit={{.ID}}">Edit</a>
+      <td class="actions"><a class="button small secondary" href="{{$.Base}}/settings/fields?edit={{.ID}}">Edit</a>
         {{if not .Groups}}<form class="inline" method="post" action="{{$.Base}}/settings/fields/{{.ID}}/delete"><button class="small danger">Delete</button></form>{{end}}</td>
     </tr>{{else}}<tr><td colspan="6" class="muted">No custom fields yet.</td></tr>{{end}}</tbody>
   </table></div>

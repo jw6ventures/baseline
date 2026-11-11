@@ -7,7 +7,7 @@
   </div>
   <div>
   {{with $v.Link}}<a class="button" href="{{$.Base}}{{.}}">Open {{$c.TypeLabel | lower}} page</a>{{end}}
-  {{if and $v.CanEdit $c.Manual}}<a class="button" href="{{$.Base}}/cis/{{$c.ID}}/edit">Edit</a>{{end}}
+  {{if and $v.CanEdit $c.Manual}}<a class="button secondary" href="{{$.Base}}/cis/{{$c.ID}}/edit">Edit</a>{{end}}
   </div>
 </div>
 {{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
