@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html/template"
 	"net/http"
 	"net/url"
 	"slices"
@@ -354,6 +355,11 @@ type windowFormView struct {
 	PatchGroups  []string // that use it (edit)
 	DisplayTZ    string
 	ExampleZones []string
+	// Prefill describes the calendar day the form was opened from, and
+	// PrefillAlt is the query for the other way to repeat on it.
+	Prefill      string
+	PrefillAlt   template.URL
+	PrefillAltIs string
 }
 
 var exampleZones = []string{"UTC", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
@@ -391,8 +397,40 @@ func (s *Server) fillWindowForm(ctx context.Context, v *windowFormView, scope []
 func (s *Server) windowNew(w http.ResponseWriter, r *http.Request) {
 	v := windowFormView{New: true, Kind: store.WindowKindWindow, Cron: "0 2 * * SUN", Duration: "3h",
 		TZ: s.cfg.Location.String(), Active: true}
-	if r.URL.Query().Get("kind") == store.WindowKindFreeze {
+	q := r.URL.Query()
+	if q.Get("kind") == store.WindowKindFreeze {
 		v.Kind, v.Cron, v.Duration = store.WindowKindFreeze, "0 0 20 12 *", "14d"
+	}
+	if ds := q.Get("date"); ds != "" {
+		// Opened from a day on the calendar: open that day, at 02:00 for a
+		// window or all day for a freeze. Cron has no year, so the choice
+		// is between that date every year and that weekday every week.
+		d, err := time.ParseInLocation("2006-01-02", ds, s.cfg.Location)
+		if err != nil || d.Year() < 2000 || d.Year() > 2200 {
+			s.errorPage(w, r, http.StatusBadRequest, "Give the date as YYYY-MM-DD.")
+			return
+		}
+		at, dur := "0 2", "3h"
+		if v.Kind == store.WindowKindFreeze {
+			at, dur = "0 0", "1d"
+		}
+		day := strings.ToUpper(d.Format("Mon"))
+		alt := url.Values{"date": {ds}}
+		if v.Kind == store.WindowKindFreeze {
+			alt.Set("kind", v.Kind)
+		}
+		if q.Get("repeat") == "weekly" {
+			v.Cron = at + " * * " + day
+			v.Prefill = "Prefilled from the calendar to open every " + d.Format("Monday") + ", starting " + d.Format("Mon 2 Jan 2006") + "."
+			v.PrefillAltIs = "Open on " + d.Format("2 January") + " only"
+		} else {
+			v.Cron = fmt.Sprintf("%s %d %d *", at, d.Day(), int(d.Month()))
+			v.Prefill = "Prefilled from the calendar to open on " + d.Format("Mon 2 Jan 2006") +
+				". Cron has no year, so it opens again on " + d.Format("2 January") + " each year: delete it or untick Active once it's past."
+			alt.Set("repeat", "weekly")
+			v.PrefillAltIs = "Repeat every " + d.Format("Monday") + " instead"
+		}
+		v.Duration, v.PrefillAlt = dur, template.URL(alt.Encode()) // a parsed date and fixed words
 	}
 	if err := s.fillWindowForm(r.Context(), &v, nil); err != nil {
 		s.serverError(w, r, err)
@@ -563,6 +601,8 @@ type calEntry struct {
 
 type calDay struct {
 	ID      string // "d-2026-10-13"
+	Date    string // "2026-10-13"
+	Label   string // "Tue 13 Oct"
 	Day     int
 	InMonth bool
 	Today   bool
@@ -571,19 +611,31 @@ type calDay struct {
 	More    int
 }
 
+// calWeek is a row of the grid. Empty rows are drawn short, so a quiet
+// month doesn't fill the screen with blank cells.
+type calWeek struct {
+	Days  []calDay
+	Empty bool
+}
+
 type upcomingItem struct {
 	calItem
 	When string
 }
 
 type calendarView struct {
-	Month     string // "October 2026"
-	Prev      string // "2026-09"
-	Next      string
-	This      string
+	Week      bool         // the week view, rather than the month
+	Title     string       // "October 2026", "Week of Mon 12 Oct 2026"
+	Prev      template.URL // query for the previous month or week: "month=2026-09"
+	Next      template.URL
+	This      template.URL // query for the current month or week
 	IsCurrent bool
+	MonthQ    template.URL // query for the month view around what's shown
+	WeekQ     template.URL // query for the week view around what's shown
 	Weekdays  []string
-	Weeks     [][]calDay
+	Weeks     []calWeek
+	Empty     bool // nothing at all in the month or week shown
+	IsAdmin   bool
 	Upcoming  []upcomingItem
 	DisplayTZ string
 }
@@ -686,54 +738,87 @@ func (s *Server) calendarItems(ctx context.Context, g rbac.Grants, from, to, now
 func (s *Server) calendar(w http.ResponseWriter, r *http.Request) {
 	loc := s.cfg.Location
 	now := time.Now().In(loc)
-	this := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
-	first := this
-	if m := r.URL.Query().Get("month"); m != "" {
-		t, err := time.ParseInLocation("2006-01", m, loc)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	thisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
+	thisWeek := mondayOf(today)
+	q := r.URL.Query()
+	g := principal(r).Grants
+	v := calendarView{Weekdays: []string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"},
+		IsAdmin: g.Has(rbac.Admin), DisplayTZ: loc.String()}
+
+	// start and end bound the days drawn; in marks the days that belong to
+	// what's shown (the month, or every day of a week).
+	var start, end time.Time
+	in := func(time.Time) bool { return true }
+	limit := perDay
+	if wk := q.Get("week"); wk != "" {
+		t, err := time.ParseInLocation("2006-01-02", wk, loc)
 		if err != nil || t.Year() < 2000 || t.Year() > 2200 {
-			s.errorPage(w, r, http.StatusBadRequest, "Give the month as YYYY-MM, such as "+now.Format("2006-01")+".")
+			s.errorPage(w, r, http.StatusBadRequest, "Give the week as a date, YYYY-MM-DD, such as "+today.Format("2006-01-02")+".")
 			return
 		}
-		first = t
+		start = mondayOf(t)
+		end = start.AddDate(0, 0, 7)
+		limit = 0 // a week has room for everything
+		v.Week, v.Title, v.IsCurrent = true, "Week of "+start.Format("Mon 2 Jan 2006"), start.Equal(thisWeek)
+		v.Prev, v.Next, v.This = weekQ(start.AddDate(0, 0, -7)), weekQ(end), weekQ(thisWeek)
+		v.WeekQ = weekQ(start)
+		v.MonthQ = monthQ(start)
+	} else {
+		first := thisMonth
+		if m := q.Get("month"); m != "" {
+			t, err := time.ParseInLocation("2006-01", m, loc)
+			if err != nil || t.Year() < 2000 || t.Year() > 2200 {
+				s.errorPage(w, r, http.StatusBadRequest, "Give the month as YYYY-MM, such as "+now.Format("2006-01")+".")
+				return
+			}
+			first = t
+		}
+		// Weeks run Monday to Sunday.
+		start = mondayOf(first)
+		end = mondayOf(first.AddDate(0, 1, -1)).AddDate(0, 0, 7)
+		in = func(d time.Time) bool { return d.Month() == first.Month() }
+		v.Title, v.IsCurrent = first.Format("January 2006"), first.Equal(thisMonth)
+		v.Prev, v.Next, v.This = monthQ(first.AddDate(0, -1, 0)), monthQ(first.AddDate(0, 1, 0)), monthQ(thisMonth)
+		v.MonthQ = monthQ(first)
+		v.WeekQ = weekQ(first)
+		if v.IsCurrent {
+			v.WeekQ = weekQ(thisWeek)
+		}
 	}
-	// Weeks run Monday to Sunday.
-	start := first.AddDate(0, 0, -((int(first.Weekday()) + 6) % 7))
-	last := first.AddDate(0, 1, -1)
-	end := last.AddDate(0, 0, 7-((int(last.Weekday())+6)%7))
 
-	g := principal(r).Grants
 	items, err := s.calendarItems(r.Context(), g, start, end, now)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	v := calendarView{
-		Month: first.Format("January 2006"), Prev: first.AddDate(0, -1, 0).Format("2006-01"),
-		Next: first.AddDate(0, 1, 0).Format("2006-01"), This: this.Format("2006-01"), IsCurrent: first.Equal(this),
-		Weekdays:  []string{"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"},
-		DisplayTZ: loc.String(),
-	}
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
-	var week []calDay
+	v.Empty = true
+	week := calWeek{Empty: true}
 	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
 		next := d.AddDate(0, 0, 1)
-		day := calDay{ID: "d-" + d.Format("2006-01-02"), Day: d.Day(), InMonth: d.Month() == first.Month(),
-			Today: d.Equal(today), Past: d.Before(today)}
+		day := calDay{ID: "d-" + d.Format("2006-01-02"), Date: d.Format("2006-01-02"), Label: d.Format("Mon 2 Jan"),
+			Day: d.Day(), InMonth: in(d), Today: d.Equal(today), Past: d.Before(today)}
 		for _, it := range items {
 			label, ok := dayLabel(it, d, next, loc)
 			if !ok {
 				continue
 			}
-			if len(day.Entries) == perDay {
+			if limit > 0 && len(day.Entries) == limit {
 				day.More++
 				continue
 			}
 			day.Entries = append(day.Entries, calEntry{calItem: it, Time: label})
 		}
-		week = append(week, day)
-		if len(week) == 7 {
+		if len(day.Entries) > 0 {
+			week.Empty = false
+			if day.InMonth {
+				v.Empty = false
+			}
+		}
+		week.Days = append(week.Days, day)
+		if len(week.Days) == 7 {
 			v.Weeks = append(v.Weeks, week)
-			week = nil
+			week = calWeek{Empty: true}
 		}
 	}
 
@@ -754,6 +839,19 @@ func (s *Server) calendar(w http.ResponseWriter, r *http.Request) {
 	}
 	s.pages.render(w, http.StatusOK, "calendar", s.data(r, "Calendar", v))
 }
+
+// mondayOf is the Monday on or before d, at midnight.
+func mondayOf(d time.Time) time.Time {
+	d = time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location())
+	return d.AddDate(0, 0, -((int(d.Weekday()) + 6) % 7))
+}
+
+// weekQ is the query for the week view of the week holding d. The
+// queries here are built from formatted dates, so they're safe to put in
+// a link as they are.
+func weekQ(d time.Time) template.URL { return template.URL("week=" + mondayOf(d).Format("2006-01-02")) }
+
+func monthQ(d time.Time) template.URL { return template.URL("month=" + d.Format("2006-01")) }
 
 // changeOutcome sorts a finished change's state for the calendar: "ok",
 // "bad", or "" while it hasn't finished.

@@ -53,6 +53,24 @@ func TestWindowsUI(t *testing.T) {
 		t.Fatalf("new window form: %d\n%s", resp.StatusCode, body)
 	}
 
+	// From a day on the calendar: that date, or that weekday every week.
+	_, body = h.do(admin, "GET", "/windows/new?date=2030-03-12", nil)
+	if !strings.Contains(body, `value="0 2 12 3 *"`) || !strings.Contains(body, "Tue 12 Mar 2030") ||
+		!strings.Contains(body, "date=2030-03-12&amp;repeat=weekly") {
+		t.Fatalf("new window from a date:\n%s", body)
+	}
+	_, body = h.do(admin, "GET", "/windows/new?date=2030-03-12&repeat=weekly", nil)
+	if !strings.Contains(body, `value="0 2 * * TUE"`) || !strings.Contains(body, "every Tuesday") {
+		t.Fatalf("weekly window from a date:\n%s", body)
+	}
+	_, body = h.do(admin, "GET", "/windows/new?date=2030-03-12&kind=freeze", nil)
+	if !strings.Contains(body, `value="0 0 12 3 *"`) || !strings.Contains(body, `value="1d"`) {
+		t.Fatalf("freeze from a date:\n%s", body)
+	}
+	if resp, _ := h.do(admin, "GET", "/windows/new?date=March", nil); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("bad date: %d", resp.StatusCode)
+	}
+
 	form := url.Values{"name": {"sunday nights"}, "kind": {"window"}, "cron": {"0 2 * * SUN"}, "duration": {"3h"},
 		"tz": {"America/Chicago"}, "scope": {prod.ID}, "active": {"1"}}
 	for field, bad := range map[string]string{"cron": "61 2 * * *", "tz": "Mars/Olympus", "duration": "3x"} {
@@ -244,6 +262,53 @@ func TestCalendarUI(t *testing.T) {
 	_, body = h.do(mv, "GET", "/calendar?month="+nextMonth.Format("2006-01"), nil)
 	if strings.Contains(body, c.Ref()) || !strings.Contains(body, "nightly") {
 		t.Fatalf("scoped viewer's calendar:\n%s", body)
+	}
+	if strings.Contains(body, "/windows/new?date=") {
+		t.Fatalf("viewer offered a new window:\n%s", body)
+	}
+
+	// Admins get a + on today and later days, not on past ones.
+	_, body = h.do(admin, "GET", "/calendar?month="+nextMonth.Format("2006-01"), nil)
+	if !strings.Contains(body, `href="/windows/new?date=`+nextMonth.Format("2006-01-02")+`"`) {
+		t.Fatalf("no + on a future day:\n%s", body)
+	}
+	_, body = h.do(admin, "GET", "/calendar?month="+lastMonth.Format("2006-01"), nil)
+	if strings.Contains(body, `/windows/new?date=`+lastMonth.Format("2006-01-02")) {
+		t.Fatalf("+ on a past day")
+	}
+
+	// The week view shows the week from Monday, every item with its
+	// details, and links back to its month.
+	d2 := nextMonth.AddDate(0, 0, 1)
+	monday := mondayOf(d2)
+	resp, body = h.do(admin, "GET", "/calendar?week="+d2.Format("2006-01-02"), nil)
+	if resp.StatusCode != 200 || !strings.Contains(body, "Week of "+monday.Format("Mon 2 Jan 2006")) ||
+		!strings.Contains(body, `class="cal week"`) || !strings.Contains(body, "month="+monday.Format("2006-01")) ||
+		!strings.Contains(body, "week="+monday.AddDate(0, 0, 7).Format("2006-01-02")) {
+		t.Fatalf("week view: %d\n%s", resp.StatusCode, body)
+	}
+	wd2 := regexp.MustCompile(`(?s)id="d-` + d2.Format("2006-01-02") + `".*?</td>`).FindString(body)
+	if !strings.Contains(wd2, "prod-patching") || !strings.Contains(wd2, `class="cal-detail">patch group: `) {
+		t.Fatalf("week view day:\n%s", wd2)
+	}
+	if n := strings.Count(body, `<td id="d-`); n != 7 {
+		t.Fatalf("week view has %d days", n)
+	}
+	if resp, _ := h.do(admin, "GET", "/calendar?week=soon", nil); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("bad week: %d", resp.StatusCode)
+	}
+}
+
+func TestCalendarEmpty(t *testing.T) {
+	h := newHarness(t)
+	admin := h.signIn("ann", "lab-admins")
+	_, body := h.do(admin, "GET", "/calendar", nil)
+	if !strings.Contains(body, "Nothing is scheduled in") || strings.Count(body, `<tr class="empty">`) < 4 {
+		t.Fatalf("empty month:\n%s", body)
+	}
+	_, body = h.do(admin, "GET", "/calendar?"+string(weekQ(time.Now())), nil)
+	if !strings.Contains(body, "Nothing is scheduled this week") {
+		t.Fatalf("empty week:\n%s", body)
 	}
 }
 
