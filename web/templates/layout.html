@@ -10,6 +10,7 @@
 </head>
 <body>
 <header class="topbar">
+  {{if .Nav}}<button type="button" class="menu-toggle" aria-controls="main-nav" aria-expanded="false" data-nav-toggle hidden>Menu</button>{{end}}
   <a class="brand" href="{{.Base}}/">Baseline</a>
   {{with .User}}
   <div class="who">
@@ -20,7 +21,7 @@
 </header>
 <div class="shell{{if not .Nav}} bare{{end}}">
   {{if .Nav}}
-  <nav class="side" aria-label="Main" data-nav>
+  <nav class="side" id="main-nav" aria-label="Main" data-nav>
     <input type="search" class="nav-filter" placeholder="Filter" aria-label="Filter navigation" data-nav-filter hidden>
     {{range .Nav}}
     {{if .Label}}

@@ -141,13 +141,31 @@ td.actions form.inline { display: inline; }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; }
 
+/* The menu button (nav.js) shows only on narrow screens, where the side
+   nav folds away behind it. Without JS the nav stays open above the page. */
+.topbar .menu-toggle { display: none; }
+.all-cols { display: none; }
 @media (max-width: 760px) {
   .shell { grid-template-columns: 1fr; }
   .side { border-right: 0; border-bottom: 1px solid var(--border); }
-  .side ul { display: flex; flex-wrap: wrap; }
-  .side a, .nav-group a { border-left: 0; border-bottom: 2px solid transparent; padding: 0.3rem 0.6rem; }
-  .side a[aria-current="page"] { border-bottom-color: var(--accent); }
+  .topbar { gap: 0.75rem; }
+  .topbar .brand { margin-right: auto; }
+  .topbar .menu-toggle:not([hidden]) {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: transparent; color: var(--text);
+    border: 1px solid var(--border); padding: 0.3rem 0.7rem;
+  }
+  .topbar .menu-toggle::before { content: "\2630"; font-size: 1.05em; line-height: 1; }
+  .topbar .menu-toggle[aria-expanded="true"]::before { content: "\2715"; }
+  .side.collapsible:not(.open) { display: none; }
+  .side a { padding: 0.55rem 1rem; }
+  .nav-group summary { padding: 0.6rem 1rem 0.35rem; }
   main { padding: 1rem; }
+
+  /* List tables keep their first three columns; the rest come back with
+     the "Show all columns" box above the table. */
+  .all-cols { display: inline-flex; flex-direction: row; align-items: center; gap: 0.35rem; margin: 0 0 0.5rem; font-size: 0.85rem; color: var(--muted); }
+  .list:not(:has([data-all-cols]:checked)) .list-table .opt { display: none; }
 }
 
 /* M1: hosts, enrollment ---------------------------------------------------- */
