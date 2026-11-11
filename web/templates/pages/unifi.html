@@ -19,7 +19,7 @@
         {{with .LastError}}<br><span class="bad">{{.}}</span>{{end}}
         {{range .NoteLines}}<br><span class="muted">{{.}}</span>{{end}}</td>
       <td class="actions"><form class="inline" method="post" action="{{$.Base}}/settings/unifi/{{.ID}}/poll"><button class="small">Poll now</button></form>
-        <a class="button small" href="{{$.Base}}/settings/unifi/{{.ID}}">Edit</a>
+        <a class="button small secondary" href="{{$.Base}}/settings/unifi/{{.ID}}">Edit</a>
         <form class="inline" method="post" action="{{$.Base}}/settings/unifi/{{.ID}}/delete"><button class="small danger">Remove</button></form></td>
     </tr>{{else}}<tr><td colspan="5" class="muted">No consoles yet.</td></tr>{{end}}</tbody>
   </table></div>

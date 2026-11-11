@@ -88,7 +88,7 @@
       <td>{{rules .PostFunctions}}</td>
       <td>{{rules .Screen}}</td>
       {{if $draft}}<td class="actions">
-        <a class="button small" href="{{$.Base}}/settings/workflows/{{$f.ID}}/transitions/{{.ID}}">Edit</a>
+        <a class="button small secondary" href="{{$.Base}}/settings/workflows/{{$f.ID}}/transitions/{{.ID}}">Edit</a>
         <form class="inline" method="post" action="{{$.Base}}/settings/workflows/{{$f.ID}}/transitions/{{.ID}}/delete"><button class="small danger">Delete</button></form>
       </td>{{end}}
     </tr>{{else}}<tr><td colspan="8" class="muted">No transitions yet.</td></tr>{{end}}</tbody>
@@ -105,7 +105,7 @@
       <td><a href="{{$.Base}}/settings/workflows/{{$f.ID}}?v={{.ID}}">v{{.Version}}</a></td>
       <td>{{.State}}</td><td class="num">{{.Items}}</td>
       <td>{{if .PublishedAt.IsZero}}<span class="muted">not yet</span>{{else}}{{time .PublishedAt}}{{end}}</td>
-      <td class="actions">{{if and .Items (eq .State "published")}}<a class="button small" href="{{$.Base}}/settings/migrations?from_version={{.ID}}">Migrate items</a>{{end}}</td>
+      <td class="actions">{{if and .Items (eq .State "published")}}<a class="button small secondary" href="{{$.Base}}/settings/migrations?from_version={{.ID}}">Migrate items</a>{{end}}</td>
     </tr>{{end}}</tbody>
   </table></div>
   <p class="muted small">Used by: {{range $i, $u := $v.Projects}}{{if $i}}, {{end}}<a href="{{$.Base}}/projects/{{$u.ProjectKey}}">{{$u.ProjectKey}}</a> {{$u.TypeName}}{{else}}no project yet{{end}}.</p>

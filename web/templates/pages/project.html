@@ -7,7 +7,7 @@
   </div>
   <div>
     {{if not $p.Archived}}<a class="button" href="{{.Base}}/work/new?project={{$p.Key}}">New work item</a>{{end}}
-    {{if $v.CanEdit}}<a class="button" href="{{.Base}}/projects/{{$p.Key}}/edit">Edit</a>{{end}}
+    {{if $v.CanEdit}}<a class="button secondary" href="{{.Base}}/projects/{{$p.Key}}/edit">Edit</a>{{end}}
   </div>
 </div>
 {{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}

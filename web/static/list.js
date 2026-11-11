@@ -158,6 +158,20 @@
     value.hidden = value.disabled = !first;
   }
 
+  // Quick search: the list follows the box as you type, after a short
+  // pause. The box keeps its id so htmx gives it focus back after the swap.
+  var searchTimer = null;
+  document.addEventListener("input", function (e) {
+    var t = e.target;
+    if (!t.matches("[data-live-search]") || !t.form) return;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () {
+      if (t.value === t.dataset.sent) return;
+      t.dataset.sent = t.value;
+      t.form.requestSubmit();
+    }, 350);
+  });
+
   function init(root) {
     root.querySelectorAll(".cond-row").forEach(function (row) {
       var field = row.querySelector("[data-cond-field]");

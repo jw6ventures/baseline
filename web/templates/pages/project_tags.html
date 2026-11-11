@@ -14,7 +14,7 @@
       <td><span class="tag"{{with .Color}} style="{{chipStyle .}}"{{end}}>{{.Name}}</span></td>
       <td class="small">{{.Description}}</td>
       <td class="num"><a href="{{$.Base}}/projects?cf=tags&amp;co=has&amp;cv={{.Name}}">{{.Projects}}</a></td>
-      <td class="actions"><a class="button small" href="{{$.Base}}/settings/project-tags?edit={{.ID}}">Edit</a> <form class="inline" method="post" action="{{$.Base}}/settings/project-tags/{{.ID}}/delete"><button class="danger small">Delete</button></form></td>
+      <td class="actions"><a class="button small secondary" href="{{$.Base}}/settings/project-tags?edit={{.ID}}">Edit</a> <form class="inline" method="post" action="{{$.Base}}/settings/project-tags/{{.ID}}/delete"><button class="danger small">Delete</button></form></td>
     </tr>{{else}}<tr><td colspan="4" class="muted">No tags yet.</td></tr>{{end}}</tbody>
   </table></div>
 </section>

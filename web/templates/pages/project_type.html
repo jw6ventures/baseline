@@ -29,7 +29,7 @@
     <tbody>{{range $v.Layouts}}<tr>
       <td>{{title .Screen}}{{if eq .Screen "create"}} <span class="muted small">(also editing)</span>{{end}}</td>
       <td>{{if .Own}}This project's own{{if .Shared}}, also used for view{{end}}{{else}}<span class="muted">The ticket type's default</span>{{end}}</td>
-      <td class="actions"><a class="button small" href="{{$.Base}}/projects/{{$p.Key}}/types/{{$t.Key}}/layouts/{{.Screen}}">Edit</a></td>
+      <td class="actions"><a class="button small secondary" href="{{$.Base}}/projects/{{$p.Key}}/types/{{$t.Key}}/layouts/{{.Screen}}">Edit</a></td>
     </tr>{{end}}</tbody>
   </table></div>
 </section>

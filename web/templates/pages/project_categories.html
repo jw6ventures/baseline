@@ -14,7 +14,7 @@
       <td style="padding-left: {{.Depth}}.5rem">{{if .Depth}}<span class="muted">↳</span> {{end}}<span class="tag"{{with .ShownColor}} style="{{chipStyle .}}"{{end}}>{{.Name}}</span>{{if and (not .Color) .ShownColor}} <span class="muted small">(inherited color)</span>{{end}}</td>
       <td class="small">{{.Description}}</td>
       <td class="num"><a href="{{$.Base}}/projects?cf=category&amp;co=eq&amp;cv={{.ID}}">{{.Projects}}</a></td>
-      <td class="actions"><a class="button small" href="{{$.Base}}/settings/project-categories?parent={{.ID}}">Add subcategory</a> <a class="button small" href="{{$.Base}}/settings/project-categories?edit={{.ID}}">Edit</a>{{if not .Children}} <form class="inline" method="post" action="{{$.Base}}/settings/project-categories/{{.ID}}/delete"><button class="danger small">Delete</button></form>{{end}}</td>
+      <td class="actions"><a class="button small secondary" href="{{$.Base}}/settings/project-categories?parent={{.ID}}">Add subcategory</a> <a class="button small secondary" href="{{$.Base}}/settings/project-categories?edit={{.ID}}">Edit</a>{{if not .Children}} <form class="inline" method="post" action="{{$.Base}}/settings/project-categories/{{.ID}}/delete"><button class="danger small">Delete</button></form>{{end}}</td>
     </tr>{{else}}<tr><td colspan="4" class="muted">No categories yet.</td></tr>{{end}}</tbody>
   </table></div>
 </section>

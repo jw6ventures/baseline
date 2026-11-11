@@ -14,7 +14,7 @@
     <tbody>{{range $v.Types}}<tr>
       <td><strong>{{with .Icon}}{{.}} {{end}}{{.Name}}</strong>{{with .Description}}<br><span class="muted small">{{.}}</span>{{end}}</td>
       <td class="mono">{{.Key}}</td><td>{{.BaseKind}}</td><td class="num">{{.Projects}}</td>
-      <td class="actions"><a class="button small" href="{{$.Base}}/settings/ticket-types/{{.ID}}/layouts/create">Create layout</a> <a class="button small" href="{{$.Base}}/settings/ticket-types/{{.ID}}/layouts/view">View layout</a> <a class="button small" href="{{$.Base}}/settings/ticket-types?edit={{.ID}}">Edit</a></td>
+      <td class="actions"><a class="button small secondary" href="{{$.Base}}/settings/ticket-types/{{.ID}}/layouts/create">Create layout</a> <a class="button small" href="{{$.Base}}/settings/ticket-types/{{.ID}}/layouts/view">View layout</a> <a class="button small secondary" href="{{$.Base}}/settings/ticket-types?edit={{.ID}}">Edit</a></td>
     </tr>{{end}}</tbody>
   </table></div>
 </section>

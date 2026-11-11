@@ -8,7 +8,7 @@
   </div>
   <div>
     {{if $v.CanRun}}<form method="post" action="{{.Base}}/patch-groups/{{$g.ID}}/run"><button>Run now</button></form>{{end}}
-    {{if $v.IsAdmin}}<a class="button" href="{{.Base}}/patch-groups/{{$g.ID}}/edit">Edit</a>{{end}}
+    {{if $v.IsAdmin}}<a class="button secondary" href="{{.Base}}/patch-groups/{{$g.ID}}/edit">Edit</a>{{end}}
   </div>
 </div>
 {{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}

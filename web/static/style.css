@@ -102,7 +102,9 @@ th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var
 th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 tr:last-child td { border-bottom: 0; }
 td.num { text-align: right; color: var(--muted); }
-td.nowrap { white-space: nowrap; }
+td.nowrap, .nowrap { white-space: nowrap; }
+/* A header takes the label font even when its column's cells are mono. */
+th.mono { font-family: var(--font); font-size: 0.8rem; }
 td.actions { text-align: right; }
 td.actions form { margin: 0; }
 td.actions form.inline { display: inline; }
@@ -388,7 +390,8 @@ a.cal-item:hover { text-decoration: underline; }
 
 /* M5: change forms and pages */
 button.secondary, .button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
-.titlebar .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.titlebar .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.titlebar .actions form { margin: 0; }
 dd.pre, p.pre { white-space: pre-wrap; }
 details.sub summary { cursor: pointer; color: var(--muted); }
 details.sub[open] { display: grid; gap: 0.75rem; }
@@ -641,3 +644,31 @@ progress.migration { width: 100%; max-width: 36rem; height: 0.9rem; }
 .map-pop p { margin: 0; }
 .map-pop-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .map-pop label.check { flex-direction: row; align-items: center; gap: 0.35rem; color: var(--text); }
+
+/* Host tabs: the less-visited ones sit under "More". */
+.tab-more { position: relative; margin-bottom: -1px; }
+.tab-more summary {
+  list-style: none; cursor: pointer; padding: 0.45rem 0.9rem;
+  color: var(--muted); border-bottom: 2px solid transparent;
+}
+.tab-more summary::-webkit-details-marker { display: none; }
+.tab-more summary::after { content: " ▾"; font-size: 0.75em; }
+.tab-more summary[aria-current="page"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.tab-more ul {
+  position: absolute; right: 0; z-index: 10; min-width: 9rem;
+  list-style: none; margin: 0.25rem 0 0; padding: 0.25rem 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+}
+.tabs .tab-more ul a { display: block; padding: 0.35rem 0.9rem; border: 0; margin: 0; color: var(--text); }
+.tabs .tab-more ul a:hover { background: var(--bg); }
+.tabs .tab-more ul a[aria-current="page"] { font-weight: 600; }
+
+/* Dashboard: tiles grouped under small headings; a zero recedes. */
+.stat-group + .stat-group .stat-head { margin-top: 1.25rem; }
+.stat-head {
+  margin: 0 0 0.5rem; font-size: 0.8rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted);
+}
+.stat-group .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); }
+.stat.zero .n { color: var(--muted); font-weight: 400; }

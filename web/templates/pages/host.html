@@ -12,7 +12,7 @@
     <p class="muted sub">{{template "status" $h}}{{if $h.HighSecurity}} <span class="tag" title="Hardware changes alert until acknowledged">high security</span>{{end}}{{with $h.OSPretty}} · {{.}}{{end}}{{with $h.FQDN}} · {{.}}{{end}}</p>
   </div>
   {{if and .Body.CanRefresh (not $h.Revoked)}}
-  <form method="post" action="{{.Base}}/hosts/{{$h.ID}}/refresh"><button{{if not .Body.Online}} disabled title="The agent isn't connected"{{end}}>Refresh inventory</button></form>
+  <form method="post" action="{{.Base}}/hosts/{{$h.ID}}/refresh"><button class="secondary"{{if not .Body.Online}} disabled title="The agent isn't connected"{{end}}>Refresh inventory</button></form>
   {{end}}
 </div>
 {{with .Body.Notice}}<p class="notice ok">{{.}}</p>{{end}}
@@ -21,7 +21,7 @@
 {{if $h.Revoked}}<p class="notice bad">This host is revoked: its agent can't connect. Its history is kept here; re-enrolling the machine creates a new host record.</p>{{end}}
 
 <nav class="tabs" aria-label="Host sections">
-{{range .Body.Tabs}}{{$t := .Key}}
+{{range .Body.Tabs}}{{if not .More}}{{$t := .Key}}
   <a href="{{$.Base}}{{.URL}}"{{if eq $.Body.Tab $t}} aria-current="page"{{end}}>{{.Label}}
     {{- if and (eq $t "updates") $h.Updates}} <span class="count{{if $h.SecurityUpdates}} warn{{end}}">{{$h.Updates}}</span>{{end}}
     {{- if and (eq $t "vulnerabilities") $h.FixableVulns}} <span class="count warn" title="fixed by pending updates">{{$h.FixableVulns}}</span>{{end}}
@@ -29,6 +29,13 @@
     {{- if and (eq $t "services") $h.FailedServices}} <span class="count warn" title="failed">{{$h.FailedServices}}</span>{{end}}
     {{- if and (eq $t "certificates") $h.CertsExpiring}} <span class="count warn" title="expiring within 30 days">{{$h.CertsExpiring}}</span>{{end}}
     {{- if and (eq $t "jobs") $h.OpenJobs}} <span class="count" title="queued or running">{{$h.OpenJobs}}</span>{{end}}</a>
+{{end}}{{end}}
+{{$more := false}}{{$cur := ""}}{{range .Body.Tabs}}{{if .More}}{{$more = true}}{{if eq $.Body.Tab .Key}}{{$cur = .Label}}{{end}}{{end}}{{end}}
+{{if $more}}
+  <details class="tab-more">
+    <summary{{if $cur}} aria-current="page"{{end}}>{{if $cur}}{{$cur}}{{else}}More{{end}}{{if $h.OpenJobs}} <span class="count" title="open jobs">{{$h.OpenJobs}}</span>{{end}}</summary>
+    <ul>{{range .Body.Tabs}}{{if .More}}<li><a href="{{$.Base}}{{.URL}}"{{if eq $.Body.Tab .Key}} aria-current="page"{{end}}>{{.Label}}{{if and (eq .Key "jobs") $h.OpenJobs}} <span class="count">{{$h.OpenJobs}}</span>{{end}}</a></li>{{end}}{{end}}</ul>
+  </details>
 {{end}}
 </nav>
 
@@ -75,15 +82,15 @@
     {{with .Image}}
     <dt>Image</dt><dd><code class="wrap">{{.Origin}}</code><br>version {{.Version}}{{with .Staged}}<br><span class="tag warn">staged {{.Version}}, reboot to apply</span>{{end}}</dd>
     {{end}}
-    <dt>Kernel</dt><dd class="mono">{{.Kernel}} ({{.Arch}})</dd>
-    <dt>Timezone</dt><dd>{{.Timezone}}</dd>
+    {{with .Kernel}}<dt>Kernel</dt><dd class="mono">{{.}}{{with $.Body.OS.Arch}} ({{.}}){{end}}</dd>{{end}}
+    {{with .Timezone}}<dt>Timezone</dt><dd>{{.}}</dd>{{end}}
   {{else}}
     <dt>OS</dt><dd class="muted">No inventory received yet.</dd>
   {{end}}
   {{with .Body.Hardware}}
-    <dt>Machine</dt><dd>{{.System.Vendor}} {{.System.Product}}{{with .System.Chassis}} <span class="muted">· {{.}}</span>{{end}}</dd>
-    <dt>Virtualization</dt><dd>{{if eq .Virtualization "none"}}bare metal{{else}}{{.Virtualization}}{{end}}{{with $.Body.Guest}}<br><a href="{{$.Base}}/vms/{{.CIID}}">{{if eq .Kind "lxc"}}LXC container{{else}}VM{{end}} {{.Name}}</a> on <a href="{{$.Base}}/hosts/{{.HostID}}/vms">{{.Hostname}}</a>{{if not .Present}} <span class="muted">(no longer reported)</span>{{end}}{{end}}</dd>
-    <dt>CPU</dt><dd>{{.CPU.Model}}<br><span class="muted">{{.CPU.Sockets}} socket(s), {{.CPU.Cores}} cores, {{.CPU.Threads}} threads</span></dd>
+    {{if or .System.Vendor .System.Product}}<dt>Machine</dt><dd>{{.System.Vendor}} {{.System.Product}}{{with .System.Chassis}} <span class="muted">· {{.}}</span>{{end}}</dd>{{end}}
+    {{if or .Virtualization $.Body.Guest}}<dt>Virtualization</dt><dd>{{if eq .Virtualization "none"}}bare metal{{else}}{{.Virtualization}}{{end}}{{with $.Body.Guest}}<br><a href="{{$.Base}}/vms/{{.CIID}}">{{if eq .Kind "lxc"}}LXC container{{else}}VM{{end}} {{.Name}}</a> on <a href="{{$.Base}}/hosts/{{.HostID}}/vms">{{.Hostname}}</a>{{if not .Present}} <span class="muted">(no longer reported)</span>{{end}}{{end}}</dd>{{end}}
+    <dt>CPU</dt><dd>{{.CPU.Model}}<br><span class="muted">{{with .CPU.Sockets}}{{plural . "socket"}}, {{end}}{{.CPU.Cores}} cores, {{.CPU.Threads}} threads</span></dd>
     <dt>Memory</dt><dd>{{bytes .Memory.TotalBytes}}</dd>
     <dt>Disks</dt><dd>{{len .Disks}}</dd>
   {{end}}
@@ -129,9 +136,9 @@
     <dt>Certificate</dt><dd>valid until {{time $h.CertNotAfter}}</dd>
     {{if not $h.ClusterAgent}}
     <dt>Machine ID</dt><dd class="mono">{{$h.MachineID}}</dd>
-    <dt>DMI UUID</dt><dd class="mono">{{$h.DMIUUID}}</dd>
+    {{with $h.DMIUUID}}<dt>DMI UUID</dt><dd class="mono">{{.}}</dd>{{end}}
     {{end}}
-    <dt>Capabilities</dt><dd>{{range $h.Capabilities}}<span class="tag">{{.}}</span> {{end}}</dd>
+    {{with $h.Capabilities}}<dt>Capabilities</dt><dd>{{range .}}<span class="tag">{{.}}</span> {{end}}</dd>{{end}}
     {{if not $h.ClusterAgent}}<dt>Local policy</dt><dd>{{template "policy" $h.Policy}}</dd>{{end}}
   </dl>
 </section>
@@ -247,12 +254,12 @@
 {{$h := .Body.Host}}
 <div class="titlebar">
   <p class="muted">{{if .Body.UpdatesAt.IsZero}}Not checked yet.{{else}}Checked {{time .Body.UpdatesAt}} ({{ago .Body.UpdatesAt}}).{{end}} The agent refreshes repository metadata and checks every 6 hours.</p>
-  <div>
+  <div class="actions">
   {{if and .Body.CanRefresh (not $h.Revoked)}}
-  <form method="post" action="{{.Base}}/hosts/{{$h.ID}}/refresh"><input type="hidden" name="section" value="updates"><button class="small"{{if not .Body.Online}} disabled title="The agent isn't connected"{{end}}>Check now</button></form>
+  <form method="post" action="{{.Base}}/hosts/{{$h.ID}}/refresh"><input type="hidden" name="section" value="updates"><button class="small secondary"{{if not .Body.Online}} disabled title="The agent isn't connected"{{end}}>Check now</button></form>
   {{end}}
   {{if and .Body.CanRun .Body.Updates}}
-  <a class="button small" href="{{.Base}}/changes/new?action=pkg.upgrade&amp;host={{$h.ID}}&amp;mode=all">Install all…</a>
+  <a class="button small secondary" href="{{.Base}}/changes/new?action=pkg.upgrade&amp;host={{$h.ID}}&amp;mode=all">Install all…</a>
   {{if $h.SecurityUpdates}}<a class="button small" href="{{.Base}}/changes/new?action=pkg.upgrade&amp;host={{$h.ID}}&amp;mode=security">Install security updates…</a>{{end}}
   {{end}}
   </div>

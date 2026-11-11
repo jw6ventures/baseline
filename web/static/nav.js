@@ -65,3 +65,20 @@
     }
   });
 })();
+
+// Drop-down menus built on <details> (the host page's "More" tab) close
+// when you click elsewhere or press Escape.
+(function () {
+  "use strict";
+  function closeAll(except) {
+    document.querySelectorAll("details.tab-more[open]").forEach(function (d) {
+      if (d !== except) d.open = false;
+    });
+  }
+  document.addEventListener("click", function (e) {
+    closeAll(e.target.closest ? e.target.closest("details.tab-more") : null);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeAll(null);
+  });
+})();

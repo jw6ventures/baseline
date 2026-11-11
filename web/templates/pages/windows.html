@@ -3,7 +3,7 @@
 {{$v := .Body}}
 <div class="titlebar">
   <h1>Maintenance windows</h1>
-  {{if $v.IsAdmin}}<div><a class="button" href="{{.Base}}/windows/new">New window</a> <a class="button" href="{{.Base}}/windows/new?kind=freeze">New freeze</a></div>{{end}}
+  {{if $v.IsAdmin}}<div><a class="button" href="{{.Base}}/windows/new">New window</a> <a class="button secondary" href="{{.Base}}/windows/new?kind=freeze">New freeze</a></div>{{end}}
 </div>
 <p class="muted">A window is when changes may run: it opens on a cron schedule in its time zone and stays open for its duration, for every host or only the hosts in its groups. A change or patch group tied to a window starts jobs only while it's open; a job that wouldn't finish before it closes waits for the next opening. A <strong>freeze</strong> has the same shape and blocks every change except Emergency ones on the hosts it covers. Times below are in {{$v.DisplayTZ}}; the <a href="{{.Base}}/calendar">calendar</a> shows them by day.{{if $v.IsAdmin}} Click a window's name to edit it.{{end}}</p>
 {{template "list" $v.List}}
