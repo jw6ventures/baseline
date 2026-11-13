@@ -115,6 +115,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /auth/logout", s.logout)
 
 	mux.Handle("GET /{$}", s.page(anyRole, s.dashboard))
+	mux.Handle("GET /search", s.page(anyRole, s.searchPage))
+	mux.Handle("GET /search.json", s.page(anyRole, s.searchJSON))
 	mux.Handle("GET /me", s.authed(s.me))
 	mux.Handle("POST /me/tokens", s.authed(s.createAPIToken))
 	mux.Handle("POST /me/tokens/{id}/revoke", s.authed(s.revokeAPIToken))

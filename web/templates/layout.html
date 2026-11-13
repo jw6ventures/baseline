@@ -11,6 +11,13 @@
 <body>
 <header class="topbar">
   <a class="brand" href="{{.Base}}/">Baseline</a>
+  {{if .Nav}}
+  <form class="topsearch" method="get" action="{{.Base}}/search" role="search" data-search="{{.Base}}">
+    <input type="search" name="q" placeholder="Search" aria-label="Search hosts, containers, CIs, work items and more" aria-keyshortcuts="Control+K Meta+K /" autocomplete="off">
+    <kbd class="topsearch-key" data-search-key>Ctrl K</kbd>
+  </form>
+  <script src="{{.Base}}/static/search.js" defer></script>
+  {{end}}
   {{with .User}}
   <div class="who">
     <a href="{{$.Base}}/me">{{.User.DisplayName}}</a>

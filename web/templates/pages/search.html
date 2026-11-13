@@ -1,0 +1,25 @@
+{{define "content"}}
+{{$v := .Body}}
+<h1>Search</h1>
+<form class="search-page" method="get" action="{{.Base}}/search" role="search">
+  <input type="search" name="q" value="{{$v.Query}}" placeholder="Hosts, containers, stacks, CIs, work items, changes…" aria-label="Search" autofocus>
+  <button>Search</button>
+</form>
+{{if $v.Query}}
+  {{range $v.Groups}}
+  <section class="search-group">
+    <h2>{{.Label}}</h2>
+    <ul class="search-results">
+      {{range .Results}}
+      <li{{if .Dim}} class="dim"{{end}}><a href="{{.URL}}">{{with .Ref}}<span class="mono">{{.}}</span> {{end}}<strong>{{.Title}}</strong></a>{{with .Detail}} <span class="muted small">{{.}}</span>{{end}}</li>
+      {{end}}
+    </ul>
+    {{if .More}}<p class="small"><a href="{{.All}}">All matching {{lower .Label}}</a></p>{{end}}
+  </section>
+  {{else}}
+  <p class="muted">Nothing you can see matches “{{$v.Query}}”.</p>
+  {{end}}
+{{else}}
+<p class="muted">Find a record by its name or reference. Press <kbd>Ctrl</kbd> <kbd>K</kbd> (<kbd>⌘</kbd> <kbd>K</kbd> on a Mac) or <kbd>/</kbd> on any page to search from there.</p>
+{{end}}
+{{end}}
