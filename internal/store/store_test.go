@@ -111,6 +111,25 @@ func TestSessionExpiry(t *testing.T) {
 	}
 }
 
+func TestSessionLookupWithoutSliding(t *testing.T) {
+	s := newTestStore(t)
+	u, _ := s.UpsertUser(ctx, "sub-1", "", "")
+	tok, _ := s.CreateSession(ctx, store.NewSession{UserID: u.ID, IdleTimeout: time.Hour, MaxLifetime: 2 * time.Hour})
+	s.DB().Exec(`UPDATE session SET last_seen = now() - interval '10 minutes', expires_at = now() + interval '50 minutes'`)
+	before, err := s.LookupSession(ctx, tok, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if time.Until(before.ExpiresAt) > 51*time.Minute {
+		t.Fatalf("a lookup without sliding moved the expiry to %v", before.ExpiresAt)
+	}
+	var seen time.Time
+	s.DB().QueryRow(`SELECT last_seen FROM session`).Scan(&seen)
+	if time.Since(seen) < 9*time.Minute {
+		t.Fatalf("a lookup without sliding touched last_seen: %v", seen)
+	}
+}
+
 func TestSessionSlidesButNotPastAbsolute(t *testing.T) {
 	s := newTestStore(t)
 	u, _ := s.UpsertUser(ctx, "sub-1", "", "")

@@ -153,7 +153,13 @@ func (s *Server) authed(next http.HandlerFunc) http.Handler {
 			s.toLogin(w, r)
 			return
 		}
-		ss, err := s.store.LookupSession(r.Context(), token, idleTimeout)
+		// Live status polling (static/live.js) isn't the user's activity, so
+		// it doesn't keep an unattended session alive past its idle timeout.
+		idle := idleTimeout
+		if isLivePoll(r) {
+			idle = 0
+		}
+		ss, err := s.store.LookupSession(r.Context(), token, idle)
 		if errors.Is(err, store.ErrNotFound) {
 			oidc.ClearCookie(w, sessionCookie, s.opts)
 			s.toLogin(w, r)
@@ -176,6 +182,12 @@ func (s *Server) authed(next http.HandlerFunc) http.Handler {
 		next(w, r.WithContext(contextWithPrincipal(r.Context(), p)))
 	})
 }
+
+// livePollHeader marks a request static/live.js makes to refresh a page's
+// status in place.
+const livePollHeader = "X-Baseline-Live"
+
+func isLivePoll(r *http.Request) bool { return r.Header.Get(livePollHeader) == "1" }
 
 // access decides whether a principal may see a page.
 type access func(rbac.Grants) bool
@@ -209,6 +221,11 @@ func (s *Server) page(allow access, next http.HandlerFunc) http.Handler {
 }
 
 func (s *Server) toLogin(w http.ResponseWriter, r *http.Request) {
+	if isLivePoll(r) {
+		// The page stops refreshing and asks the user to sign in again.
+		http.Error(w, "signed out", http.StatusUnauthorized)
+		return
+	}
 	if r.Method != http.MethodGet {
 		s.errorPage(w, r, http.StatusUnauthorized, "Your session has expired. Sign in again.")
 		return

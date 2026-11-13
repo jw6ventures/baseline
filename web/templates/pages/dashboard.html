@@ -1,5 +1,9 @@
+{{define "head"}}<script src="{{.Base}}/static/live.js" defer></script>{{end}}
+
 {{define "content"}}
 <h1>Dashboard</h1>
+<p id="live-note" class="notice warn" role="status" hidden></p>
+<div id="dashboard-live" data-live data-live-src="{{.Base}}/">
 <section class="stat-group" aria-labelledby="dash-fleet">
 <h2 id="dash-fleet" class="stat-head">Fleet</h2>
 <div class="stats">
@@ -85,4 +89,5 @@
   </tr>{{end}}</tbody>
 </table></div>
 {{end}}
+</div>
 {{end}}
