@@ -1,7 +1,8 @@
 // The side nav (templates/layout.html), no dependencies. Without JS the
 // groups are plain <details>, open on the current page's group. With it,
 // the other groups remember being opened in this browser, and a filter
-// box narrows the links, opening every group with a match.
+// box narrows the links, opening every group with a match. On narrow
+// screens the nav folds away behind the Menu button in the top bar.
 (function () {
   "use strict";
 
@@ -55,10 +56,33 @@
     setTimeout(function () { filtering = false; }, 0);
   }
 
+  // The Menu button: CSS hides it and the folded nav on wide screens, so
+  // this only has to track open and closed.
+  var toggle = document.querySelector("[data-nav-toggle]");
+  if (toggle) {
+    nav.classList.add("collapsible");
+    toggle.hidden = false;
+    var setOpen = function (open) {
+      nav.classList.toggle("open", open);
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+    // No focus on the filter when opening: on a phone that pops the keyboard.
+    toggle.addEventListener("click", function () {
+      setOpen(!nav.classList.contains("open"));
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && nav.classList.contains("open")) {
+        setOpen(false);
+        toggle.focus();
+      }
+    });
+  }
+
   filter.hidden = false;
   filter.addEventListener("input", apply);
   filter.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") { filter.value = ""; apply(); }
+    // Escape clears the filter first, and closes the menu once it is empty.
+    if (e.key === "Escape" && filter.value) { e.stopPropagation(); filter.value = ""; apply(); }
     if (e.key === "Enter") {
       var first = nav.querySelector("li:not([hidden]) a");
       if (first) { e.preventDefault(); first.click(); }

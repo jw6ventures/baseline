@@ -89,12 +89,13 @@
 </form>
 {{end}}
 
+{{if gt (len .Header) 3}}<label class="check all-cols"><input type="checkbox" data-all-cols> Show all {{len .Header}} columns</label>{{end}}
 <div class="table-wrap"><table class="list-table">
   <thead><tr>
     {{if .SelectURL}}<th class="sel"><input type="checkbox" name="keep" value="1" data-select-all aria-label="Select every row on this page"{{if .AllTicked}} checked{{end}}
       hx-post="{{$b}}{{.SelectURL}}" hx-include="#list input[name=row]" hx-vals='{"page": "1"}' hx-trigger="change" hx-swap="none"></th>
     {{else if .Selection}}<th class="sel"><input type="checkbox" data-select-all aria-label="Select all rows"></th>{{end}}
-    {{range .Header}}<th{{with .Class}} class="{{.}}"{{end}}{{if .Sorted}} aria-sort="{{if .Desc}}descending{{else}}ascending{{end}}"{{end}}>{{if .URL}}<a href="{{$b}}{{.URL}}">{{.Label}}{{if .Sorted}}{{if .Desc}} ↓{{else}} ↑{{end}}{{end}}</a>{{else}}{{.Label}}{{end}}</th>{{end}}
+    {{range $i, $h := .Header}}<th{{if or .Class (ge $i 3)}} class="{{.Class}}{{if ge $i 3}} opt{{end}}"{{end}}{{if .Sorted}} aria-sort="{{if .Desc}}descending{{else}}ascending{{end}}"{{end}}>{{if .URL}}<a href="{{$b}}{{.URL}}">{{.Label}}{{if .Sorted}}{{if .Desc}} ↓{{else}} ↑{{end}}{{end}}</a>{{else}}{{.Label}}{{end}}</th>{{end}}
   </tr></thead>
   <tbody>
   {{range .Rows}}
@@ -103,7 +104,7 @@
       {{if $v.SelectURL}}<td class="sel"><input type="hidden" name="row" value="{{.ID}}"><input type="checkbox" name="keep" value="1" data-row{{if not (index $v.Excluded .ID)}} checked{{end}} aria-label="Select row"
         hx-post="{{$b}}{{$v.SelectURL}}" hx-vals='{"id": "{{.ID}}"}' hx-trigger="change" hx-swap="none"></td>
       {{else if $v.Selection}}<td class="sel"><input type="checkbox" name="id" value="{{.ID}}" form="bulk-{{$v.Table.Key}}" aria-label="Select row"></td>{{end}}
-      {{range .Cells}}<td{{with .EditTag}} id="{{.}}"{{end}}{{with .Field.Class}} class="{{.}}"{{end}}{{if .Match}} data-f="{{.Field.Key}}" data-op="{{.Match}}" data-nop="{{.Exclude}}"{{if not .Tags}}{{if .Value}} data-v="{{.Value}}"{{end}}{{end}}{{end}}>{{template "list-cell" (dict "Base" $b "Cell" .)}}</td>{{end}}
+      {{range $i, $c := .Cells}}<td{{with .EditTag}} id="{{.}}"{{end}}{{if or .Field.Class (ge $i 3)}} class="{{.Field.Class}}{{if ge $i 3}} opt{{end}}"{{end}}{{if .Match}} data-f="{{.Field.Key}}" data-op="{{.Match}}" data-nop="{{.Exclude}}"{{if not .Tags}}{{if .Value}} data-v="{{.Value}}"{{end}}{{end}}{{end}}>{{template "list-cell" (dict "Base" $b "Cell" .)}}</td>{{end}}
     </tr>
   {{else}}
     <tr><td colspan="{{$v.Colspan}}" class="muted">{{if or .Query.Groups .Query.Search}}Nothing matches.{{else}}No {{lower .Table.Label}} yet.{{end}}</td></tr>
