@@ -11,7 +11,7 @@
 {{end}}
 <nav class="tabs" aria-label="Alerts">
   <a href="{{.Base}}/alerts"{{if eq $v.View "open"}} aria-current="page"{{end}}>Alerts
-    {{- with $v.Counts}}{{if .Critical}} <span class="count warn" title="critical">{{.Critical}}</span>{{end}}{{if .Warning}} <span class="count warn" title="warning">{{.Warning}}</span>{{end}}{{if .Info}} <span class="count" title="info">{{.Info}}</span>{{end}}{{end}}</a>
+    {{- with $v.Counts}}{{if .Critical}} <span class="count warn crit" title="critical">{{.Critical}}<span class="sr-only"> critical</span></span>{{end}}{{if .Warning}} <span class="count warn" title="warning">{{.Warning}}<span class="sr-only"> warning</span></span>{{end}}{{if .Info}} <span class="count" title="info">{{.Info}}<span class="sr-only"> info</span></span>{{end}}{{end}}</a>
   <a href="{{.Base}}/alerts?view=rules"{{if eq $v.View "rules"}} aria-current="page"{{end}}>Rules</a>
   <a href="{{.Base}}/alerts?view=silences"{{if eq $v.View "silences"}} aria-current="page"{{end}}>Silences</a>
 </nav>

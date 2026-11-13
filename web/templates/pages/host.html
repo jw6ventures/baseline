@@ -29,18 +29,18 @@
 <nav class="tabs" aria-label="Host sections">
 {{range .Body.Tabs}}{{if not .More}}{{$t := .Key}}
   <a href="{{$.Base}}{{.URL}}"{{if eq $.Body.Tab $t}} aria-current="page"{{end}}>{{.Label}}<span id="tab-n-{{$t}}" data-live>
-    {{- if and (eq $t "updates") $h.Updates}} <span class="count{{if $h.SecurityUpdates}} warn{{end}}">{{$h.Updates}}</span>{{end}}
-    {{- if and (eq $t "vulnerabilities") $h.FixableVulns}} <span class="count warn" title="fixed by pending updates">{{$h.FixableVulns}}</span>{{end}}
-    {{- if and (eq $t "containers") $h.Containers}} <span class="count{{if $h.ContainerUpdates}} warn{{end}}">{{$h.Containers}}</span>{{end}}
-    {{- if and (eq $t "services") $h.FailedServices}} <span class="count warn" title="failed">{{$h.FailedServices}}</span>{{end}}
-    {{- if and (eq $t "certificates") $h.CertsExpiring}} <span class="count warn" title="expiring within 30 days">{{$h.CertsExpiring}}</span>{{end}}
-    {{- if and (eq $t "jobs") $h.OpenJobs}} <span class="count" title="queued or running">{{$h.OpenJobs}}</span>{{end}}</span></a>
+    {{- if and (eq $t "updates") $h.Updates}} {{if $h.SecurityUpdates}}<span class="count warn" title="includes security updates">{{$h.Updates}}<span class="sr-only">, includes security updates</span></span>{{else}}<span class="count">{{$h.Updates}}</span>{{end}}{{end}}
+    {{- if and (eq $t "vulnerabilities") $h.FixableVulns}} <span class="count warn" title="fixed by pending updates">{{$h.FixableVulns}}<span class="sr-only"> fixed by pending updates</span></span>{{end}}
+    {{- if and (eq $t "containers") $h.Containers}} {{if $h.ContainerUpdates}}<span class="count warn" title="image updates available">{{$h.Containers}}<span class="sr-only">, image updates available</span></span>{{else}}<span class="count">{{$h.Containers}}</span>{{end}}{{end}}
+    {{- if and (eq $t "services") $h.FailedServices}} <span class="count warn" title="failed">{{$h.FailedServices}}<span class="sr-only"> failed</span></span>{{end}}
+    {{- if and (eq $t "certificates") $h.CertsExpiring}} <span class="count warn" title="expiring within 30 days">{{$h.CertsExpiring}}<span class="sr-only"> expiring within 30 days</span></span>{{end}}
+    {{- if and (eq $t "jobs") $h.OpenJobs}} <span class="count" title="queued or running">{{$h.OpenJobs}}<span class="sr-only"> queued or running</span></span>{{end}}</span></a>
 {{end}}{{end}}
 {{$more := false}}{{$cur := ""}}{{range .Body.Tabs}}{{if .More}}{{$more = true}}{{if eq $.Body.Tab .Key}}{{$cur = .Label}}{{end}}{{end}}{{end}}
 {{if $more}}
   <details class="tab-more">
-    <summary{{if $cur}} aria-current="page"{{end}}>{{if $cur}}{{$cur}}{{else}}More{{end}}<span id="tab-n-more" data-live>{{if $h.OpenJobs}} <span class="count" title="open jobs">{{$h.OpenJobs}}</span>{{end}}</span></summary>
-    <ul>{{range .Body.Tabs}}{{if .More}}<li><a href="{{$.Base}}{{.URL}}"{{if eq $.Body.Tab .Key}} aria-current="page"{{end}}>{{.Label}}<span id="tab-n-more-{{.Key}}" data-live>{{if and (eq .Key "jobs") $h.OpenJobs}} <span class="count">{{$h.OpenJobs}}</span>{{end}}</span></a></li>{{end}}{{end}}</ul>
+    <summary{{if $cur}} aria-current="page"{{end}}>{{if $cur}}{{$cur}}{{else}}More{{end}}<span id="tab-n-more" data-live>{{if $h.OpenJobs}} <span class="count" title="open jobs">{{$h.OpenJobs}}<span class="sr-only"> open jobs</span></span>{{end}}</span></summary>
+    <ul>{{range .Body.Tabs}}{{if .More}}<li><a href="{{$.Base}}{{.URL}}"{{if eq $.Body.Tab .Key}} aria-current="page"{{end}}>{{.Label}}<span id="tab-n-more-{{.Key}}" data-live>{{if and (eq .Key "jobs") $h.OpenJobs}} <span class="count" title="queued or running">{{$h.OpenJobs}}<span class="sr-only"> queued or running</span></span>{{end}}</span></a></li>{{end}}{{end}}</ul>
   </details>
 {{end}}
 </nav>

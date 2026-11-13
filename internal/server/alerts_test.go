@@ -277,7 +277,7 @@ func TestVulnerabilitiesUI(t *testing.T) {
 	}
 	_, body = h.do(mediaOps, "GET", "/hosts/"+plex.HostID+"?tab=vulnerabilities", nil)
 	if !strings.Contains(body, "Upgrade 1 fixing package…") || !strings.Contains(body, `name="pkg" value="sudo"`) ||
-		!strings.Contains(body, `<span class="count warn" title="fixed by pending updates">1</span>`) {
+		!strings.Contains(body, `<span class="count warn" title="fixed by pending updates">1<span class="sr-only"> fixed by pending updates</span></span>`) {
 		t.Fatalf("host tab:\n%s", body)
 	}
 	if _, body = h.do(admin, "GET", "/hosts/"+desk.HostID+"?tab=vulnerabilities", nil); !strings.Contains(body, "OSV publishes no vulnerability data") {
