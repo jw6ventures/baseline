@@ -5,15 +5,7 @@
 {{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
 {{if not $v.Spec.Name}}
 <p class="muted">Pick what to do. Everything runs as a job inside a change record. A Normal change runs once an approver approves it (approvers can approve their own; it's recorded as self-approval). An Emergency change needs one approver and runs even during a freeze. Standard changes come from a pre-approved <a href="{{.Base}}/change-models">change model</a>.</p>
-<div class="cards">
-{{range $v.Actions}}
-  <a class="card" href="{{$.Base}}/changes/new?action={{.Name}}{{range index $f "host"}}&amp;host={{.}}{{end}}">
-    <span class="badge">{{.Risk}} risk</span>
-    <strong>{{.Label}}</strong>
-    <span class="mono">{{.Name}}</span>
-  </a>
-{{end}}
-</div>
+{{template "action-picker" (dict "Groups" $v.ActionGroups "Href" (print .Base "/changes/new") "Hosts" (index $f "host"))}}
 {{else}}
 
 {{if and (eq $v.Spec.Name "script.run") (not $v.Script)}}

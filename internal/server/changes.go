@@ -342,6 +342,9 @@ type changeFormView struct {
 	TZ           string
 }
 
+// ActionGroups are the actions offered, grouped by what they change.
+func (v changeFormView) ActionGroups() []action.Group { return action.ByTarget(v.Actions) }
+
 type targetHost struct {
 	store.Host
 	Checked  bool

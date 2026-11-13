@@ -79,6 +79,10 @@ func TestChangesAndJobsUI(t *testing.T) {
 	if !strings.Contains(body, "Restart a service") || !strings.Contains(body, "Install updates") {
 		t.Fatalf("action picker:\n%s", body)
 	}
+	if !strings.Contains(body, "<h2>Hosts</h2>") || !strings.Contains(body, "<h2>Compose stacks</h2>") ||
+		!strings.Contains(body, `class="badge risk-high">high risk`) {
+		t.Fatalf("action picker groups and risk badges:\n%s", body)
+	}
 	_, body = h.do(ops, "GET", "/changes/new?action=service.restart&host="+plex.HostID+"&unit=nginx.service", nil)
 	if !strings.Contains(body, `value="`+plex.HostID+`" checked`) || strings.Contains(body, "dns1") ||
 		strings.Contains(body, "Submit and approve") || !strings.Contains(body, `value="nginx.service"`) {

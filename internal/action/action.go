@@ -1001,3 +1001,40 @@ func CheckComposeRoot(dir string) error {
 	}
 	return nil
 }
+
+// Group is the actions that change one kind of target, for the pickers
+// that offer them.
+type Group struct {
+	Label string // "Hosts", "Containers", ...
+	Specs []Spec
+}
+
+// targets name what each category's actions change, in the order the
+// pickers group them.
+var targets = []struct {
+	label      string
+	categories []string
+}{
+	{"Hosts", []string{CategoryPatch, CategoryService, CategoryReboot, CategoryScript}},
+	{"Containers", []string{CategoryContainer}},
+	{"Compose stacks", []string{CategoryCompose}},
+	{"Kubernetes", []string{CategoryKubernetes}},
+}
+
+// ByTarget groups actions by what they change, keeping their order within
+// each group and leaving out empty groups.
+func ByTarget(specs []Spec) []Group {
+	var out []Group
+	for _, t := range targets {
+		g := Group{Label: t.label}
+		for _, s := range specs {
+			if slices.Contains(t.categories, s.Category) {
+				g.Specs = append(g.Specs, s)
+			}
+		}
+		if len(g.Specs) > 0 {
+			out = append(out, g)
+		}
+	}
+	return out
+}

@@ -1,3 +1,23 @@
+{{/* The action cards of the new-change and change model pickers, grouped
+     by what they change: dict "Groups" []action.Group "Href" <form URL>
+     "Hosts" <host IDs to carry along, optional>. */}}
+{{define "action-picker"}}{{$hosts := .Hosts}}{{$href := .Href}}
+{{range .Groups}}
+<section class="action-group">
+  <h2>{{.Label}}</h2>
+  <div class="cards">
+  {{range .Specs}}
+    <a class="card" href="{{$href}}?action={{.Name}}{{range $hosts}}&amp;host={{.}}{{end}}">
+      <span class="badge risk-{{.Risk}}">{{.Risk}} risk</span>
+      <strong>{{.Label}}</strong>
+      <span class="mono">{{.Name}}</span>
+    </a>
+  {{end}}
+  </div>
+</section>
+{{end}}
+{{end}}
+
 {{/* An action's parameter fields, shared by the new-change and the change
      model forms: dict "Base" .Base "V" <changeFormView>. */}}
 {{define "action-params"}}{{$v := .V}}{{$f := $v.Form}}
