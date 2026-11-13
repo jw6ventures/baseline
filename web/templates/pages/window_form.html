@@ -2,6 +2,7 @@
 {{$v := .Body}}
 <h1>{{if $v.New}}New {{if eq $v.Kind "freeze"}}freeze{{else}}window{{end}}{{else}}Edit {{$v.Name}}{{end}}</h1>
 {{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with $v.Prefill}}<p class="notice prefill">{{.}} <a href="{{$.Base}}/windows/new?{{$v.PrefillAlt}}">{{$v.PrefillAltIs}}</a>.</p>{{end}}
 <p class="muted">The schedule is when it opens, written as cron (<code>minute hour day-of-month month day-of-week</code>) and read in its own time zone, so daylight-saving changes move with it. It stays open for the duration. Changes tied to a window run only while it's open; a freeze stops every change except Emergency ones while it's in effect.</p>
 <form class="panel stack-form wide" method="post" action="{{.Base}}/windows{{if not $v.New}}/{{$v.ID}}{{end}}">
   <label>Name<input name="name" value="{{$v.Name}}" maxlength="100" required></label>

@@ -376,10 +376,13 @@ details.panel h3 { font-size: 1rem; margin: 1rem 0 0.4rem; }
 details.panel summary .tag { margin: 0 0.4rem; }
 
 .cal-nav { margin: 0; }
+.titlebar > .cal-navs { gap: 1rem; }
 .cal-month { margin: 0.5rem 0; }
 .cal-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.5rem; padding: 0; }
 table.cal { table-layout: fixed; min-width: 52rem; }
 table.cal th { text-align: center; padding: 0.4rem; }
+table.cal th.today { color: var(--accent); }
+table.cal.week .cal-day { min-height: 1.1rem; }
 table.cal td { height: 7.5rem; padding: 0.3rem; border-left: 1px solid var(--border); }
 table.cal td:first-child { border-left: 0; }
 table.cal td.out { background: var(--bg); }
@@ -405,6 +408,25 @@ a.cal-item:hover { text-decoration: underline; }
 .cal-time { font-variant-numeric: tabular-nums; color: var(--muted); }
 .cal-item.freeze .cal-time { color: inherit; }
 .cal-more { font-size: 0.75rem; color: var(--muted); }
+.cal-day { display: flex; align-items: baseline; gap: 0.3rem; }
+.cal-day a { color: inherit; text-decoration: none; }
+.cal-day a:hover { text-decoration: underline; }
+.cal-day .cal-add {
+  margin-left: auto; padding: 0 0.35rem; border-radius: 4px; line-height: 1.3; color: var(--muted);
+  opacity: 0.4; transition: opacity 0.1s;
+}
+table.cal td:hover .cal-add, .cal-add:focus-visible { opacity: 1; }
+.cal-day .cal-add:hover { background: var(--win-bg); color: var(--win); text-decoration: none; }
+@media (hover: none) { .cal-day .cal-add { opacity: 1; } }
+/* Weeks with nothing in them are drawn short. */
+table.cal tr.empty td { height: 2.4rem; }
+.cal-empty { margin: 0 0 0.5rem; }
+/* The week view has room for every item, with its details. */
+table.cal.week td { height: 14rem; }
+table.cal.week tr.empty td { height: 6rem; }
+table.cal.week .cal-item { white-space: normal; overflow: visible; margin-bottom: 0.3rem; }
+.cal-detail { display: block; color: var(--muted); font-size: 0.72rem; }
+.notice.prefill { background: var(--win-bg); color: var(--text); }
 
 /* M5: change forms and pages */
 button.secondary, .button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }

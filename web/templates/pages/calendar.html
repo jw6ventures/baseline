@@ -2,13 +2,19 @@
 {{$v := .Body}}
 <div class="titlebar">
   <h1>Calendar</h1>
-  <nav class="ranges cal-nav" aria-label="Month">
-    <a href="{{.Base}}/calendar?month={{$v.Prev}}" rel="prev">← Previous</a>
-    <a href="{{.Base}}/calendar?month={{$v.This}}"{{if $v.IsCurrent}} aria-current="page"{{end}}>This month</a>
-    <a href="{{.Base}}/calendar?month={{$v.Next}}" rel="next">Next →</a>
+  <div class="cal-navs">
+  <nav class="ranges cal-nav" aria-label="View">
+    <a href="{{.Base}}/calendar?{{$v.MonthQ}}"{{if not $v.Week}} aria-current="page"{{end}}>Month</a>
+    <a href="{{.Base}}/calendar?{{$v.WeekQ}}"{{if $v.Week}} aria-current="page"{{end}}>Week</a>
   </nav>
+  <nav class="ranges cal-nav" aria-label="{{if $v.Week}}Week{{else}}Month{{end}}">
+    <a href="{{.Base}}/calendar?{{$v.Prev}}" rel="prev">← Previous</a>
+    <a href="{{.Base}}/calendar?{{$v.This}}"{{if $v.IsCurrent}} aria-current="page"{{end}}>This {{if $v.Week}}week{{else}}month{{end}}</a>
+    <a href="{{.Base}}/calendar?{{$v.Next}}" rel="next">Next →</a>
+  </nav>
+  </div>
 </div>
-<p class="muted">Maintenance windows and freezes, changes planned to start, and patch group runs, by day in {{$v.DisplayTZ}}. Changes show once they're approved, and stay once they've run, on the day they started, with how they ended; patch group runs are the ones still to come.</p>
+<p class="muted">Maintenance windows and freezes, changes planned to start, and patch group runs, by day in {{$v.DisplayTZ}}. Changes show once they're approved, and stay once they've run, on the day they started, with how they ended; patch group runs are the ones still to come.{{if $v.IsAdmin}} Use <strong>+</strong> on a day to make a window that opens then.{{end}}</p>
 <ul class="cal-legend" aria-label="Key">
   <li><span class="cal-item window">window</span></li>
   <li><span class="cal-item freeze">freeze</span></li>
@@ -17,14 +23,15 @@
   <li><span class="cal-item change bad">change, failed or rolled back</span></li>
   <li><span class="cal-item patch">patch group run</span></li>
 </ul>
-<h2 class="cal-month">{{$v.Month}}</h2>
-<div class="table-wrap"><table class="cal">
-  <thead><tr>{{range $v.Weekdays}}<th scope="col">{{.}}</th>{{end}}</tr></thead>
-  <tbody>{{range $v.Weeks}}<tr>{{range .}}
+<h2 class="cal-month">{{$v.Title}}</h2>
+{{if $v.Empty}}<p class="muted cal-empty">Nothing is scheduled {{if $v.Week}}this week{{else}}in {{$v.Title}}{{end}}.{{if $v.IsAdmin}} Use <strong>+</strong> on a day to add a window, or <a href="{{.Base}}/windows/new?kind=freeze">add a freeze</a>.{{end}}</p>{{end}}
+<div class="table-wrap"><table class="cal{{if $v.Week}} week{{end}}">
+  <thead><tr>{{if $v.Week}}{{range (index $v.Weeks 0).Days}}<th scope="col"{{if .Today}} class="today"{{end}}>{{.Label}}</th>{{end}}{{else}}{{range $v.Weekdays}}<th scope="col">{{.}}</th>{{end}}{{end}}</tr></thead>
+  <tbody>{{range $v.Weeks}}<tr{{if .Empty}} class="empty"{{end}}>{{range .Days}}
     <td id="{{.ID}}" class="{{if not .InMonth}}out{{end}}{{if .Today}} today{{end}}{{if .Past}} past{{end}}"{{if .Today}} aria-current="date"{{end}}>
-      <div class="cal-day">{{.Day}}{{if .Today}} <span class="small">today</span>{{end}}</div>
-      {{range .Entries}}<a class="cal-item {{.Kind}}{{with .Outcome}} {{.}}{{end}}" href="{{$.Base}}{{.Href}}" title="{{.Name}} — {{.Detail}}"><span class="cal-time">{{.Time}}</span> {{.Name}}{{if .Outcome}} <span class="cal-state">({{.Detail}})</span>{{end}}</a>{{end}}
-      {{with .More}}<span class="cal-more">+{{.}} more</span>{{end}}
+      <div class="cal-day">{{if $v.Week}}{{else}}<a href="{{$.Base}}/calendar?week={{.Date}}" title="Week of {{.Label}}">{{.Day}}</a>{{end}}{{if .Today}}{{if not $v.Week}} {{end}}<span class="small">today</span>{{end}}{{if and $v.IsAdmin (not .Past)}}<a class="cal-add" href="{{$.Base}}/windows/new?date={{.Date}}" title="New window on {{.Label}}" aria-label="New window on {{.Label}}">+</a>{{end}}</div>
+      {{range .Entries}}<a class="cal-item {{.Kind}}{{with .Outcome}} {{.}}{{end}}" href="{{$.Base}}{{.Href}}" title="{{.Name}} — {{.Detail}}"><span class="cal-time">{{.Time}}</span> {{.Name}}{{if .Outcome}} <span class="cal-state">({{.Detail}})</span>{{else if $v.Week}} <span class="cal-detail">{{.Detail}}</span>{{end}}</a>{{end}}
+      {{if .More}}<a class="cal-more" href="{{$.Base}}/calendar?week={{.Date}}">+{{.More}} more</a>{{end}}
     </td>{{end}}
   </tr>{{end}}</tbody>
 </table></div>
