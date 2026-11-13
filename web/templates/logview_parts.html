@@ -1,0 +1,14 @@
+{{/* The toolbar above a log (web/static/logview.js): filter, wrap,
+download and jump to latest. It stays hidden without JavaScript, where the
+log is still readable as plain text. Pass the log's download name. */}}
+{{define "logview-bar"}}
+<div class="logview-bar" data-logview-bar hidden>
+  <input type="search" data-logview-q placeholder="Filter lines" aria-label="Filter log lines" autocomplete="off" spellcheck="false">
+  <span class="muted small" data-logview-count aria-live="polite"></span>
+  <span class="logview-tools">
+    <label class="check small"><input type="checkbox" data-logview-wrap> Wrap lines</label>
+    <button type="button" class="small secondary" data-logview-download>Download</button>
+  </span>
+</div>
+<button type="button" class="logview-latest small" data-logview-latest hidden>Jump to latest</button>
+{{end}}

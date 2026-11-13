@@ -1,3 +1,5 @@
+{{define "head"}}<script src="{{.Base}}/static/logview.js" defer></script>{{end}}
+
 {{define "content"}}
 {{$v := .Body}}{{$w := $v.W}}{{$c := $v.Cluster}}
 <div class="titlebar">
@@ -19,7 +21,8 @@
 {{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
 {{with $v.Logs}}
 {{if .Truncated}}<p class="notice warn">Only the last megabyte is shown.</p>{{end}}
-<pre class="file">{{with .Text}}{{.}}{{else}}(empty){{end}}</pre>
+{{if .Text}}{{template "logview-bar"}}{{end}}
+<pre class="output" data-logview="{{$w.Namespace}}-{{$v.Pod.Name}}-{{$v.Container}}">{{with .Text}}{{.}}{{else}}<span class="info">(empty)</span>{{end}}</pre>
 <p class="muted small">Read from the cluster just now; reading logs is recorded in the audit log.</p>
 {{end}}
 {{end}}
