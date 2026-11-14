@@ -1,0 +1,17 @@
+{{define "content"}}
+<h1>Settings</h1>
+{{template "settings-tabs" .}}
+{{with .Body.Error}}<p class="notice bad">{{.}}</p>{{end}}
+{{with .Body.Notice}}<p class="notice ok">{{.}}</p>{{end}}
+
+<section class="panel">
+  <h2>Missing Compose stacks</h2>
+  <p class="muted">A stack whose containers are gone from its host is marked missing after an hour. Missing stacks stay on the <a href="{{.Base}}/stacks?show=gone">Gone</a> list until you delete them, unless Baseline retires them for you.</p>
+  <form class="inline-form" method="post" action="{{.Base}}/settings/inventory">
+    <label class="check"><input type="checkbox" name="retire_stacks"{{if .Body.RetireDays}} checked{{end}}> Retire stacks missing for more than</label>
+    <label class="check"><input name="retire_days" type="number" min="1" max="{{.Body.MaxDays}}" value="{{if .Body.RetireDays}}{{.Body.RetireDays}}{{else}}30{{end}}" class="narrow" aria-label="Days"> days</label>
+    <button>Save</button>
+  </form>
+  <p class="muted small">{{if .Body.RetireDays}}On: stacks missing for more than {{plural .Body.RetireDays "day"}} are retired.{{else}}Off: missing stacks are never retired automatically.{{end}} Retiring hides a stack from the stack lists and its host's Stacks tab. Nothing is deleted: its settings, history and relationships are kept, the <a href="{{.Base}}/stacks?show=retired">Retired</a> view still lists it, and it turns active again by itself if its host reports it. Checked every 10 minutes; each retirement is in the audit log.</p>
+</section>
+{{end}}

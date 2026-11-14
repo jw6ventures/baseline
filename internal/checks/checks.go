@@ -85,12 +85,18 @@ func (c *Checker) Run(ctx context.Context) {
 }
 
 // Pass runs one round: stale image digests, tags for repositories a semver
-// rule watches, the digests of the tags those rules would offer, endpoints due for a probe, and missing containers.
+// rule watches, the digests of the tags those rules would offer, endpoints due for a probe, missing containers,
+// and stacks missing long enough to retire.
 func (c *Checker) Pass(ctx context.Context, now time.Time) {
 	if n, err := c.Store.MarkMissing(ctx, now); err != nil {
 		c.logf(jw6_utils.Error, "mark missing CIs: %v", err)
 	} else if n > 0 {
 		c.logf(jw6_utils.Info, "%d containers or stacks are gone and now missing", n)
+	}
+	if n, err := c.Store.RetireMissingStacks(ctx, now); err != nil {
+		c.logf(jw6_utils.Error, "retire missing stacks: %v", err)
+	} else if n > 0 {
+		c.logf(jw6_utils.Info, "%d Compose stacks were missing too long and are now retired", n)
 	}
 	reg := c.Registry
 	if reg == nil {
