@@ -516,10 +516,11 @@ func scanStack(row interface{ Scan(...any) error }) (Stack, error) {
 }
 
 // ListStacks returns the stacks on the given hosts, present ones first.
+// Gone stacks that were retired (RetireMissingStacks) are left out.
 func (s *Store) ListStacks(ctx context.Context, hostIDs []string) ([]Stack, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT `+stackCols+stackFrom+`
-		WHERE s.host::text = ANY($1)
+		WHERE s.host::text = ANY($1) AND (s.present OR ci.status <> 'retired')
 		ORDER BY NOT s.present, lower(h.hostname), s.project`, pq.Array(nonNil(hostIDs)))
 	if err != nil {
 		return nil, err

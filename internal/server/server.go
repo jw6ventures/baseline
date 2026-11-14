@@ -291,6 +291,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /settings/field-groups/{id}", s.page(adminOnly, s.fieldGroupEdit))
 	mux.Handle("POST /settings/field-groups/{id}", s.page(adminOnly, s.fieldGroupSave))
 	mux.Handle("POST /settings/field-groups/{id}/delete", s.page(adminOnly, s.fieldGroupDelete))
+	mux.Handle("GET /settings/inventory", s.page(adminOnly, s.inventorySettings))
+	mux.Handle("POST /settings/inventory", s.page(adminOnly, s.inventorySettingsSave))
 	mux.Handle("GET /settings/registries", s.page(adminOnly, s.registries))
 	mux.Handle("POST /settings/registries", s.page(adminOnly, s.saveRegistry))
 	mux.Handle("POST /settings/registries/{id}/delete", s.page(adminOnly, s.deleteRegistry))

@@ -19,7 +19,8 @@
 </div>
 {{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
 {{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
-{{if not $s.Present}}<p class="notice warn">This stack's containers are gone from the host. Its settings are kept in case it comes back.</p>{{end}}
+{{if and (not $s.Present) (eq $s.Status "retired")}}<p class="notice">Retired: this stack's containers have been gone from the host long enough that it was taken off the stack lists. Its settings are kept, and it turns active again if the host reports it.</p>
+{{else if not $s.Present}}<p class="notice warn">This stack's containers are gone from the host. Its settings are kept in case it comes back.</p>{{end}}
 {{if and $s.Stopped $s.Present}}<p class="notice">Not running: Baseline found it in <code>{{$s.WorkingDir}}</code>, under one of the host's Compose roots, with no containers on the engine.{{if $v.CanStart}} Start it to run it.{{end}}</p>{{end}}
 {{if $s.Orphaned}}<p class="notice warn">Orphaned: its Compose files aren't readable on the host (it was started from somewhere else), so Baseline can't update it.</p>{{end}}
 

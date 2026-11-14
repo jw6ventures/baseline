@@ -233,7 +233,8 @@ func buildNav(p *Principal, path string) []navGroup {
 	if p.Grants.Has(rbac.Admin) {
 		groups = append(groups, navGroup{Key: "admin", Label: "Administration", Items: []navItem{
 			{Path: "/settings/access", Label: "Access"}, {Path: "/settings/enrollment", Label: "Enrollment"},
-			{Path: "/settings/agents", Label: "Agents"}, {Path: "/settings/registries", Label: "Registries"},
+			{Path: "/settings/agents", Label: "Agents"}, {Path: "/settings/inventory", Label: "Inventory"},
+			{Path: "/settings/registries", Label: "Registries"},
 			{Path: "/settings/unifi", Label: "UniFi"},
 			{Path: "/settings/notifications", Label: "Notifications"}, {Path: "/settings/ticket-types", Label: "Ticket types"},
 			{Path: "/settings/workflows", Label: "Workflows"}, {Path: "/settings/migrations", Label: "Migrations"},

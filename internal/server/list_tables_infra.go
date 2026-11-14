@@ -134,10 +134,12 @@ var stackTable = &list.Table{
 				WHERE c.host = s.host AND c.engine = s.engine AND c.compose_project = s.project AND u.drift) END`},
 		{Key: "flags", Label: "Flags", Type: list.Tags, Badge: "flag",
 			Expr: `array_remove(ARRAY[CASE WHEN s.pinned THEN 'pinned' END, CASE WHEN s.orphaned THEN 'orphaned' END, CASE WHEN s.stopped AND s.present THEN 'not running' END,
-				CASE WHEN NOT s.present THEN 'gone' END, CASE WHEN s.auto_update THEN 'auto-update' END], NULL)`},
+				CASE WHEN NOT s.present AND ci.status <> 'retired' THEN 'gone' END, CASE WHEN ci.status = 'retired' THEN 'retired' END,
+				CASE WHEN s.auto_update THEN 'auto-update' END], NULL)`},
 		{Key: "pinned", Label: "Pinned", Type: list.Bool, Expr: `s.pinned`},
 		{Key: "orphaned", Label: "Orphaned", Type: list.Bool, Expr: `s.orphaned`},
 		{Key: "present", Label: "Present", Type: list.Bool, Expr: `s.present`},
+		{Key: "retired", Label: "Retired", Type: list.Bool, Expr: `ci.status = 'retired'`},
 		{Key: "auto_update", Label: "Auto-update", Type: list.Bool, Expr: `s.auto_update`},
 		{Key: "model", Label: "Change model", Type: list.Text, Expr: `COALESCE(m.name, '')`,
 			LinkExpr: `'/change-models/' || m.id`},
@@ -153,7 +155,9 @@ func init() {
 	stackTable.Views = []list.View{present,
 		view("updates", "With newer images", []list.Cond{cond("drift", list.Gt, "0")}),
 		view("orphaned", "Orphaned", []list.Cond{cond("orphaned", list.IsTrue, "")}),
-		view("gone", "Gone", []list.Cond{cond("present", list.IsFalse, "")}),
+		view("gone", "Gone", []list.Cond{cond("present", list.IsFalse, ""), cond("retired", list.IsFalse, "")}),
+		// Missing too long (Settings > Inventory), or on a revoked host.
+		view("retired", "Retired", []list.Cond{cond("retired", list.IsTrue, "")}),
 		view("all", "All"),
 	}
 }
