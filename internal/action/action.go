@@ -79,6 +79,9 @@ const (
 	// CapComposeRetag: compose.update takes a new tag for the services it
 	// names (ComposeParams.Tag), written into their Compose file.
 	CapComposeRetag = "compose-retag"
+	// CapComposeMoveTimeout: compose.move takes its own time limit
+	// (ComposeParams.Timeout), and a failed move gets as long to go back.
+	CapComposeMoveTimeout = "compose-move-timeout"
 )
 
 type Risk string
@@ -286,6 +289,26 @@ type ComposeParams struct {
 	// file before pulling, and puts the file back if the update fails. It
 	// needs CapComposeRetag and services.
 	Tag string `json:"tag,omitempty"`
+	// Timeout (compose.move), in seconds, replaces the move's default time
+	// limit, for a stack too big to copy within it; zero keeps the default.
+	// It needs CapComposeMoveTimeout.
+	Timeout int `json:"timeout_s,omitempty"`
+}
+
+// Bounds of a compose.move's own time limit (ComposeParams.Timeout).
+const (
+	MinMoveTimeout = time.Minute
+	MaxMoveTimeout = 48 * time.Hour
+)
+
+// NeedsMoveTimeout reports whether compose.move parameters set their own
+// time limit, which only agents with CapComposeMoveTimeout understand.
+func NeedsMoveTimeout(name string, params []byte) bool {
+	if name != ComposeMove {
+		return false
+	}
+	var p ComposeParams
+	return json.Unmarshal(params, &p) == nil && p.Timeout > 0
 }
 
 // reTag is what a registry accepts as a tag.
@@ -503,8 +526,14 @@ func Validate(name string, raw []byte) ([]byte, error) {
 			if err := CheckComposeRoot(p.Dest); err != nil {
 				return nil, err
 			}
+			// Checked in seconds: a huge value would overflow a Duration.
+			if p.Timeout != 0 && (p.Timeout < int(MinMoveTimeout/time.Second) || p.Timeout > int(MaxMoveTimeout/time.Second)) {
+				return nil, fmt.Errorf("a move's time limit must be between %v and %v", MinMoveTimeout, MaxMoveTimeout)
+			}
 		} else if p.Dest != "" {
 			return nil, errors.New("dest is compose.move's")
+		} else if p.Timeout != 0 {
+			return nil, errors.New("timeout_s is compose.move's")
 		}
 		if p.Tag != "" {
 			if name != ComposeUpdate {
@@ -653,7 +682,11 @@ func Timeout(name string, params []byte) time.Duration {
 	case ComposeUpdate, ComposeStart, ComposeMove:
 		var p ComposeParams
 		if json.Unmarshal(params, &p) == nil {
-			return s.Timeout + time.Duration(p.HealthTimeout)*time.Second
+			base := s.Timeout
+			if p.Timeout > 0 {
+				base = time.Duration(p.Timeout) * time.Second
+			}
+			return base + time.Duration(p.HealthTimeout)*time.Second
 		}
 	case ComposeDeploy, ComposeEdit:
 		var p StackFileParams

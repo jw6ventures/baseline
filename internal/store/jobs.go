@@ -37,7 +37,9 @@ const (
 	// MaxJobOutput caps the output kept per job.
 	MaxJobOutput = 5 << 20
 	// jobGrace is how long past its timeout the server waits for an
-	// agent's own timeout to arrive before giving up on a job.
+	// agent's own timeout to arrive before giving up on a job. A failed
+	// compose.move gets its timeout again to move back (the agent's
+	// moveBackTimeout), so the server waits twice its timeout for one.
 	jobGrace = 5 * time.Minute
 	// offlineLimit is how long a job waits for its host to come online.
 	offlineLimit = time.Hour
@@ -501,8 +503,9 @@ func (s *Store) ExpireJobs(ctx context.Context) ([]JobRef, error) {
 		rows, err := tx.QueryContext(ctx, `
 			SELECT j.id, j.host, h.agent_id, j.change_id, j.state, j.awaiting_reboot FROM job j JOIN host h ON h.ci_id = j.host
 			WHERE j.state IN ('dispatched', 'running')
-			  AND COALESCE(j.started_at, j.dispatched_at) + make_interval(secs => j.timeout_s) + $1 * interval '1 second' < now()`,
-			jobGrace.Seconds())
+			  AND COALESCE(j.started_at, j.dispatched_at) + make_interval(secs => j.timeout_s * CASE WHEN j.action = $2 THEN 2 ELSE 1 END)
+			      + $1 * interval '1 second' < now()`,
+			jobGrace.Seconds(), action.ComposeMove)
 		if err != nil {
 			return err
 		}

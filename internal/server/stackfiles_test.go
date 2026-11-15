@@ -479,8 +479,32 @@ func TestArchiveAndMoveStacks(t *testing.T) {
 		t.Fatalf("move: %d %s", resp.StatusCode, notice(body))
 	}
 	c, _ := h.st.GetChange(ctx, h.changeOrJob(resp))
-	if c.Title != "Move stack app to /srv/stacks/app on a" || len(c.Plan) != 1 || !strings.Contains(string(c.Plan[0].Params), `"dest": "/srv/stacks"`) {
+	if c.Title != "Move stack app to /srv/stacks/app on a" || len(c.Plan) != 1 || !strings.Contains(string(c.Plan[0].Params), `"dest": "/srv/stacks"`) ||
+		strings.Contains(string(c.Plan[0].Params), "timeout_s") {
 		t.Fatalf("move change %q %s", c.Title, c.Plan[0].Params)
+	}
+
+	// A longer time limit needs an agent that takes it. The default one,
+	// which the form sends unchanged, doesn't.
+	if _, body := h.do(ops, "GET", "/changes/new?action=compose.move&stack="+stack, nil); !strings.Contains(body, `name="timeout_m"`) {
+		t.Fatal("move form lacks a time limit")
+	}
+	if resp, body := post(url.Values{"action": {"compose.move"}, "dest": {"/srv/stacks"}, "timeout_m": {"600"}}); resp.StatusCode != http.StatusUnprocessableEntity ||
+		!strings.Contains(body, "can&#39;t take a move&#39;s own time limit") {
+		t.Fatalf("long move on an old agent: %d %s", resp.StatusCode, notice(body))
+	}
+	if resp, body := post(url.Values{"action": {"compose.move"}, "dest": {"/srv/stacks"}, "timeout_m": {"60"}}); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("default-limit move on an old agent: %d %s", resp.StatusCode, notice(body))
+	}
+	h.connect(a, []string{"docker", action.CapCompose, action.CapComposeFiles, action.CapComposeRoots, action.CapComposeStart,
+		action.CapComposeArchive, action.CapComposeMoveTimeout}, &action.Policy{Jobs: true})
+	resp, body = post(url.Values{"action": {"compose.move"}, "dest": {"/srv/stacks"}, "health_timeout": {"60"}, "timeout_m": {"600"}})
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("long move: %d %s", resp.StatusCode, notice(body))
+	}
+	c, _ = h.st.GetChange(ctx, h.changeOrJob(resp))
+	if !strings.Contains(string(c.Plan[0].Params), `"timeout_s": 36000`) {
+		t.Fatalf("long move params %s", c.Plan[0].Params)
 	}
 
 	resp, body = post(url.Values{"action": {"compose.archive"}})

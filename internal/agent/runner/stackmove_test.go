@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	agentv1 "github.com/jw6ventures/baseline/api/agent/v1"
 	"github.com/jw6ventures/baseline/internal/action"
@@ -166,5 +167,14 @@ func TestComposeMoveRefused(t *testing.T) {
 	checkResult(t, runStackDir(t, r, 551, action.ComposeMove, action.ComposeParams{Dest: r.Dir, HealthTimeout: 10}), "failed", -1, "state directory")
 	if len(h.fe.lines()) != 0 {
 		t.Errorf("commands %q", h.fe.lines())
+	}
+}
+
+func TestMoveBackTimeout(t *testing.T) {
+	if got := moveBackTimeout(action.ComposeParams{Dest: "/srv", HealthTimeout: 60}); got != time.Hour+time.Minute {
+		t.Errorf("default move goes back within %v", got)
+	}
+	if got := moveBackTimeout(action.ComposeParams{Dest: "/srv", HealthTimeout: 60, Timeout: 8 * 3600}); got != 8*time.Hour+time.Minute {
+		t.Errorf("8-hour move goes back within %v", got)
 	}
 }
