@@ -62,6 +62,10 @@ func TestValidateRejects(t *testing.T) {
 		name, in, err string
 	}{
 		{PkgUpgrade, `{"mode":"all","force":true}`, "unknown field"},
+		{ComposeMove, `{"engine":"docker","project":"app","dest":"/srv","timeout_s":30}`, "time limit must be between"},
+		{ComposeMove, `{"engine":"docker","project":"app","dest":"/srv","timeout_s":172801}`, "time limit must be between"},
+		{ComposeUpdate, `{"engine":"docker","project":"app","timeout_s":3600}`, "timeout_s is compose.move's"},
+		{ComposeArchive, `{"engine":"docker","project":"app","timeout_s":3600}`, "timeout_s is compose.move's"},
 		{PkgUpgrade, `{"mode":"everything"}`, "mode must be"},
 		{PkgUpgrade, `{"reboot":"sometimes"}`, "reboot must be"},
 		{PkgUpgrade, `{"mode":"selected"}`, "at least one package"},
@@ -194,6 +198,8 @@ func TestTimeout(t *testing.T) {
 		{HostReboot, `{"delay_s":10}`, 20 * time.Minute},
 		{ScriptRun, `{"script_id":"s","version":1}`, DefaultScriptTimeout},
 		{ScriptRun, `{"script_id":"s","version":1,"timeout_s":90}`, 90 * time.Second},
+		{ComposeMove, `{"dest":"/srv","health_timeout":120}`, time.Hour + 2*time.Minute},
+		{ComposeMove, `{"dest":"/srv","health_timeout":120,"timeout_s":36000}`, 10*time.Hour + 2*time.Minute},
 		{"nope", `{}`, DefaultScriptTimeout},
 	} {
 		if got := Timeout(tc.name, []byte(tc.params)); got != tc.want {
@@ -612,5 +618,20 @@ func TestByTarget(t *testing.T) {
 	}
 	if got := ByTarget([]Spec{MustGet(ServiceRestart)}); len(got) != 1 || got[0].Label != "Hosts" {
 		t.Fatalf("empty groups kept: %+v", got)
+	}
+}
+
+func TestNeedsMoveTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		name, params string
+		want         bool
+	}{
+		{ComposeMove, `{"dest":"/srv"}`, false},
+		{ComposeMove, `{"dest":"/srv","timeout_s":7200}`, true},
+		{ScriptRun, `{"timeout_s":7200}`, false},
+	} {
+		if got := NeedsMoveTimeout(tc.name, []byte(tc.params)); got != tc.want {
+			t.Errorf("NeedsMoveTimeout(%s, %s) = %v", tc.name, tc.params, got)
+		}
 	}
 }

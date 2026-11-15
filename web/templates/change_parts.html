@@ -55,6 +55,8 @@
   <label>Move to<select name="dest" required>{{range $v.Roots}}<option{{if eq ($f.Get "dest") .}} selected{{end}}>{{.}}</option>{{end}}</select></label>
   {{if not $v.Roots}}<p class="notice warn">None of the stacks' hosts has Compose roots. Admins add them on a host's Settings tab.</p>{{end}}
   <label>Time to come up healthy (seconds)<input type="number" name="health_timeout" min="10" max="1800" value="{{with $f.Get "health_timeout"}}{{.}}{{else}}120{{end}}" class="narrow"></label>
+  <label>Time limit (minutes)<input type="number" name="timeout_m" min="1" max="2880" value="{{with $f.Get "timeout_m"}}{{.}}{{else}}60{{end}}" class="narrow"></label>
+  <p class="muted small">How long the move may take, up to 48 hours. Copying a large stack to another file system can take hours, more so on a busy disk. If the move fails, moving it back gets as long again.</p>
   <p class="muted small">Takes the stack down, moves its directory to <code>&lt;root&gt;/&lt;project&gt;</code> under the Compose root picked (across file systems it is copied, then removed), checks it with <code>compose config</code> and, if it was running, starts it there and waits for its services to run and pass their healthchecks. If any of that fails, it is moved back and started where it was. The project name stays, so named volumes stay attached. The root must be one of each stack's host's.</p>
   {{else}}
   <p class="muted small">Pulls the services' images without restarting anything, so a later update is quick.</p>

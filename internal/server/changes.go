@@ -1037,6 +1037,11 @@ func (s *Server) planStep(r *http.Request, spec action.Spec, stack *store.Stack)
 		}
 		if spec.Name == action.ComposeMove {
 			p.Dest = f.Get("dest")
+			// The default limit stays unset, so agents without
+			// CapComposeMoveTimeout still take the move.
+			if minutes, _ := strconv.Atoi(f.Get("timeout_m")); minutes > 0 && time.Duration(minutes)*time.Minute != action.MustGet(action.ComposeMove).Timeout {
+				p.Timeout = minutes * 60
+			}
 		}
 		if stack == nil {
 			raw, _ := json.Marshal(p)

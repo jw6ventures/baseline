@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -206,6 +207,9 @@ func (r *Runner) move(ctx context.Context, p action.ComposeParams, out *output) 
 		res.ComposeFile = to.ConfigFiles[0].Path
 	}
 	wasRunning := running(st)
+	// Moving back may copy the whole stack again, so it gets as long as the
+	// move did; the server waits that much longer for a move's result.
+	backLimit := moveBackTimeout(p)
 	if len(st.Containers) > 0 {
 		out.info("Taking %s down…\n", st.Project)
 		if code, err := r.exec(ctx, composeCmd(st, "down"), out); err != nil || code != 0 {
@@ -213,10 +217,10 @@ func (r *Runner) move(ctx context.Context, p action.ComposeParams, out *output) 
 		}
 	}
 	if err := r.moveDir(ctx, st, st.WorkingDir, dst, out); err != nil {
-		return r.unmove(ctx, st, to, wasRunning, false, fmt.Sprintf("moving %s failed: %v", st.WorkingDir, err), res, out)
+		return r.unmove(ctx, st, to, wasRunning, false, fmt.Sprintf("moving %s failed: %v", st.WorkingDir, err), backLimit, res, out)
 	}
 	if why := r.composeCheck(ctx, to, out); why != "" {
-		return r.unmove(ctx, st, to, wasRunning, true, why, res, out)
+		return r.unmove(ctx, st, to, wasRunning, true, why, backLimit, res, out)
 	}
 	if !wasRunning {
 		out.info("Moved %s to %s. It isn't running; start it to run it from there.\n", st.Project, dst)
@@ -240,14 +244,21 @@ func (r *Runner) move(ctx context.Context, p action.ComposeParams, out *output) 
 		return outcome{failed: true, exitCode: -1, result: res,
 			err: fmt.Sprintf("%s; taking it down failed too: %s; its files are in %s", why, composeExit("down", code, err), dst)}
 	}
-	return r.unmove(ctx, st, to, wasRunning, true, why, res, out)
+	return r.unmove(ctx, st, to, wasRunning, true, why, backLimit, res, out)
+}
+
+// moveBackTimeout is how long a failed move gets to go back: the move's own
+// time limit, and never less than another rollback's.
+func moveBackTimeout(p action.ComposeParams) time.Duration {
+	raw, _ := json.Marshal(p)
+	return max(rollbackTimeout, action.Timeout(action.ComposeMove, raw))
 }
 
 // unmove undoes a failed compose.move: the directory back where it was
 // (when it moved), and the stack started there again if it ran.
 func (r *Runner) unmove(ctx context.Context, st, to collect.Stack, wasRunning, back bool, why string,
-	res *action.StackFileResult, out *output) outcome {
-	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackTimeout)
+	limit time.Duration, res *action.StackFileResult, out *output) outcome {
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), limit)
 	defer cancel()
 	out.info("\n%s. Putting %s back.\n", upperFirst(why), st.Project)
 	if back {

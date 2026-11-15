@@ -512,10 +512,14 @@ func stackDirBlock(act string, h store.Host) string {
 }
 
 // checkDest checks that a compose.move step moves the stack under one of
-// its host's Compose roots.
+// its host's Compose roots, and that the host's agent takes the step's own
+// time limit when it sets one.
 func checkDest(step store.PlanStep, h store.Host) error {
 	if step.Action != action.ComposeMove {
 		return nil
+	}
+	if action.NeedsMoveTimeout(step.Action, step.Params) && !slices.Contains(h.Capabilities, action.CapComposeMoveTimeout) {
+		return errors.New(h.DisplayName() + "'s agent can't take a move's own time limit; update it, or keep the default")
 	}
 	var p action.ComposeParams
 	json.Unmarshal(step.Params, &p)

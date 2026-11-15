@@ -322,6 +322,35 @@ func TestExpireJobs(t *testing.T) {
 	}
 }
 
+// A failed move may copy the stack back, so the server waits twice a
+// move's timeout for its result.
+func TestExpireMoveJobs(t *testing.T) {
+	s := newTestStore(t)
+	h := host(t, s, 1)
+	s.CreateChange(ctx, user(t, s, "ann"), store.NewChange{Title: "x", Risk: action.Low, SelfApprove: true,
+		Steps: []store.PlanStep{step(t, action.ComposeMove, action.ComposeParams{Engine: "docker", Project: "app", Dest: "/srv",
+			Timeout: 3600}, h.HostID)}})
+	startAll(t, s)
+	q, _ := s.QueuedJobs(ctx)
+	s.MarkDispatched(ctx, q[0].Job)
+	if q[0].TimeoutS != 3600+120 {
+		t.Fatalf("timeout_s = %d", q[0].TimeoutS)
+	}
+	db := s.DB()
+	if _, err := db.Exec(`UPDATE job SET dispatched_at = now() - interval '90 minutes' WHERE id = $1`, q[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if late, _ := s.ExpireJobs(ctx); len(late) != 0 {
+		t.Fatalf("expired while it may still be moving back: %+v", late)
+	}
+	if _, err := db.Exec(`UPDATE job SET dispatched_at = now() - interval '3 hours' WHERE id = $1`, q[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if late, _ := s.ExpireJobs(ctx); len(late) != 1 {
+		t.Fatalf("late: %+v", late)
+	}
+}
+
 func TestOutputCap(t *testing.T) {
 	s := newTestStore(t)
 	h := host(t, s, 1)
