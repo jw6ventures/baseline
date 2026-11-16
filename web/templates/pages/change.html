@@ -5,6 +5,7 @@
     <h1>{{$c.Ref}} · {{$c.Title}}</h1>
     <p class="muted sub">{{template "change-state" $c}} · {{template "change-kind" $c.Kind}} change · {{$c.Risk}} risk, {{$c.Impact}} impact · requested by {{$c.RequestedByName}} {{ago $c.CreatedAt}}</p>
   </div>
+  {{if $v.CanEdit}}<div class="actions"><a class="button secondary" href="{{.Base}}/changes/{{$c.ID}}/edit">Edit</a></div>{{end}}
 </div>
 {{with $v.Notice}}<p class="notice ok">{{.}}</p>{{end}}
 {{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
@@ -17,10 +18,11 @@
     {{range $c.Plan}}<dt>Action</dt><dd>{{.Summary}} <span class="muted small mono">{{.Action}}</span></dd>{{end}}
     <dt>Hosts</dt><dd>{{range $i, $id := $c.HostIDs}}{{if $i}}, {{end}}<a href="{{$.Base}}/hosts/{{$id}}/jobs">{{index $c.HostNames $i}}</a>{{end}}</dd>
     <dt>Rollout</dt><dd>{{plural $c.Concurrency "host"}} at a time{{if $c.StopOnFailure}}, stopping at the first failure{{end}}</dd>
+    {{with $c.Description}}<dt>Description</dt><dd class="pre">{{.}}</dd>{{end}}
     {{with $c.Justification}}<dt>Why</dt><dd>{{.}}</dd>{{end}}
     {{with $c.BackoutPlan}}<dt>Back-out</dt><dd class="pre">{{.}}</dd>{{end}}
     {{with $c.TestPlan}}<dt>Test</dt><dd class="pre">{{.}}</dd>{{end}}
-    {{if $c.ModelID}}<dt>Model</dt><dd><a href="{{.Base}}/change-models/{{$c.ModelID}}">{{$c.ModelName}}</a> <span class="muted small">(pre-approved)</span></dd>{{end}}
+    {{if $c.ModelID}}<dt>Model</dt><dd><a href="{{.Base}}/change-models/{{$c.ModelID}}">{{$c.ModelName}}</a> <span class="muted small">{{if eq $c.Kind "standard"}}(pre-approved){{else}}(escalated from a Standard change){{end}}</span></dd>{{end}}
     {{with $v.Cycle}}<dt>Patch group</dt><dd><a href="{{$.Base}}/patch-groups/{{.GroupID}}">{{.GroupName}}</a>, run of {{time .ScheduledFor}}</dd>{{end}}
   </dl>
 </section>
@@ -28,6 +30,7 @@
   <h2>Schedule</h2>
   <dl class="facts">
     <dt>Window</dt><dd>{{if $c.WindowID}}<a href="{{.Base}}/windows">{{$c.WindowName}}</a>{{if eq $c.OnWindowEnd "fail"}} <span class="muted small">(hosts left when it closes are skipped)</span>{{else}} <span class="muted small">(hosts left when it closes wait for the next opening)</span>{{end}}{{else}}none{{end}}</dd>
+    {{if not $c.NotBefore.IsZero}}<dt>Not before</dt><dd>{{time $c.NotBefore}}</dd>{{end}}
     {{if not $c.PlannedStart.IsZero}}<dt>Planned</dt><dd>{{time $c.PlannedStart}}{{if not $c.PlannedEnd.IsZero}} – {{time $c.PlannedEnd}}{{end}}</dd>{{end}}
     {{if not $c.ActualStart.IsZero}}<dt>Started</dt><dd>{{time $c.ActualStart}}</dd>{{end}}
     {{if not $c.WindowEndsAt.IsZero}}<dt>Window closes</dt><dd>{{time $c.WindowEndsAt}}</dd>{{end}}
@@ -44,7 +47,7 @@
   {{else}}
   <dl class="facts">
     <dt>Needs</dt><dd>{{plural $c.RequiredApprovals "approval"}} from approvers of every affected host{{if gt $c.RequiredApprovals 1}} ({{$c.Approvals}} so far){{end}}</dd>
-    {{range $v.Approvals}}<dt>{{if eq .Decision "approve"}}Approved{{else}}Rejected{{end}}</dt><dd>by {{.ApproverName}}{{if .SelfApproved}} <span class="tag">self-approved</span>{{end}} <span class="muted small">{{time .At}}</span>{{with .Comment}}<br>“{{.}}”{{end}}</dd>{{end}}
+    {{range $v.Approvals}}<dt{{if .Withdrawn}} class="muted"{{end}}>{{if eq .Decision "approve"}}Approved{{else}}Rejected{{end}}</dt><dd{{if .Withdrawn}} class="muted"{{end}}>by {{.ApproverName}}{{if .SelfApproved}} <span class="tag">self-approved</span>{{end}}{{if .Withdrawn}} <span class="tag" title="The change was edited or escalated after this approval">withdrawn</span>{{end}} <span class="muted small">{{time .At}}</span>{{with .Comment}}<br>“{{.}}”{{end}}</dd>{{end}}
   </dl>
   {{end}}
   {{if $v.CanSubmit}}
@@ -126,6 +129,33 @@
     <div><button>Close the change</button></div>
   </form>
   {{end}}
+</section>
+{{end}}
+
+{{if $v.History}}
+<h2>History</h2>
+<div class="table-wrap">
+<table class="history">
+  <thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead>
+  <tbody>
+  {{range $v.History}}
+  <tr><td class="nowrap">{{time .At}}</td><td>{{.Who}}</td><td>{{.What}}{{with .Details}}<ul class="small">{{range .}}<li>{{.}}</li>{{end}}</ul>{{end}}</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{if $v.CanEscalate}}
+<section class="panel warn-zone spaced">
+  <h2>Escalate to Emergency</h2>
+  <p class="muted">An Emergency change needs one approver, runs as soon as it's approved, outside its maintenance window and through freezes, and needs a post-implementation review before it closes.
+  {{if $c.WindowID}}Its window, {{$c.WindowName}}, is removed{{if not $c.NotBefore.IsZero}}, and so is its planned start{{end}}.{{else if not $c.NotBefore.IsZero}}Its planned start is removed.{{end}}
+  {{if $v.EscalateApproves}}{{if eq $c.State "in_progress"}}Jobs left stop waiting for the window.{{else if eq $c.State "draft"}}As an approver of every host, escalating also submits and approves it.{{else}}As an approver of every host, escalating also approves it, so it starts now.{{end}}{{else}}{{if eq $c.State "draft"}}It stays a draft until you submit it.{{else}}Approvals so far are withdrawn: it waits for one approver.{{end}}{{end}}</p>
+  <form class="inline-form" method="post" action="{{.Base}}/changes/{{$c.ID}}/escalate">
+    <label>Why is it an emergency? <input name="reason" required placeholder="e.g. CVE under active exploitation" size="40"></label>
+    <button class="warn">Escalate to Emergency</button>
+  </form>
 </section>
 {{end}}
 

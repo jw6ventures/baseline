@@ -80,15 +80,19 @@ type Change struct {
 	CreatedAt         time.Time
 	SubmittedAt       time.Time
 	ApprovedAt        time.Time
-	PlannedStart      time.Time
-	PlannedEnd        time.Time
-	ActualStart       time.Time
-	ActualEnd         time.Time
-	ClosedAt          time.Time
-	HostIDs           []string // affected hosts
-	HostNames         []string
-	SelfApproved      bool
-	Approvals         int // approvals so far
+	// NotBefore is the start its requester asked for; PlannedStart is
+	// when the scheduler plans to start it, which a window or freeze can
+	// push later.
+	NotBefore    time.Time
+	PlannedStart time.Time
+	PlannedEnd   time.Time
+	ActualStart  time.Time
+	ActualEnd    time.Time
+	ClosedAt     time.Time
+	HostIDs      []string // affected hosts
+	HostNames    []string
+	SelfApproved bool
+	Approvals    int // approvals so far, not counting withdrawn ones
 
 	ModelID      string
 	ModelName    string
@@ -194,8 +198,8 @@ const changeCols = `c.id, c.number, c.kind, c.title, c.description, c.justificat
 	COALESCE(c.actual_start, 'epoch'), COALESCE(c.actual_end, 'epoch'), COALESCE(c.closed_at, 'epoch'),
 	ARRAY(SELECT cc.ci_id::text FROM change_ci cc JOIN host h ON h.ci_id = cc.ci_id WHERE cc.change_id = c.id ORDER BY h.hostname),
 	ARRAY(SELECT h.hostname FROM change_ci cc JOIN host h ON h.ci_id = cc.ci_id WHERE cc.change_id = c.id ORDER BY h.hostname),
-	EXISTS (SELECT 1 FROM change_approval a WHERE a.change_id = c.id AND a.self_approved AND a.decision = 'approve'),
-	(SELECT count(*) FROM change_approval a WHERE a.change_id = c.id AND a.decision = 'approve'),
+	EXISTS (SELECT 1 FROM change_approval a WHERE a.change_id = c.id AND a.self_approved AND a.decision = 'approve' AND NOT a.withdrawn),
+	(SELECT count(*) FROM change_approval a WHERE a.change_id = c.id AND a.decision = 'approve' AND NOT a.withdrawn),
 	COALESCE(c.model_id::text, ''), COALESCE(m.name, ''), COALESCE(c.window_id::text, ''), COALESCE(w.name, ''),
 	COALESCE(c.window_ends_at, 'epoch'), c.on_window_end, c.schedule_note, c.review_notes,
 	COALESCE(NULLIF(r.name, ''), r.email, ''),
@@ -203,7 +207,8 @@ const changeCols = `c.id, c.number, c.kind, c.title, c.description, c.justificat
 	(SELECT count(*) FROM job j WHERE j.change_id = c.id AND j.state = 'succeeded'),
 	(SELECT count(*) FROM job j WHERE j.change_id = c.id AND j.state IN ('failed', 'timed_out', 'rejected', 'rolled_back')),
 	(SELECT count(*) FROM job j WHERE j.change_id = c.id AND j.state IN ('queued', 'dispatched', 'running')),
-	(SELECT count(*) FROM job j WHERE j.change_id = c.id AND j.state = 'queued')`
+	(SELECT count(*) FROM job j WHERE j.change_id = c.id AND j.state = 'queued'),
+	COALESCE(c.not_before, 'epoch')`
 
 const changeFrom = ` FROM change c LEFT JOIN app_user u ON u.id = c.requested_by LEFT JOIN change_model m ON m.id = c.model_id
 	LEFT JOIN maintenance_window w ON w.id = c.window_id LEFT JOIN app_user r ON r.id = c.reviewed_by `
@@ -218,12 +223,12 @@ func scanChange(row interface{ Scan(...any) error }) (Change, error) {
 		pq.Array(&c.HostIDs), pq.Array(&c.HostNames), &c.SelfApproved, &c.Approvals,
 		&c.ModelID, &c.ModelName, &c.WindowID, &c.WindowName, &c.WindowEndsAt, &c.OnWindowEnd, &c.ScheduleNote,
 		&c.ReviewNotes, &c.ReviewedBy,
-		&c.Jobs, &c.JobsOK, &c.JobsFailed, &c.JobsOpen, &c.JobsQueued)
+		&c.Jobs, &c.JobsOK, &c.JobsFailed, &c.JobsOpen, &c.JobsQueued, &c.NotBefore)
 	if err != nil {
 		return c, err
 	}
 	for _, t := range []*time.Time{&c.SubmittedAt, &c.ApprovedAt, &c.PlannedStart, &c.PlannedEnd, &c.ActualStart,
-		&c.ActualEnd, &c.ClosedAt, &c.WindowEndsAt} {
+		&c.ActualEnd, &c.ClosedAt, &c.WindowEndsAt, &c.NotBefore} {
 		if t.Unix() == 0 {
 			*t = time.Time{}
 		}
@@ -291,12 +296,15 @@ type Approval struct {
 	Decision     string
 	Comment      string
 	SelfApproved bool
-	At           time.Time
+	// Withdrawn approvals were given before an edit or an escalation that
+	// needed approval again; they no longer count.
+	Withdrawn bool
+	At        time.Time
 }
 
 func (s *Store) ChangeApprovals(ctx context.Context, changeID string) ([]Approval, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT a.approver, COALESCE(NULLIF(u.name, ''), u.email, ''), a.decision, a.comment, a.self_approved, a.at
+		SELECT a.approver, COALESCE(NULLIF(u.name, ''), u.email, ''), a.decision, a.comment, a.self_approved, a.withdrawn, a.at
 		FROM change_approval a JOIN app_user u ON u.id = a.approver WHERE a.change_id = $1 ORDER BY a.at`, changeID)
 	if err != nil {
 		return nil, mapErr(err)
@@ -305,7 +313,7 @@ func (s *Store) ChangeApprovals(ctx context.Context, changeID string) ([]Approva
 	var out []Approval
 	for rows.Next() {
 		var a Approval
-		if err := rows.Scan(&a.Approver, &a.ApproverName, &a.Decision, &a.Comment, &a.SelfApproved, &a.At); err != nil {
+		if err := rows.Scan(&a.Approver, &a.ApproverName, &a.Decision, &a.Comment, &a.SelfApproved, &a.Withdrawn, &a.At); err != nil {
 			return nil, err
 		}
 		out = append(out, a)
@@ -381,8 +389,8 @@ func (s *Store) CreateChange(ctx context.Context, actor Actor, nc NewChange) (Ch
 		if err := tx.QueryRowContext(ctx, `
 			INSERT INTO change (kind, model_id, title, description, justification, risk, impact, backout_plan, test_plan,
 			                    implementation_plan, state, requested_by, required_approvals, concurrency, stop_on_failure,
-			                    window_id, planned_start, on_window_end, submitted_at, approved_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+			                    window_id, planned_start, not_before, on_window_end, submitted_at, approved_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17, $18,
 			        CASE WHEN $11 <> 'draft' THEN now() END, CASE WHEN $11 = 'approved' THEN now() END)
 			RETURNING id, number`,
 			nc.Kind, nullString(nc.ModelID), nc.Title, nc.Description, nc.Justification, string(nc.Risk), string(nc.Impact),
@@ -513,7 +521,8 @@ func decide(ctx context.Context, tx *sql.Tx, actor Actor, id, decision, comment 
 	self := requester == userID.String
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO change_approval (change_id, approver, decision, comment, self_approved) VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (change_id, approver) DO UPDATE SET decision = EXCLUDED.decision, comment = EXCLUDED.comment, at = now()`,
+		ON CONFLICT (change_id, approver) DO UPDATE SET decision = EXCLUDED.decision, comment = EXCLUDED.comment,
+		    self_approved = EXCLUDED.self_approved, withdrawn = false, at = now()`,
 		id, userID, decision, comment, self); err != nil {
 		return err
 	}
@@ -532,7 +541,7 @@ func decide(ctx context.Context, tx *sql.Tx, actor Actor, id, decision, comment 
 	}
 	var approvals int
 	if err := tx.QueryRowContext(ctx,
-		`SELECT count(*) FROM change_approval WHERE change_id = $1 AND decision = 'approve'`, id).Scan(&approvals); err != nil {
+		`SELECT count(*) FROM change_approval WHERE change_id = $1 AND decision = 'approve' AND NOT withdrawn`, id).Scan(&approvals); err != nil {
 		return err
 	}
 	if approvals < required {

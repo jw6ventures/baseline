@@ -16,10 +16,10 @@ import (
 )
 
 // The JSON API at /api/v1 (docs/api.md). It reads everything the web UI
-// shows, under the same role checks; creates, submits, cancels and closes
-// changes; adds and removes manual CI relationships; and files, edits,
-// transitions, comments on and links work items. It
-// is authenticated with an API token in the Authorization header: a token
+// shows, under the same role checks; creates, edits, escalates, submits,
+// cancels and closes changes; adds and removes manual CI relationships; and
+// files, edits, transitions, comments on and links work items. It is
+// authenticated with an API token in the Authorization header: a token
 // acts as its user with at most the roles it names (docs/architecture.md
 // §5.1). Responses are JSON; errors are {"error": "..."} with the status.
 const apiPrefix = "/api/v1"
@@ -89,6 +89,8 @@ func (s *Server) apiRoutes(mux *http.ServeMux) {
 	post("/changes/{id}/submit", anyOperator, s.apiChangeSubmit)
 	post("/changes/{id}/cancel", anyRole, s.apiChangeCancel)
 	post("/changes/{id}/close", anyRole, s.apiChangeClose)
+	patch("/changes/{id}", anyRole, s.apiChangeEdit)
+	post("/changes/{id}/escalate", anyRole, s.apiChangeEscalate)
 	get("/change-models", anyRole, s.apiChangeModels)
 	get("/change-models/{id}", anyRole, s.apiChangeModel)
 	get("/jobs", anyRole, s.apiJobs)

@@ -97,7 +97,7 @@ func (s *Server) changeDetail(r *http.Request, c store.Change) (any, error) {
 	out.Approvals = make([]approvalJSON, 0, len(approvals))
 	for _, a := range approvals {
 		out.Approvals = append(out.Approvals, approvalJSON{Approver: a.Approver, ApproverName: a.ApproverName,
-			Decision: a.Decision, Comment: a.Comment, SelfApproved: a.SelfApproved, At: a.At})
+			Decision: a.Decision, Comment: a.Comment, SelfApproved: a.SelfApproved, Withdrawn: a.Withdrawn, At: a.At})
 	}
 	jobs, err := s.store.ListJobs(ctx, store.JobFilter{ChangeID: c.ID, Limit: 1000})
 	if err != nil {

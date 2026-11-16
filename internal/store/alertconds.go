@@ -467,7 +467,7 @@ func (s *Store) HardwareChanges(ctx context.Context, ruleID string, keep time.Du
 func (s *Store) ChangesAwaitingApproval(ctx context.Context, d time.Duration) ([]Condition, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT c.id, c.number, c.title, COALESCE(c.submitted_at, c.created_at), c.required_approvals,
-		       (SELECT count(*) FROM change_approval a WHERE a.change_id = c.id AND a.decision = 'approve'),
+		       (SELECT count(*) FROM change_approval a WHERE a.change_id = c.id AND a.decision = 'approve' AND NOT a.withdrawn),
 		       ARRAY(SELECT DISTINCT m.group_id::text FROM change_ci x JOIN host_group_member m ON m.ci_id = x.ci_id
 		             WHERE x.change_id = c.id)
 		FROM change c

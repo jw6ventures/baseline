@@ -1,0 +1,54 @@
+{{define "content"}}
+{{$v := .Body}}{{$c := $v.Change}}{{$f := $v.Form}}
+<h1>Edit <a href="{{.Base}}/changes/{{$c.ID}}">{{$c.Ref}}</a></h1>
+<p class="muted sub">{{template "change-state" $c}} · {{template "change-kind" $c.Kind}} change · {{range $i, $p := $c.Plan}}{{if $i}}; {{end}}{{$p.Summary}}{{end}} on {{plural (len $c.HostIDs) "host"}}</p>
+{{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
+<p class="muted">What the change runs and where stay as they are; to change those, cancel it and make a new one.
+{{if eq $c.Kind "standard"}}Its change model approved it, so edits keep it approved.
+{{else if or (eq $c.State "submitted") (eq $c.State "approved") (eq $c.State "scheduled")}}Text edits keep its approvals. Changing its risk, impact, schedule or rollout withdraws them{{if $v.CanApprove}}; as an approver of every host, your edit counts as your approval{{else}}, and it waits for approval again{{end}}.{{end}}</p>
+
+<form class="panel stack-form wide" method="post" action="{{.Base}}/changes/{{$c.ID}}/edit">
+  <label>Title<input name="title" value="{{$f.Get "title"}}" maxlength="200" required></label>
+  <label><span>Description <span class="muted small">(optional)</span></span><textarea name="description" rows="2">{{$f.Get "description"}}</textarea></label>
+  <label><span>Why <span class="muted small">(justification, kept with the change)</span></span><textarea name="justification" rows="2">{{$f.Get "justification"}}</textarea></label>
+  <details class="sub"{{if or ($f.Get "backout_plan") ($f.Get "test_plan")}} open{{end}}>
+    <summary>Back-out and test plans</summary>
+    <label><span>Back-out plan <span class="muted small">(how to undo it if it goes wrong)</span></span><textarea name="backout_plan" rows="2">{{$f.Get "backout_plan"}}</textarea></label>
+    <label><span>Test plan <span class="muted small">(how you'll know it worked)</span></span><textarea name="test_plan" rows="2">{{$f.Get "test_plan"}}</textarea></label>
+  </details>
+
+  {{if ne $c.Kind "standard"}}
+  <div class="inline-form">
+    <label>Risk<select name="risk">{{range $v.Risks}}<option value="{{.}}"{{if eq (print .) ($f.Get "risk")}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+    <label>Impact<select name="impact">{{range $v.Risks}}<option value="{{.}}"{{if eq (print .) ($f.Get "impact")}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+    {{if eq $c.Kind "normal"}}<label>Approvals needed<input type="number" name="approvals" min="1" max="5" value="{{$f.Get "approvals"}}" class="narrow"></label>{{end}}
+  </div>
+  {{end}}
+
+  <fieldset>
+    <legend>When</legend>
+    <div class="inline-form">
+      <label>Maintenance window<select name="window">
+        <option value="">none: as soon as it's approved</option>
+        {{range $v.Windows}}<option value="{{.ID}}"{{if eq .ID ($f.Get "window")}} selected{{end}}>{{.Name}}{{if not .Global}} ({{join .ScopeNames ", "}}){{end}}{{if not .Active}} (turned off){{end}}</option>{{end}}
+      </select></label>
+      <label><span>Not before <span class="muted small">({{$v.TZ}})</span></span><input type="datetime-local" name="not_before" value="{{$f.Get "not_before"}}"></label>
+      <label>When the window closes<select name="on_window_end">
+        <option value="carry_over">hosts left wait for the next opening</option>
+        <option value="fail"{{if eq ($f.Get "on_window_end") "fail"}} selected{{end}}>hosts left are skipped and the change fails</option>
+      </select></label>
+    </div>
+    {{if and (eq $c.State "scheduled") (not $c.PlannedStart.IsZero)}}<p class="muted small">Scheduled for {{time $c.PlannedStart}}{{with $c.ScheduleNote}} ({{.}}){{end}}. Changing the window or start plans it again.</p>{{end}}
+    {{if ne $c.Kind "emergency"}}<p class="muted small">To run it outside its window or through a freeze, escalate it to Emergency from the change's page.</p>{{end}}
+  </fieldset>
+
+  <div class="inline-form">
+    <label>{{with index $c.Plan 0}}{{if hasPrefix .Action "compose."}}Stacks{{else if eq .Action "container.restart"}}Containers{{else if hasPrefix .Action "k8s."}}Workloads{{else}}Hosts{{end}}{{end}} at a time<input type="number" name="concurrency" min="1" max="100" value="{{$f.Get "concurrency"}}" class="narrow"></label>
+    <label class="check"><input type="checkbox" name="stop_on_failure" value="1"{{if $f.Get "stop_on_failure"}} checked{{end}}> stop at the first failure</label>
+  </div>
+  <div>
+    <button>Save</button>
+    <a href="{{.Base}}/changes/{{$c.ID}}">Cancel</a>
+  </div>
+</form>
+{{end}}

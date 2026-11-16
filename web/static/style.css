@@ -195,6 +195,9 @@ tr.dim td { opacity: 0.55; }
 .panel h2 { margin-top: 0; }
 .panel.highlight { border-color: var(--accent); }
 .danger-zone { border-color: var(--bad); }
+.warn-zone { border-color: var(--warn); }
+button.warn { background: transparent; color: var(--warn); border: 1px solid var(--warn); }
+table.history ul { margin: 0.25rem 0 0; padding-left: 1.1rem; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); gap: 1rem; }
 .grid2 .panel { margin-bottom: 0; }
 .grid2 + .panel { margin-top: 1rem; }
