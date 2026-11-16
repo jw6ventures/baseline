@@ -1,7 +1,7 @@
 # JSON API
 
 Baseline has a read API over everything the web UI shows, plus creating,
-submitting, cancelling and closing changes, adding and removing manual CI
+editing, escalating, submitting, cancelling and closing changes, adding and removing manual CI
 relationships, and filing and working on work items, at `/api/v1` on the
 web hostname. It exists for scripts and other systems: inventory exports,
 dashboards, a ticketing system that raises a change when someone asks for
@@ -137,6 +137,8 @@ All paths are under `/api/v1`.
 | `GET /changes` | Changes affecting only visible hosts, newest first: `show` (`open`, `approval`, `scheduled`, `review`, `all`), `state` (comma-separated), `host`, `model`, `ci`, `limit` (300). |
 | `POST /changes` | Creates a change (§4). |
 | `GET /changes/{id}` | A change with its approvals, jobs, patch cycle and linked work items (`work_items`, each with its `rel`: `fixes`, `implements` or `caused`). |
+| `PATCH /changes/{id}` | Edits a change that hasn't started (draft, submitted, approved or scheduled; `409` otherwise): `title`, `description`, `justification`, `backout_plan`, `test_plan`, `risk`, `impact` (not on Standard changes), `required_approvals` (Normal only), `concurrency`, `stop_on_failure`, `window` (`""` for none), `not_before` (RFC 3339, or `null` to start as soon as it can) and `on_window_end`. What it runs and where can't change. Editing its risk, impact, schedule or rollout withdraws the approvals given so far (`withdrawn` on each in `approvals`) and it waits for approvers again; the API never approves. Who may: as cancel. |
+| `POST /changes/{id}/escalate` | Makes an open change an Emergency change: `{"reason": "..."}` (`422` without). Its window and `not_before` are dropped, so it runs as soon as one approver approves it, ignoring freezes, and it needs a review before it closes. The approvals given so far are withdrawn. `409` for an Emergency change, one that has ended, or one in progress (escalate that in the UI, as an approver). Who may: as cancel. |
 | `POST /changes/{id}/submit` | Submits a draft for approval. Only its requester may; `409` otherwise. |
 | `POST /changes/{id}/cancel` | Cancels an open change, asking its running jobs to stop; `{"reason": "..."}` is optional. Its requester, an approver on all its hosts or an admin may; `409` once it has ended. |
 | `POST /changes/{id}/close` | Closes a change that has ended (implemented, failed, rolled back or in review). One that didn't end implemented needs `{"review": "..."}`, its post-implementation review (`422` without). Who may: as cancel. |

@@ -85,8 +85,14 @@ type changeView struct {
 	CanCancel  bool
 	CanSubmit  bool
 	CanClose   bool
-	Notice     string
-	Error      string
+	CanEdit    bool
+	// CanEscalate offers Emergency; EscalateApproves says the user's
+	// escalation is also its approval.
+	CanEscalate      bool
+	EscalateApproves bool
+	History          []changeEvent
+	Notice           string
+	Error            string
 }
 
 // loadChange fetches the change in the path, if the user may see it.
@@ -164,6 +170,15 @@ func (s *Server) changePage(w http.ResponseWriter, r *http.Request) {
 	v.CanCancel = c.Open() && s.mayManage(r, c, hosts)
 	v.CanSubmit = c.State == store.ChangeDraft && c.RequestedBy == p.User.ID
 	v.CanClose = c.Closable() && s.mayManage(r, c, hosts)
+	v.CanEdit = c.Editable() && s.mayManage(r, c, hosts)
+	v.EscalateApproves = canOnAll(p.Grants, rbac.Approver, c.HostIDs, hosts)
+	v.CanEscalate = c.Escalatable() && s.mayManage(r, c, hosts) && (c.State != store.ChangeInProgress || v.EscalateApproves)
+	hist, err := s.store.ChangeHistory(ctx, c.ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	v.History = s.changeEvents(hist)
 	s.pages.render(w, http.StatusOK, "change", s.data(r, c.Ref()+" "+c.Title, v))
 }
 

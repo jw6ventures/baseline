@@ -454,6 +454,7 @@ type changeJSON struct {
 	CreatedAt         time.Time        `json:"created_at"`
 	SubmittedAt       *time.Time       `json:"submitted_at,omitempty"`
 	ApprovedAt        *time.Time       `json:"approved_at,omitempty"`
+	NotBefore         *time.Time       `json:"not_before,omitempty"`
 	PlannedStart      *time.Time       `json:"planned_start,omitempty"`
 	PlannedEnd        *time.Time       `json:"planned_end,omitempty"`
 	ActualStart       *time.Time       `json:"actual_start,omitempty"`
@@ -489,7 +490,7 @@ func changeToJSON(c store.Change) changeJSON {
 		State: c.State, Outcome: c.Outcome, RequestedBy: c.RequestedBy, RequestedByName: c.RequestedByName,
 		RequiredApprovals: c.RequiredApprovals, Approvals: c.Approvals, SelfApproved: c.SelfApproved,
 		Concurrency: c.Concurrency, StopOnFailure: c.StopOnFailure, Plan: plan, Hosts: refs(c.HostIDs, c.HostNames),
-		CreatedAt: c.CreatedAt, SubmittedAt: ts(c.SubmittedAt), ApprovedAt: ts(c.ApprovedAt), PlannedStart: ts(c.PlannedStart),
+		CreatedAt: c.CreatedAt, SubmittedAt: ts(c.SubmittedAt), ApprovedAt: ts(c.ApprovedAt), NotBefore: ts(c.NotBefore), PlannedStart: ts(c.PlannedStart),
 		PlannedEnd: ts(c.PlannedEnd), ActualStart: ts(c.ActualStart), ActualEnd: ts(c.ActualEnd), ClosedAt: ts(c.ClosedAt),
 		ModelID: c.ModelID, ModelName: c.ModelName, WindowID: c.WindowID, WindowName: c.WindowName,
 		WindowEndsAt: ts(c.WindowEndsAt), OnWindowEnd: c.OnWindowEnd, ScheduleNote: c.ScheduleNote,
@@ -511,6 +512,7 @@ type approvalJSON struct {
 	Decision     string    `json:"decision"`
 	Comment      string    `json:"comment"`
 	SelfApproved bool      `json:"self_approved"`
+	Withdrawn    bool      `json:"withdrawn,omitempty"`
 	At           time.Time `json:"at"`
 }
 
