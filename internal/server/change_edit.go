@@ -27,6 +27,8 @@ type changeEditView struct {
 	// CanApprove: the editor approves every host, so an edit that needs
 	// approval again is approved by them.
 	CanApprove bool
+	// Files: the change writes a stack's files, which can be edited too.
+	Files *changeFilesView
 }
 
 // editForm is the edit form filled from the change.
@@ -61,6 +63,10 @@ func (s *Server) renderChangeEdit(w http.ResponseWriter, r *http.Request, c stor
 	}
 	v := changeEditView{Change: c, Form: f, Risks: action.Risks, TZ: s.cfg.Location.String(), Error: errMsg,
 		CanApprove: canOnAll(principal(r).Grants, rbac.Approver, c.HostIDs, hosts)}
+	if v.Files, err = s.editFilesView(r, c, hosts); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	for _, w := range ws {
 		if w.Kind == store.WindowKindWindow && (w.Active || w.ID == c.WindowID) {
 			v.Windows = append(v.Windows, w)
@@ -92,7 +98,62 @@ func (s *Server) changeEditPage(w http.ResponseWriter, r *http.Request) {
 		s.backToChange(w, r, c.ID, "error", "This change has started, so it can't be edited any more.")
 		return
 	}
-	s.renderChangeEdit(w, r, c, hosts, http.StatusOK, s.editForm(c), "")
+	f := s.editForm(c)
+	fv, err := s.editFilesView(r, c, hosts)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if fv != nil && fv.CanEdit {
+		// The form starts from the files the change writes now.
+		f.Set("files", "1")
+		f.Set("compose", fv.Revision.Compose)
+		if fv.Revision.HasEnv {
+			text, err := s.openEnv(r, fv.Revision, "change edit form")
+			if err != nil {
+				s.serverError(w, r, err)
+				return
+			}
+			f.Set("env", string(text))
+		}
+	}
+	s.renderChangeEdit(w, r, c, hosts, http.StatusOK, f, "")
+}
+
+// editFilesView is the stack files part of the change's edit form, or nil
+// when it writes none.
+func (s *Server) editFilesView(r *http.Request, c store.Change, hosts map[string]store.Host) (*changeFilesView, error) {
+	rev, err := s.changeRevision(r.Context(), c)
+	if err != nil || rev == nil {
+		return nil, err
+	}
+	return &changeFilesView{Revision: *rev, Deploy: rev.Action == action.ComposeDeploy,
+		CanEdit: canOnAll(principal(r).Grants, rbac.Operator, c.HostIDs, hosts)}, nil
+}
+
+// formFilesEdit reads the stack files part of the edit form, when the
+// form had one.
+func (s *Server) formFilesEdit(r *http.Request, c store.Change, hosts map[string]store.Host) (*store.FilesEdit, error) {
+	if r.Form.Get("files") == "" {
+		return nil, nil
+	}
+	fv, err := s.editFilesView(r, c, hosts)
+	if err != nil || fv == nil {
+		return nil, err
+	}
+	if !fv.CanEdit {
+		return nil, store.EditError("editing the stack's files needs the operator role on its host")
+	}
+	var compose, env *string
+	if fv.Revision.HasCompose {
+		v := textField(r.Form, "compose")
+		compose = &v
+	}
+	if fv.Deploy || fv.Revision.HasEnv {
+		v := textField(r.Form, "env")
+		env = &v
+	}
+	return s.filesEdit(r, c, fv.Revision, compose, env)
 }
 
 // formEdit reads the edit form into an edit of c.
@@ -183,6 +244,14 @@ func (s *Server) changeEdit(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		fail(sentence(err))
+		return
+	}
+	if e.Files, err = s.formFilesEdit(r, c, hosts); err != nil {
+		if errors.As(err, new(store.EditError)) {
+			fail(sentence(err))
+		} else {
+			s.serverError(w, r, err)
+		}
 		return
 	}
 	e.Approve = canOnAll(principal(r).Grants, rbac.Approver, c.HostIDs, hosts)
@@ -367,6 +436,7 @@ func (s *Server) changeEvents(entries []store.AuditEntry) []changeEvent {
 				}
 				ev.Details = append(ev.Details, editLabels[f]+": "+s.editValue(f, c["from"])+" → "+s.editValue(f, c["to"]))
 			}
+			ev.Details = append(ev.Details, filesHistory(changes)...)
 			if n, _ := d["approvals_withdrawn"].(float64); n > 0 {
 				ev.Details = append(ev.Details, plural(int(n), "approval", "approvals")+" withdrawn")
 			}
@@ -420,6 +490,11 @@ type changeEditRequest struct {
 	// can. Leave it out to keep it.
 	NotBefore   json.RawMessage `json:"not_before"`
 	OnWindowEnd *string         `json:"on_window_end"`
+	// Compose and Env replace the files a compose.deploy or compose.edit
+	// change writes (operators of its host); "" for a deploy's env writes
+	// no .env.
+	Compose *string `json:"compose"`
+	Env     *string `json:"env"`
 }
 
 func (s *Server) apiChangeEdit(w http.ResponseWriter, r *http.Request) {
@@ -493,6 +568,28 @@ func (s *Server) apiChangeEdit(w http.ResponseWriter, r *http.Request) {
 	if err := s.checkEdit(r, c, e); err != nil {
 		s.respond(w, r, nil, bad("%s", err.Error()))
 		return
+	}
+	if req.Compose != nil || req.Env != nil {
+		rev, err := s.changeRevision(r.Context(), c)
+		switch {
+		case err != nil:
+			s.apiServerError(w, r, err)
+			return
+		case rev == nil:
+			s.respond(w, r, nil, bad("compose and env are for compose.deploy and compose.edit changes"))
+			return
+		case !canOnAll(principal(r).Grants, rbac.Operator, c.HostIDs, hosts):
+			apiError(w, http.StatusForbidden, "editing a change's stack files needs the operator role on its host")
+			return
+		}
+		if e.Files, err = s.filesEdit(r, c, *rev, req.Compose, req.Env); err != nil {
+			if errors.As(err, new(store.EditError)) {
+				s.respond(w, r, nil, bad("%s", err.Error()))
+			} else {
+				s.apiServerError(w, r, err)
+			}
+			return
+		}
 	}
 	_, err = s.store.EditChange(r.Context(), s.actor(r), c.ID, e)
 	switch {

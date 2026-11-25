@@ -69,6 +69,7 @@
 {{range $v.Revisions}}{{$r := .}}
 <section class="panel">
   <h2>{{if eq .Action "compose.deploy"}}New stack{{else}}Files of stack{{end}} {{.Project}} <span class="muted small">({{.Engine}})</span></h2>
+  {{if and $v.CanEdit $v.CanSeeEnv}}<p class="small"><a href="{{$.Base}}/changes/{{$c.ID}}/edit#files">Edit the files</a> <span class="muted">before the change starts</span></p>{{end}}
   {{if .HasCompose}}
   <details{{if not .BaseSHA256}} open{{end}}>
     <summary><strong>Compose file</strong> <span class="muted small mono">sha256 {{short .ComposeSHA256 12}}</span></summary>

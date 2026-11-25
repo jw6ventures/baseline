@@ -58,3 +58,16 @@ func TestHash(t *testing.T) {
 		t.Errorf("hashes %s %s", a, b)
 	}
 }
+
+func TestDiff(t *testing.T) {
+	added, removed, changed, err := Diff([]byte("A=1\nB=2\n# c\nC=3\n"), []byte("A=1\nexport B = 5\nD=4\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(added, ",") != "D" || strings.Join(removed, ",") != "C" || strings.Join(changed, ",") != "B" {
+		t.Fatalf("added %v removed %v changed %v", added, removed, changed)
+	}
+	if _, _, _, err := Diff(nil, []byte("nope\n")); err == nil {
+		t.Fatal("a bad .env passed")
+	}
+}

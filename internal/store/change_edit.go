@@ -3,9 +3,13 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/lib/pq"
 
 	"github.com/jw6ventures/baseline/internal/action"
 )
@@ -42,10 +46,31 @@ type ChangeEdit struct {
 	NotBefore   *time.Time
 	OnWindowEnd *string
 
+	// Files replaces the files a compose.deploy or compose.edit change
+	// writes.
+	Files *FilesEdit
+
 	// Approve is set when the editor holds approver on every host the
 	// change affects (and edits from the UI): an edit that withdraws the
 	// approvals counts as their approval of the edited change.
 	Approve bool
+}
+
+// FilesEdit is an edit of the files a compose.deploy or compose.edit
+// change writes. The revision keeps its ID (the job's parameters name it);
+// its content, and the step's and the job's parameters, are replaced.
+type FilesEdit struct {
+	// Revision holds the new files, as the server checked and sealed them.
+	Revision ComposeRevision
+	// WasComposeSHA256 and WasEnvHash are the revision's as the edit was
+	// made from it: it is refused if another edit changed them since.
+	WasComposeSHA256, WasEnvHash string
+	// Params and Summary are the step's, for the new files.
+	Params  json.RawMessage
+	Summary string
+	// Compose and Env describe what changed, for the audit log (never a
+	// value of the .env); nil when it didn't.
+	Compose, Env map[string]any
 }
 
 // EditResult says what an edit did.
@@ -180,9 +205,28 @@ func (s *Store) EditChange(ctx context.Context, actor Actor, id string, e Change
 			set(editField{name: "on_window_end", reapprove: true}, n.OnWindowEnd, *e.OnWindowEnd)
 			n.OnWindowEnd = *e.OnWindowEnd
 		}
+		if f := e.Files; f != nil && (f.Compose != nil || f.Env != nil) {
+			if err := editFiles(ctx, tx, id, &n, f); err != nil {
+				return err
+			}
+			for _, x := range []struct {
+				name string
+				d    map[string]any
+			}{{"compose", f.Compose}, {"env", f.Env}} {
+				if x.d != nil {
+					changes[x.name] = x.d
+					res.Fields = append(res.Fields, x.name)
+					reapprove = true
+				}
+			}
+		}
 		if len(res.Fields) == 0 {
 			res.Change = c
 			return nil
+		}
+		plan, err := json.Marshal(n.Plan)
+		if err != nil {
+			return err
 		}
 
 		state := c.State
@@ -200,11 +244,11 @@ func (s *Store) EditChange(ctx context.Context, actor Actor, id string, e Change
 			UPDATE change SET title = $2, description = $3, justification = $4, backout_plan = $5, test_plan = $6,
 			       risk = $7, impact = $8, required_approvals = $9, concurrency = $10, stop_on_failure = $11,
 			       window_id = $12, not_before = $13, on_window_end = $14, planned_start = $15, planned_end = $16,
-			       schedule_note = $17, state = $18, updated_at = now()
+			       schedule_note = $17, state = $18, implementation_plan = $19, updated_at = now()
 			WHERE id = $1`,
 			id, n.Title, n.Description, n.Justification, n.BackoutPlan, n.TestPlan, n.Risk, n.Impact, n.RequiredApprovals,
 			n.Concurrency, n.StopOnFailure, nullString(n.WindowID), nullTime(n.NotBefore), n.OnWindowEnd, planned,
-			plannedEnd, note, state); err != nil {
+			plannedEnd, note, state, string(plan)); err != nil {
 			return mapErr(err)
 		}
 		details := map[string]any{"number": c.Ref(), "state": c.State, "changes": changes}
@@ -255,6 +299,53 @@ func (s *Store) EditChange(ctx context.Context, actor Actor, id string, e Change
 		res.Change, err = s.GetChange(ctx, id)
 	}
 	return res, err
+}
+
+// editFiles writes a files edit: the revision's new content, and the
+// parameters of its step (in n's plan) and of its job, which hasn't run.
+func editFiles(ctx context.Context, tx *sql.Tx, id string, n *Change, f *FilesEdit) error {
+	r := f.Revision
+	var sha, hash string
+	err := tx.QueryRowContext(ctx, `
+		SELECT compose_sha256, env_hash FROM compose_revision WHERE id::text = $1 AND change_id = $2 FOR UPDATE`, r.ID, id).
+		Scan(&sha, &hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return EditError("the change doesn't write those stack files")
+	}
+	if err != nil {
+		return err
+	}
+	if sha != f.WasComposeSHA256 || hash != f.WasEnvHash {
+		return EditError("someone edited the stack's files meanwhile; open the edit again to start from theirs")
+	}
+	step := slices.IndexFunc(n.Plan, func(p PlanStep) bool {
+		var x struct {
+			Revision string `json:"revision"`
+		}
+		return json.Unmarshal(p.Params, &x) == nil && x.Revision == r.ID
+	})
+	if step < 0 {
+		return EditError("the change has no step for those stack files")
+	}
+	n.Plan = slices.Clone(n.Plan)
+	n.Plan[step].Params, n.Plan[step].Summary = f.Params, f.Summary
+	compose := sql.NullString{String: r.Compose, Valid: r.HasCompose}
+	env := sql.NullString{String: r.EnvEnc, Valid: r.HasEnv}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE compose_revision SET compose = $2, compose_sha256 = $3, env_enc = $4, env_keys = $5, env_hash = $6
+		WHERE id::text = $1`, r.ID, compose, r.ComposeSHA256, env, pq.Array(nonNil(r.EnvKeys)), r.EnvHash); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx, `
+		UPDATE job SET params = $3 WHERE change_id = $1 AND params->>'revision' = $2 AND state = 'queued'`,
+		id, r.ID, string(f.Params))
+	if err != nil {
+		return err
+	}
+	if k, _ := res.RowsAffected(); k == 0 {
+		return ErrState // its job has started
+	}
+	return nil
 }
 
 // approveAs records actor's approval of the change, flagged as

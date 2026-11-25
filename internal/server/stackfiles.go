@@ -361,14 +361,37 @@ func (s *Server) stackFilesPlan(r *http.Request, spec action.Spec, in stackFiles
 		}
 	}
 
+	if err := s.sealFiles(&rev, &params, compose, env, changeCompose, changeEnv); err != nil {
+		return fail("%v", err)
+	}
+	rev.HostID, rev.Engine, rev.Project = h.ID, params.Engine, params.Project
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return fail("%v", err)
+	}
+	norm, err := action.Validate(spec.Name, raw)
+	if err != nil {
+		return fail("%v", err)
+	}
+	step := store.PlanStep{Action: spec.Name, Params: norm, Summary: action.Describe(spec.Name, norm), HostIDs: []string{h.ID}}
+	return step, rev, stackCI, object, nil
+}
+
+// sealFiles checks the files a revision writes and puts them in rev and
+// params: the Compose file when changeCompose, the .env (encrypted) when
+// changeEnv. It clears what rev and params held of them before.
+func (s *Server) sealFiles(rev *store.ComposeRevision, params *action.StackFileParams, compose, env string,
+	changeCompose, changeEnv bool) error {
+	rev.Compose, rev.HasCompose, rev.ComposeSHA256, params.ComposeSHA256 = "", false, "", ""
+	rev.HasEnv, rev.EnvEnc, rev.EnvKeys, rev.EnvHash, params.Env = false, "", nil, "", false
 	if changeCompose {
 		switch {
 		case strings.TrimSpace(compose) == "":
-			return fail("the Compose file is empty")
+			return errors.New("the Compose file is empty")
 		case len(compose) > maxComposeSize:
-			return fail("the Compose file is larger than 1 MiB")
+			return errors.New("the Compose file is larger than 1 MiB")
 		case !utf8.ValidString(compose) || strings.ContainsRune(compose, 0):
-			return fail("the Compose file isn't text")
+			return errors.New("the Compose file isn't text")
 		}
 		if !strings.HasSuffix(compose, "\n") {
 			compose += "\n"
@@ -382,25 +405,15 @@ func (s *Server) stackFilesPlan(r *http.Request, spec action.Spec, in stackFiles
 		}
 		keys, err := stackenv.Check([]byte(env))
 		if err != nil {
-			return fail("the .env: %v", err)
+			return fmt.Errorf("the .env: %w", err)
 		}
 		if rev.EnvEnc, err = stackenv.Seal(s.secrets, rev.ID, []byte(env)); err != nil {
-			return fail("%v", err)
+			return err
 		}
 		rev.HasEnv, rev.EnvKeys, rev.EnvHash = true, keys, stackenv.Hash(stackenv.HashKey(s.cfg.SecretKey), []byte(env))
 		params.Env = true
 	}
-	rev.HostID, rev.Engine, rev.Project = h.ID, params.Engine, params.Project
-	raw, err := json.Marshal(params)
-	if err != nil {
-		return fail("%v", err)
-	}
-	norm, err := action.Validate(spec.Name, raw)
-	if err != nil {
-		return fail("%v", err)
-	}
-	step := store.PlanStep{Action: spec.Name, Params: norm, Summary: action.Describe(spec.Name, norm), HostIDs: []string{h.ID}}
-	return step, rev, stackCI, object, nil
+	return nil
 }
 
 // hostManageCompose turns Compose stack management on or off for a host.

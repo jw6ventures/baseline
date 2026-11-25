@@ -211,6 +211,22 @@ func TestComposeDeployAndEdit(t *testing.T) {
 	}
 	h.noSecret("correct-horse")
 
+	// Before it starts, the edit's .env can be edited, not which files it
+	// writes.
+	var e map[string]any
+	tok := h.mintToken(ops, "files", "operator")
+	if resp := h.api(tok, "PATCH", "/changes/"+cid2, map[string]any{"compose": webCompose + "# x\n"}, &e); resp.StatusCode != http.StatusUnprocessableEntity ||
+		!strings.Contains(fmt.Sprint(e["error"]), "leaves the stack's Compose file alone") {
+		t.Fatalf("compose on an env edit: %d %v", resp.StatusCode, e)
+	}
+	if resp := h.api(tok, "PATCH", "/changes/"+cid2, map[string]any{"env": "DB_PASSWORD=battery-staple\nTZ=UTC\n"}, &e); resp.StatusCode != http.StatusOK {
+		t.Fatalf("env edit of an edit: %d %v", resp.StatusCode, e)
+	}
+	if revs, _ = h.st.ChangeRevisions(ctx, cid2); revs[0].HasCompose || revs[0].EnvHash == "" {
+		t.Fatalf("edit revision after its edit %+v", revs[0])
+	}
+	h.noSecret("battery-staple")
+
 	// While it is open, the stack can't be edited again.
 	if _, body := h.do(ops, "GET", "/changes/new?action=compose.edit&stack="+stack, nil); !strings.Contains(body, c2.Ref()+" deploys or edits it already") {
 		t.Fatalf("second edit:\n%s", body)
