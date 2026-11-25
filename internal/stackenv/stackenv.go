@@ -147,3 +147,46 @@ func Check(text []byte) ([]string, error) {
 	slices.Sort(keys)
 	return keys, nil
 }
+
+// Diff names the variables added, removed and changed (set to another
+// value) from old to new, each sorted. It names, never shows, values.
+func Diff(old, new []byte) (added, removed, changed []string, err error) {
+	values := func(text []byte) (map[string]string, error) {
+		lines, err := parse(text)
+		if err != nil {
+			return nil, err
+		}
+		m := map[string]string{}
+		for _, l := range lines {
+			if l.key != "" {
+				_, v, _ := strings.Cut(strings.TrimPrefix(strings.TrimSpace(l.text), "export "), "=")
+				m[l.key] = strings.TrimSpace(v)
+			}
+		}
+		return m, nil
+	}
+	o, err := values(old)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	n, err := values(new)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for k, v := range n {
+		if ov, ok := o[k]; !ok {
+			added = append(added, k)
+		} else if ov != v {
+			changed = append(changed, k)
+		}
+	}
+	for k := range o {
+		if _, ok := n[k]; !ok {
+			removed = append(removed, k)
+		}
+	}
+	slices.Sort(added)
+	slices.Sort(removed)
+	slices.Sort(changed)
+	return added, removed, changed, nil
+}

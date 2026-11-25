@@ -3,9 +3,9 @@
 <h1>Edit <a href="{{.Base}}/changes/{{$c.ID}}">{{$c.Ref}}</a></h1>
 <p class="muted sub">{{template "change-state" $c}} · {{template "change-kind" $c.Kind}} change · {{range $i, $p := $c.Plan}}{{if $i}}; {{end}}{{$p.Summary}}{{end}} on {{plural (len $c.HostIDs) "host"}}</p>
 {{with $v.Error}}<p class="notice bad">{{.}}</p>{{end}}
-<p class="muted">What the change runs and where stay as they are; to change those, cancel it and make a new one.
+<p class="muted">What the change runs and where stay as they are{{if $v.Files}}, apart from the stack's files below{{end}}; to change those, cancel it and make a new one.
 {{if eq $c.Kind "standard"}}Its change model approved it, so edits keep it approved.
-{{else if or (eq $c.State "submitted") (eq $c.State "approved") (eq $c.State "scheduled")}}Text edits keep its approvals. Changing its risk, impact, schedule or rollout withdraws them{{if $v.CanApprove}}; as an approver of every host, your edit counts as your approval{{else}}, and it waits for approval again{{end}}.{{end}}</p>
+{{else if or (eq $c.State "submitted") (eq $c.State "approved") (eq $c.State "scheduled")}}Text edits keep its approvals. Changing its risk, impact, schedule{{if $v.Files}}, stack files{{end}} or rollout withdraws them{{if $v.CanApprove}}; as an approver of every host, your edit counts as your approval{{else}}, and it waits for approval again{{end}}.{{end}}</p>
 
 <form class="panel stack-form wide" method="post" action="{{.Base}}/changes/{{$c.ID}}/edit">
   <label>Title<input name="title" value="{{$f.Get "title"}}" maxlength="200" required></label>
@@ -16,6 +16,19 @@
     <label><span>Back-out plan <span class="muted small">(how to undo it if it goes wrong)</span></span><textarea name="backout_plan" rows="2">{{$f.Get "backout_plan"}}</textarea></label>
     <label><span>Test plan <span class="muted small">(how you'll know it worked)</span></span><textarea name="test_plan" rows="2">{{$f.Get "test_plan"}}</textarea></label>
   </details>
+
+  {{with $v.Files}}{{$r := .Revision}}
+  <fieldset id="files">
+    <legend>{{if .Deploy}}Files of the new stack{{else}}New files of stack{{end}} {{$r.Project}} <span class="muted small">({{$r.Engine}})</span></legend>
+    {{if .CanEdit}}
+    <input type="hidden" name="files" value="1">
+    {{if $r.HasCompose}}<label><span>Compose file</span><textarea name="compose" rows="20" class="mono" spellcheck="false">{{$f.Get "compose"}}</textarea></label>
+    {{else}}<p class="muted small">This change leaves the Compose file as it is.</p>{{end}}
+    {{if or .Deploy $r.HasEnv}}<label><span>.env <span class="muted small">(<code>KEY=value</code> lines, kept encrypted{{if .Deploy}}; leave it empty to write no .env{{end}}). Opening this form was recorded in the audit log.</span></span><textarea name="env" rows="8" class="mono" spellcheck="false" autocomplete="off">{{$f.Get "env"}}</textarea></label>
+    {{else}}<p class="muted small">This change leaves the .env as it is.</p>{{end}}
+    {{else}}<p class="muted small">Editing the stack's files needs the operator role on its host.</p>{{end}}
+  </fieldset>
+  {{end}}
 
   {{if ne $c.Kind "standard"}}
   <div class="inline-form">
